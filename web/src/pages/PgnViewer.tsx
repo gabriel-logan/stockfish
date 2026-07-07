@@ -191,6 +191,31 @@ export default function PgnViewer() {
     }
   };
 
+  function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
+    const good = new Set([
+      "excellent",
+      "best",
+      "forced",
+      "opening",
+      "perfect",
+      "splendid",
+    ]);
+
+    const playerMoves = moveList.filter((m) => {
+      return m.color === color;
+    });
+
+    if (playerMoves.length === 0) {
+      return "-";
+    }
+
+    const goodMoves = playerMoves.filter((m) => {
+      return m.classification && good.has(m.classification);
+    });
+
+    return ((goodMoves.length / playerMoves.length) * 100).toFixed(1);
+  }
+
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -334,6 +359,21 @@ export default function PgnViewer() {
               }}
               showEvaluation={showMoveEvaluation}
             />
+          </div>
+
+          <div className="flex gap-6 text-sm text-gray-400">
+            <div>
+              White accuracy:{" "}
+              <span className="font-semibold text-gray-200">
+                {computeAccuracy(moves, "w")}%
+              </span>
+            </div>
+            <div>
+              Black accuracy:{" "}
+              <span className="font-semibold text-gray-200">
+                {computeAccuracy(moves, "b")}%
+              </span>
+            </div>
           </div>
         </>
       )}

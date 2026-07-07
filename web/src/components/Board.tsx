@@ -8,6 +8,8 @@ interface BoardProps {
   onSelectSquare?: (square: Square | null) => void;
   lastMove?: { from: Square; to: Square } | null;
   orientation?: "w" | "b";
+  squareEvaluations?: Record<string, string>;
+  showEvaluationIcons?: boolean;
 }
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -20,6 +22,8 @@ export default function Board({
   onSelectSquare = () => {},
   lastMove = null,
   orientation = "w",
+  squareEvaluations = {},
+  showEvaluationIcons = false,
 }: BoardProps) {
   const board = game.board();
 
@@ -125,6 +129,16 @@ export default function Board({
                       ) : (
                         <div className="h-3 w-3 rounded-full bg-gray-800/30" />
                       )}
+                    </div>
+                  )}
+                  {showEvaluationIcons && squareEvaluations[square] && (
+                    <div className="pointer-events-none absolute top-0 right-0">
+                      <img
+                        src={`/icons/${squareEvaluations[square]}.png`}
+                        alt={squareEvaluations[square]}
+                        title={squareEvaluations[square]}
+                        className="h-4 w-4"
+                      />
                     </div>
                   )}
                 </div>

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
+import { openings } from "../data/openings";
 import { useSettingsStore } from "../store/settingsStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
@@ -33,6 +34,7 @@ export default function PlayComputer() {
   const [isGameOver, setIsGameOver] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [boardFlipped, setBoardFlipped] = useState(false);
 
   const {
     showEvaluationBar,
@@ -142,6 +144,8 @@ export default function PlayComputer() {
           san: move.san,
           fen: gameRef.current.fen(),
           color: move.color as "w" | "b",
+          from: move.from,
+          to: move.to,
         };
         syncMoves([...movesRef.current, entry]);
         setIsGameOver(gameRef.current.isGameOver());
@@ -226,6 +230,8 @@ export default function PlayComputer() {
           san: move.san,
           fen: gameRef.current.fen(),
           color: move.color as "w" | "b",
+          from: move.from,
+          to: move.to,
         };
         syncMoves([...movesRef.current, entry]);
 
@@ -249,6 +255,91 @@ export default function PlayComputer() {
     },
     [playerColor, botElo, syncMoves],
   );
+
+  const effectiveOrientation = useMemo(() => {
+    if (boardFlipped) {
+      return playerColor === "w" ? "b" : "w";
+    }
+    return playerColor;
+  }, [boardFlipped, playerColor]);
+
+  const squareEvaluations = useMemo(() => {
+    const evals: Record<string, string> = {};
+    for (const m of moves) {
+      if (m.to && m.classification) {
+        evals[m.to] = m.classification;
+      }
+    }
+    return evals;
+  }, [moves]);
+
+  const currentFen = game.fen();
+
+  const openingName = useMemo(() => {
+    const match = openings.find((o) => o.fen === currentFen);
+    return match?.name ?? null;
+  }, [currentFen]);
+
+  const undoLastMove = useCallback(() => {
+    if (gameRef.current.isGameOver()) {
+      return;
+    }
+
+    const engine = engineRef.current;
+    if (engine?.connected && isEngineRunning.current) {
+      engine.stopAnalysis();
+      isEngineRunning.current = false;
+      setIsThinking(false);
+    }
+
+    const currentMoves = movesRef.current;
+
+    if (currentMoves.length === 0) {
+      return;
+    }
+
+    const undoCount = currentMoves.length >= 2 ? 2 : 1;
+
+    for (let i = 0; i < undoCount; i++) {
+      gameRef.current.undo();
+    }
+
+    const newMoves = currentMoves.slice(0, currentMoves.length - undoCount);
+    syncMoves(newMoves);
+
+    if (newMoves.length > 0) {
+      const prevMove = newMoves[newMoves.length - 1];
+      evaluationRef.current = prevMove.evaluation ?? null;
+      setEvaluation(prevMove.evaluation ?? null);
+      setMate(prevMove.mate ?? null);
+      prevEvalRef.current = prevMove.evaluation ?? null;
+    } else {
+      evaluationRef.current = null;
+      setEvaluation(null);
+      setMate(null);
+      prevEvalRef.current = null;
+    }
+
+    const hist = gameRef.current.history({ verbose: true });
+    if (hist.length > 0) {
+      const last = hist[hist.length - 1];
+      setLastMove({ from: last.from as Square, to: last.to as Square });
+    } else {
+      setLastMove(null);
+    }
+
+    setIsGameOver(false);
+    setSelectedSquare(null);
+  }, [syncMoves]);
+
+  const copyPgn = useCallback(() => {
+    const pgn = gameRef.current.pgn();
+    navigator.clipboard.writeText(pgn).catch(() => {});
+  }, []);
+
+  const toggleBoard = useCallback(() => {
+    setBoardFlipped((prev) => !prev);
+  }, []);
 
   const newGame = useCallback(() => {
     const engine = engineRef.current;
@@ -357,6 +448,13 @@ export default function PlayComputer() {
         </button>
       </div>
 
+      {openingName && (
+        <div className="rounded bg-gray-800 px-3 py-1 text-sm text-gray-400">
+          Opening:{" "}
+          <span className="font-medium text-gray-200">{openingName}</span>
+        </div>
+      )}
+
       <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-start">
         <div className="flex gap-3">
           <Board
@@ -365,12 +463,40 @@ export default function PlayComputer() {
             selectedSquare={selectedSquare}
             onSelectSquare={setSelectedSquare}
             lastMove={lastMove}
-            orientation={playerColor}
+            orientation={effectiveOrientation}
+            squareEvaluations={squareEvaluations}
+            showEvaluationIcons={showMoveEvaluation}
           />
 
           {showEvaluationBar && (
             <EvaluationBar evaluation={evaluation} mate={mate} height={484} />
           )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
+            onClick={undoLastMove}
+            disabled={moves.length === 0 || isGameOver}
+          >
+            Undo last move
+          </button>
+          <button
+            type="button"
+            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700"
+            onClick={toggleBoard}
+          >
+            Flip board
+          </button>
+          <button
+            type="button"
+            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
+            onClick={copyPgn}
+            disabled={moves.length === 0}
+          >
+            Copy PGN
+          </button>
         </div>
       </div>
 
