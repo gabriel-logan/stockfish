@@ -1,4 +1,4 @@
-import { MoveClassification } from "./types/enums";
+import { MoveClassification } from "./types/chess-types";
 
 export const CLASSIFICATION_COLORS: Record<
   (typeof MoveClassification)[keyof typeof MoveClassification],
