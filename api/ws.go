@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// writeBinaryMsg marshals v to JSON and sends it as a WebSocket binary message.
 func writeBinaryMsg(conn *websocket.Conn, v any) error {
 	b, err := json.Marshal(v)
 
@@ -143,6 +144,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 	}
 }
 
+// parseSFLine parses a single line of Stockfish UCI output into a structured message.
 func parseSFLine(line string) *WSMessage {
 	if strings.HasPrefix(line, "bestmove") {
 		return parseBestMove(line)
@@ -155,6 +157,7 @@ func parseSFLine(line string) *WSMessage {
 	return nil
 }
 
+// parseBestMove extracts the best move and ponder from a "bestmove" UCI line.
 func parseBestMove(line string) *WSMessage {
 	msg := &WSMessage{Type: "bestmove"}
 
@@ -175,6 +178,7 @@ func parseBestMove(line string) *WSMessage {
 	return msg
 }
 
+// parseInfoLine parses an "info" UCI line, extracting depth, score, PV, nodes, etc.
 func parseInfoLine(line string) *WSMessage {
 	msg := &WSMessage{Type: "analysis"}
 

@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 )
 
+// corsMiddleware sets permissive CORS headers and handles preflight OPTIONS requests.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -21,6 +22,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// recoverMiddleware catches panics in HTTP handlers, logs the stack, and returns 500.
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
