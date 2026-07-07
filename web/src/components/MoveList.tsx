@@ -15,12 +15,14 @@ interface Props {
   moves: MoveEntry[];
   currentMoveIndex: number;
   onGoToMove: (index: number) => void;
+  showEvaluation?: boolean;
 }
 
 export default function MoveList({
   moves,
   currentMoveIndex,
   onGoToMove,
+  showEvaluation = true,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
@@ -50,7 +52,7 @@ export default function MoveList({
       className="max-h-[480px] overflow-y-auto rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm"
     >
       {pairs.length === 0 && (
-        <p className="py-4 text-center text-gray-500">Nenhum lance ainda</p>
+        <p className="py-4 text-center text-gray-500">No moves yet</p>
       )}
       {pairs.map((pair) => {
         return (
@@ -75,10 +77,12 @@ export default function MoveList({
               }}
             >
               <span>{pair.white.san}</span>
-              <MoveClassificationIcon
-                classification={pair.white.classification}
-                size={14}
-              />
+              {showEvaluation && (
+                <MoveClassificationIcon
+                  classification={pair.white.classification}
+                  size={14}
+                />
+              )}
             </button>
 
             {pair.black && (
@@ -97,10 +101,12 @@ export default function MoveList({
                 }}
               >
                 <span>{pair.black.san}</span>
-                <MoveClassificationIcon
-                  classification={pair.black.classification}
-                  size={14}
-                />
+                {showEvaluation && (
+                  <MoveClassificationIcon
+                    classification={pair.black.classification}
+                    size={14}
+                  />
+                )}
               </button>
             )}
           </div>

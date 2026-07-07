@@ -1,14 +1,11 @@
-export interface AnalysisData {
-  score: number | null;
-  mate: number | null;
-  depth: number;
-  pv: string[];
-}
+import type {
+  AnalysisData,
+  BestMoveData,
+  WSClientMessage,
+  WSServerMessage,
+} from "../types/api";
 
-export interface BestMoveData {
-  bestmove: string | null;
-  ponder: string | null;
-}
+export type { AnalysisData, BestMoveData };
 
 export class AnalysisEngine {
   private ws: WebSocket | null = null;
@@ -43,7 +40,7 @@ export class AnalysisEngine {
 
       ws.onmessage = (event) => {
         const text = new TextDecoder().decode(event.data);
-        let msg: Record<string, unknown>;
+        let msg: WSServerMessage;
 
         try {
           msg = JSON.parse(text);
@@ -51,33 +48,30 @@ export class AnalysisEngine {
           return;
         }
 
-        if (msg.type === "ready") {
-          this.onReady?.();
-          return;
-        }
+        switch (msg.type) {
+          case "ready":
+            this.onReady?.();
+            break;
 
-        if (msg.type === "analysis") {
-          this.onAnalysis?.({
-            score: typeof msg.score === "number" ? msg.score : null,
-            mate: typeof msg.mate === "number" ? msg.mate : null,
-            depth: typeof msg.depth === "number" ? msg.depth : 0,
-            pv: Array.isArray(msg.pv) ? (msg.pv as string[]) : [],
-          });
-          return;
-        }
+          case "analysis":
+            this.onAnalysis?.({
+              score: msg.score ?? null,
+              mate: msg.mate ?? null,
+              depth: msg.depth,
+              pv: msg.pv,
+            });
+            break;
 
-        if (msg.type === "bestmove") {
-          this.onBestMove?.({
-            bestmove: typeof msg.bestmove === "string" ? msg.bestmove : null,
-            ponder: typeof msg.ponder === "string" ? msg.ponder : null,
-          });
-          return;
-        }
+          case "bestmove":
+            this.onBestMove?.({
+              bestmove: msg.bestmove ?? null,
+              ponder: msg.ponder ?? null,
+            });
+            break;
 
-        if (msg.type === "error") {
-          this.onError?.(
-            typeof msg.error === "string" ? msg.error : "Unknown error",
-          );
+          case "error":
+            this.onError?.(msg.error);
+            break;
         }
       };
 
@@ -99,25 +93,25 @@ export class AnalysisEngine {
     this.isConnected = false;
   }
 
-  send(msg: Record<string, unknown>): void {
+  private send(msg: WSClientMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     }
-  }
-
-  setOption(name: string, value: string): void {
-    this.send({ type: "setoption", fen: name, moves: value });
   }
 
   private currentSkill: number = 10;
 
   setSkillLevel(skill: number): void {
     this.currentSkill = skill;
-    this.setOption("Skill Level", String(skill));
+    this.send({ type: "setoption", fen: "Skill Level", moves: String(skill) });
   }
 
   startAnalysis(fen: string, depth: number = 0, multiPv: number = 1): void {
-    this.setOption("Skill Level", String(this.currentSkill));
+    this.send({
+      type: "setoption",
+      name: "Skill Level",
+      value: String(this.currentSkill),
+    });
     this.send({ type: "start", fen, depth, multi_pv: multiPv });
   }
 
@@ -129,11 +123,7 @@ export class AnalysisEngine {
     fen: string,
     depth: number = 14,
     timeoutMs: number = 30000,
-  ): Promise<{
-    score: number | null;
-    mate: number | null;
-    bestmove: string | null;
-  }> {
+  ): Promise<AnalysisData & { bestmove: string | null }> {
     return new Promise((resolve) => {
       let lastScore: number | null = null;
       let lastMate: number | null = null;
@@ -144,7 +134,13 @@ export class AnalysisEngine {
       const timer = setTimeout(() => {
         this.onAnalysis = prevOnAnalysis;
         this.onBestMove = prevOnBestMove;
-        resolve({ score: lastScore, mate: lastMate, bestmove: null });
+        resolve({
+          score: lastScore,
+          mate: lastMate,
+          depth,
+          pv: [],
+          bestmove: null,
+        });
       }, timeoutMs);
 
       this.onAnalysis = (data) => {
@@ -168,6 +164,8 @@ export class AnalysisEngine {
         resolve({
           score: lastScore,
           mate: lastMate,
+          depth,
+          pv: [],
           bestmove: data.bestmove,
         });
       };

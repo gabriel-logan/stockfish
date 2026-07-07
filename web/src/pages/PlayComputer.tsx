@@ -36,10 +36,12 @@ export default function PlayComputer() {
 
   const {
     showEvaluationBar,
+    showMoveEvaluation,
     botElo,
     playerColor,
     setPlayerColor,
     setShowEvaluationBar,
+    setShowMoveEvaluation,
     setBotElo,
   } = useSettingsStore();
 
@@ -334,6 +336,18 @@ export default function PlayComputer() {
           Eval bar
         </label>
 
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
+          <input
+            type="checkbox"
+            checked={showMoveEvaluation}
+            onChange={(e) => {
+              setShowMoveEvaluation(e.target.checked);
+            }}
+            className="h-4 w-4"
+          />
+          Move eval
+        </label>
+
         <button
           type="button"
           className="rounded bg-blue-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-600"
@@ -385,6 +399,7 @@ export default function PlayComputer() {
           moves={moves}
           currentMoveIndex={moves.length - 1}
           onGoToMove={() => {}}
+          showEvaluation={showMoveEvaluation}
         />
       </div>
     </div>

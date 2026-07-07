@@ -33,7 +33,7 @@ export default function PgnViewer() {
   );
 
   const abortRef = useRef(false);
-  const { showEvaluationBar } = useSettingsStore();
+  const { showEvaluationBar, showMoveEvaluation } = useSettingsStore();
 
   const moves: MoveEntry[] = positions
     .filter((p): p is PositionData & { san: string; color: "w" | "b" } => {
@@ -332,6 +332,7 @@ export default function PgnViewer() {
               onGoToMove={(idx) => {
                 goToPosition(idx + 1);
               }}
+              showEvaluation={showMoveEvaluation}
             />
           </div>
         </>
