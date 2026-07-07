@@ -9,7 +9,7 @@ RUN GOOS=linux GOARCH=amd64 go build -o server .
 FROM ubuntu:noble
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    apt-get install -y --no-install-recommends ca-certificates curl bash && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -L \
