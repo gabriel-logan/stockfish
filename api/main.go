@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -26,7 +27,7 @@ func main() {
 		Handler: handler,
 	}
 
-	log.Printf("server starting on :%s (stockfish: %s)", cfg.Port, cfg.StockfishPath)
+	fmt.Printf("server starting on http://localhost:%s (stockfish: %s)\n", cfg.Port, cfg.StockfishPath)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("server: %v", err)
 	}
