@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { BASE_URL_API } from "../constants";
+import { BaseUrlAPI } from "../constants";
 import type {
   AnalysisEntry,
   AnalyzeRequest,
@@ -15,7 +15,7 @@ export async function analyzePosition(
   const body: AnalyzeRequest = { fen, depth, multi_pv: multiPv };
 
   const response = await axios.post<AnalyzeResponse>(
-    `${BASE_URL_API}/api/analyze`,
+    `${BaseUrlAPI}/api/analyze`,
     body,
   );
 

@@ -1,4 +1,4 @@
-import { BASE_URL_WS } from "../constants";
+import { BaseUrlWS } from "../constants";
 import type {
   AnalysisData,
   BestMoveData,
@@ -30,7 +30,7 @@ export class AnalysisEngine {
         return;
       }
 
-      const ws = new WebSocket(BASE_URL_WS);
+      const ws = new WebSocket(BaseUrlWS);
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {

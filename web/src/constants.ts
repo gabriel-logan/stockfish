@@ -16,5 +16,5 @@ export const CLASSIFICATION_COLORS: Record<
   [MoveClassification.Blunder]: "#df5353",
 };
 
-export const BASE_URL_API = "http://localhost:3000";
-export const BASE_URL_WS = "ws://localhost:3000/ws";
+export const BaseUrlAPI = import.meta.env.VITE_BASE_URL_API;
+export const BaseUrlWS = import.meta.env.VITE_BASE_URL_WS;
