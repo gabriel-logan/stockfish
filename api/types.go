@@ -26,7 +26,7 @@ type AnalyzeRequest struct {
 }
 
 type AnalyzeResponse struct {
-	BestMove string          `json:"bestmove,omitempty"`
-	Ponder   string          `json:"ponder,omitempty"`
-	Analysis []WSMessage     `json:"analysis"`
+	BestMove string      `json:"bestmove,omitempty"`
+	Ponder   string      `json:"ponder,omitempty"`
+	Analysis []WSMessage `json:"analysis"`
 }

@@ -59,9 +59,8 @@ func handleWS(cfg Config) http.HandlerFunc {
 		}
 		defer shutdown()
 
-		go writePump(conn, sf, shutdown)
-
-		go readPump(conn, sf, shutdown)
+		safeGo(func() { writePump(conn, sf, shutdown) })
+		safeGo(func() { readPump(conn, sf, shutdown) })
 	}
 }
 
@@ -75,6 +74,7 @@ func writePump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 		}
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err := writeBinaryMsg(conn, msg); err != nil {
+			log.Printf("writePump: %v", err)
 			return
 		}
 	}
@@ -86,6 +86,9 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 	for {
 		mt, data, err := conn.ReadMessage()
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				log.Printf("readPump: %v", err)
+			}
 			return
 		}
 
@@ -93,6 +96,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 		case websocket.TextMessage, websocket.BinaryMessage:
 			var msg WSMessage
 			if err := json.Unmarshal(data, &msg); err != nil {
+				log.Printf("readPump unmarshal: %v", err)
 				continue
 			}
 			if msg.Type == "" {
@@ -101,29 +105,41 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 
 			switch msg.Type {
 			case "start":
-				sf.Stop()
+				if err := sf.Stop(); err != nil {
+					log.Printf("readPump stop: %v", err)
+				}
 				time.Sleep(15 * time.Millisecond)
 
 				moves := strings.Fields(msg.Moves)
-				sf.SetPosition(msg.FEN, moves)
+				if err := sf.SetPosition(msg.FEN, moves); err != nil {
+					log.Printf("readPump setpos: %v", err)
+					continue
+				}
 
 				if msg.Depth <= 0 {
-					sf.GoInfinite(msg.MultiPV)
+					if err := sf.GoInfinite(msg.MultiPV); err != nil {
+						log.Printf("readPump go: %v", err)
+					}
 				} else {
-					sf.GoDepth(msg.Depth, msg.MultiPV)
+					if err := sf.GoDepth(msg.Depth, msg.MultiPV); err != nil {
+						log.Printf("readPump go: %v", err)
+					}
 				}
 
 			case "stop":
-				sf.Stop()
+				if err := sf.Stop(); err != nil {
+					log.Printf("readPump stop: %v", err)
+				}
 
 			case "setoption":
-				sf.SetOption(msg.FEN, msg.Moves)
+				if err := sf.SetOption(msg.FEN, msg.Moves); err != nil {
+					log.Printf("readPump setopt: %v", err)
+				}
 			}
 
 		default:
 			continue
 		}
-
 	}
 }
 
@@ -131,15 +147,19 @@ func parseSFLine(line string) *WSMessage {
 	if strings.HasPrefix(line, "bestmove") {
 		return parseBestMove(line)
 	}
+
 	if strings.HasPrefix(line, "info") {
 		return parseInfoLine(line)
 	}
+
 	return nil
 }
 
 func parseBestMove(line string) *WSMessage {
 	msg := &WSMessage{Type: "bestmove"}
+
 	fields := strings.Fields(line)
+
 	for i, f := range fields {
 		switch f {
 		case "bestmove":
@@ -157,46 +177,71 @@ func parseBestMove(line string) *WSMessage {
 
 func parseInfoLine(line string) *WSMessage {
 	msg := &WSMessage{Type: "analysis"}
+
 	fields := strings.Fields(line)
+
 	for i := 0; i < len(fields); i++ {
 		switch fields[i] {
 		case "depth":
 			if i+1 < len(fields) {
-				msg.Depth, _ = strconv.Atoi(fields[i+1])
+				n, err := strconv.Atoi(fields[i+1])
+				if err == nil {
+					msg.Depth = n
+				}
 			}
 		case "seldepth":
 			if i+1 < len(fields) {
-				msg.SelDepth, _ = strconv.Atoi(fields[i+1])
+				n, err := strconv.Atoi(fields[i+1])
+				if err == nil {
+					msg.SelDepth = n
+				}
 			}
 		case "multipv":
 			if i+1 < len(fields) {
-				msg.MultiPV, _ = strconv.Atoi(fields[i+1])
+				n, err := strconv.Atoi(fields[i+1])
+				if err == nil {
+					msg.MultiPV = n
+				}
 			}
 		case "score":
 			if i+1 < len(fields) {
 				switch fields[i+1] {
 				case "cp":
 					if i+2 < len(fields) {
-						cp, _ := strconv.Atoi(fields[i+2])
-						msg.Score = float64(cp) / 100.0
+						n, err := strconv.Atoi(fields[i+2])
+						if err == nil {
+							msg.Score = float64(n) / 100.0
+						}
 					}
 				case "mate":
 					if i+2 < len(fields) {
-						msg.Mate, _ = strconv.Atoi(fields[i+2])
+						n, err := strconv.Atoi(fields[i+2])
+						if err == nil {
+							msg.Mate = n
+						}
 					}
 				}
 			}
 		case "nodes":
 			if i+1 < len(fields) {
-				msg.Nodes, _ = strconv.ParseInt(fields[i+1], 10, 64)
+				n, err := strconv.ParseInt(fields[i+1], 10, 64)
+				if err == nil {
+					msg.Nodes = n
+				}
 			}
 		case "nps":
 			if i+1 < len(fields) {
-				msg.NPS, _ = strconv.ParseInt(fields[i+1], 10, 64)
+				n, err := strconv.ParseInt(fields[i+1], 10, 64)
+				if err == nil {
+					msg.NPS = n
+				}
 			}
 		case "time":
 			if i+1 < len(fields) {
-				msg.Time, _ = strconv.ParseInt(fields[i+1], 10, 64)
+				n, err := strconv.ParseInt(fields[i+1], 10, 64)
+				if err == nil {
+					msg.Time = n
+				}
 			}
 		case "pv":
 			if i+1 < len(fields) {

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"strings"
 	"sync"
@@ -39,7 +40,7 @@ func NewStockfish(path string) (*Stockfish, error) {
 		done:  make(chan struct{}),
 	}
 
-	go func() {
+	safeGo(func() {
 		defer close(sf.lines)
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -50,7 +51,10 @@ func NewStockfish(path string) (*Stockfish, error) {
 				return
 			}
 		}
-	}()
+		if err := scanner.Err(); err != nil {
+			log.Printf("stockfish scanner: %v", err)
+		}
+	})
 
 	if err := sf.send("uci"); err != nil {
 		sf.Close()
