@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -12,6 +11,16 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+func writeBinaryMsg(conn *websocket.Conn, v any) error {
+	b, err := json.Marshal(v)
+
+	if err != nil {
+		return err
+	}
+
+	return conn.WriteMessage(websocket.BinaryMessage, b)
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -32,12 +41,14 @@ func handleWS(cfg Config) http.HandlerFunc {
 		sf, err := NewStockfish(cfg.StockfishPath)
 		if err != nil {
 			log.Printf("stockfish init: %v", err)
-			conn.WriteJSON(WSMessage{Type: "error", Error: "engine init failed"})
+
+			writeBinaryMsg(conn, WSMessage{Type: "error", Error: "engine init failed"})
+
 			conn.Close()
 			return
 		}
 
-		conn.WriteJSON(WSMessage{Type: "ready"})
+		writeBinaryMsg(conn, WSMessage{Type: "ready"})
 
 		var closeOnce sync.Once
 		shutdown := func() {
@@ -63,7 +74,7 @@ func writePump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 			continue
 		}
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := conn.WriteJSON(msg); err != nil {
+		if err := writeBinaryMsg(conn, msg); err != nil {
 			return
 		}
 	}
@@ -73,47 +84,47 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 	defer shutdown()
 
 	for {
-		_, data, err := conn.ReadMessage()
+		mt, data, err := conn.ReadMessage()
 		if err != nil {
 			return
 		}
 
-		var msg WSMessage
-		if err := parseWSMessage(data, &msg); err != nil {
+		switch mt {
+		case websocket.TextMessage, websocket.BinaryMessage:
+			var msg WSMessage
+			if err := json.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			if msg.Type == "" {
+				continue
+			}
+
+			switch msg.Type {
+			case "start":
+				sf.Stop()
+				time.Sleep(15 * time.Millisecond)
+
+				moves := strings.Fields(msg.Moves)
+				sf.SetPosition(msg.FEN, moves)
+
+				if msg.Depth <= 0 {
+					sf.GoInfinite(msg.MultiPV)
+				} else {
+					sf.GoDepth(msg.Depth, msg.MultiPV)
+				}
+
+			case "stop":
+				sf.Stop()
+
+			case "setoption":
+				sf.SetOption(msg.FEN, msg.Moves)
+			}
+
+		default:
 			continue
 		}
 
-		switch msg.Type {
-		case "start":
-			sf.Stop()
-			time.Sleep(15 * time.Millisecond)
-
-			moves := strings.Fields(msg.Moves)
-			sf.SetPosition(msg.FEN, moves)
-
-			if msg.Depth <= 0 {
-				sf.GoInfinite(msg.MultiPV)
-			} else {
-				sf.GoDepth(msg.Depth, msg.MultiPV)
-			}
-
-		case "stop":
-			sf.Stop()
-
-		case "setoption":
-			sf.SetOption(msg.FEN, msg.Moves)
-		}
 	}
-}
-
-func parseWSMessage(data []byte, msg *WSMessage) error {
-	if err := json.Unmarshal(data, msg); err != nil {
-		return err
-	}
-	if msg.Type == "" {
-		return errors.New("missing type field")
-	}
-	return nil
 }
 
 func parseSFLine(line string) *WSMessage {
