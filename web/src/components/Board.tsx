@@ -8,6 +8,7 @@ interface BoardProps {
   onSelectSquare?: (square: Square | null) => void;
   lastMove?: { from: Square; to: Square } | null;
   orientation?: "w" | "b";
+  interactive?: boolean;
   squareEvaluations?: Record<string, string>;
   showEvaluationIcons?: boolean;
 }
@@ -22,6 +23,7 @@ export default function Board({
   onSelectSquare = () => {},
   lastMove = null,
   orientation = "w",
+  interactive = true,
   squareEvaluations = {},
   showEvaluationIcons = false,
 }: BoardProps) {
@@ -50,6 +52,10 @@ export default function Board({
 
   const handleClick = useCallback(
     (square: Square) => {
+      if (!interactive) {
+        return;
+      }
+
       const piece = game.get(square);
 
       if (!selectedSquare) {
@@ -74,7 +80,7 @@ export default function Board({
         onSelectSquare(null);
       }
     },
-    [selectedSquare, game, onMove, onSelectSquare, legalTargets],
+    [selectedSquare, game, onMove, onSelectSquare, legalTargets, interactive],
   );
 
   function getSquareClass(row: number, col: number, square: Square): string {

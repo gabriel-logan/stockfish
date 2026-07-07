@@ -265,11 +265,16 @@ export default function PlayComputer() {
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, string> = {};
-    for (const m of moves) {
+
+    for (let i = moves.length - 1; i >= 0; i--) {
+      const m = moves[i];
+
       if (m.to && m.classification) {
         evals[m.to] = m.classification;
+        break;
       }
     }
+
     return evals;
   }, [moves]);
 
@@ -464,6 +469,7 @@ export default function PlayComputer() {
             onSelectSquare={setSelectedSquare}
             lastMove={lastMove}
             orientation={effectiveOrientation}
+            interactive={!isThinking && !isGameOver}
             squareEvaluations={squareEvaluations}
             showEvaluationIcons={showMoveEvaluation}
           />
