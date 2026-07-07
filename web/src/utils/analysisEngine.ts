@@ -107,7 +107,7 @@ export class AnalysisEngine {
     this.send({ type: "setoption", fen: "Skill Level", moves: String(skill) });
   }
 
-  startAnalysis(fen: string, depth: number = 0, multiPv: number = 1): void {
+  startAnalysis(fen: string, depth: number = 14, multiPv: number = 1): void {
     this.send({
       type: "setoption",
       fen: "Skill Level",

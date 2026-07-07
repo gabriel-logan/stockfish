@@ -116,14 +116,13 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 					continue
 				}
 
-				if msg.Depth <= 0 {
-					if err := sf.GoInfinite(msg.MultiPV); err != nil {
-						log.Printf("readPump go: %v", err)
-					}
-				} else {
-					if err := sf.GoDepth(msg.Depth, msg.MultiPV); err != nil {
-						log.Printf("readPump go: %v", err)
-					}
+				depth := msg.Depth
+				if depth <= 0 {
+					depth = 1
+				}
+
+				if err := sf.GoDepth(depth, msg.MultiPV); err != nil {
+					log.Printf("readPump go: %v", err)
 				}
 
 			case "stop":

@@ -81,7 +81,7 @@ export default function PlayComputer() {
       ) {
         const skill = getSkillLevel(botEloRef.current);
         engine.setSkillLevel(skill);
-        engine.startAnalysis(gameRef.current.fen(), 0, 1);
+        engine.startAnalysis(gameRef.current.fen(), 14, 1);
         isEngineRunning.current = true;
         setIsThinking(true);
       }
@@ -192,7 +192,7 @@ export default function PlayComputer() {
 
     const skill = getSkillLevel(botEloRef.current);
     engine.setSkillLevel(skill);
-    engine.startAnalysis(gameRef.current.fen(), 0, 1);
+    engine.startAnalysis(gameRef.current.fen(), 14, 1);
     isEngineRunning.current = true;
     setIsThinking(true);
   }, [connected]);
@@ -239,7 +239,7 @@ export default function PlayComputer() {
         if (engine?.connected) {
           const skill = getSkillLevel(botElo);
           engine.setSkillLevel(skill);
-          engine.startAnalysis(gameRef.current.fen(), 0, 1);
+          engine.startAnalysis(gameRef.current.fen(), 14, 1);
           isEngineRunning.current = true;
           setIsThinking(true);
         }
@@ -276,7 +276,7 @@ export default function PlayComputer() {
     ) {
       const skill = getSkillLevel(botEloRef.current);
       engine.setSkillLevel(skill);
-      engine.startAnalysis(gameRef.current.fen(), 0, 1);
+      engine.startAnalysis(gameRef.current.fen(), 14, 1);
       isEngineRunning.current = true;
       setIsThinking(true);
     }
