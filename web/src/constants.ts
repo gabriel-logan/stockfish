@@ -17,3 +17,4 @@ export const CLASSIFICATION_COLORS: Record<
 };
 
 export const BASE_URL_API = "http://localhost:3000";
+export const BASE_URL_WS = "ws://localhost:3000/ws";

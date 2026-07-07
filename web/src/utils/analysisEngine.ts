@@ -1,3 +1,4 @@
+import { BASE_URL_WS } from "../constants";
 import type {
   AnalysisData,
   BestMoveData,
@@ -29,7 +30,7 @@ export class AnalysisEngine {
         return;
       }
 
-      const ws = new WebSocket("ws://localhost:3000/ws");
+      const ws = new WebSocket(BASE_URL_WS);
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
@@ -109,8 +110,8 @@ export class AnalysisEngine {
   startAnalysis(fen: string, depth: number = 0, multiPv: number = 1): void {
     this.send({
       type: "setoption",
-      name: "Skill Level",
-      value: String(this.currentSkill),
+      fen: "Skill Level",
+      moves: String(this.currentSkill),
     });
     this.send({ type: "start", fen, depth, multi_pv: multiPv });
   }

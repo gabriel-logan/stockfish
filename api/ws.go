@@ -58,7 +58,6 @@ func handleWS(cfg Config) http.HandlerFunc {
 				sf.Close()
 			})
 		}
-		defer shutdown()
 
 		safeGo(func() { writePump(conn, sf, shutdown) })
 		safeGo(func() { readPump(conn, sf, shutdown) })

@@ -21,7 +21,10 @@ RUN curl -L \
     chmod +x /usr/local/bin/stockfish && \
     rm -rf /tmp/stockfish*
 
-EXPOSE $PORT
+ENV PORT=3000
+ENV STOCKFISH_PATH=/usr/local/bin/stockfish
+
+EXPOSE 3000
 
 COPY --from=builder /app/server /usr/local/bin/server
 
