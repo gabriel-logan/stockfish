@@ -34,11 +34,25 @@ export default function MoveList({
   const activeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (activeRef.current) {
-      activeRef.current.scrollIntoView({
-        block: "nearest",
-        behavior: "smooth",
-      });
+    const list = listRef.current;
+    const active = activeRef.current;
+
+    if (!list || !active) {
+      return;
+    }
+
+    const activeTop = active.offsetTop;
+    const activeBottom = activeTop + active.offsetHeight;
+    const visibleTop = list.scrollTop;
+    const visibleBottom = visibleTop + list.clientHeight;
+
+    if (activeTop < visibleTop) {
+      list.scrollTop = activeTop;
+      return;
+    }
+
+    if (activeBottom > visibleBottom) {
+      list.scrollTop = activeBottom - list.clientHeight;
     }
   }, [currentMoveIndex]);
 
