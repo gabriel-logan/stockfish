@@ -384,7 +384,7 @@ export default function PlayComputer() {
       playEngineRef.current = null;
       evalEngineRef.current = null;
     };
-  }, [classifyLastMove]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [classifyLastMove, clearPendingBotMove, syncMoves]);
 
   /*
     Keep a dedicated connection for playing moves and a separate full-strength
