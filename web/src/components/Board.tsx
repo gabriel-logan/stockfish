@@ -16,8 +16,7 @@ interface BoardProps {
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
-const SQUARE_SIZE_CLASS =
-  "[width:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)] [height:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)]";
+const SQUARE_SIZE_CLASS = "size-[clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)]";
 
 function getCoordinateColorClass(row: number, col: number): string {
   const isLight = (row + col) % 2 === 0;
@@ -135,7 +134,7 @@ export default function Board({
     const isLastMoveSquare =
       lastMove !== null && (lastMove.from === square || lastMove.to === square);
 
-    let className = `relative flex items-center justify-center ${SQUARE_SIZE_CLASS}`;
+    let className = `relative flex shrink-0 items-center justify-center ${SQUARE_SIZE_CLASS}`;
 
     if (interactive) {
       className = `${className} cursor-pointer`;
@@ -161,7 +160,7 @@ export default function Board({
   }
 
   return (
-    <div className="inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
+    <div className="inline-block shrink-0 overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
       {displayRanks.map((rank, row) => {
         return (
           <div key={rank} className="flex">
@@ -224,7 +223,7 @@ export default function Board({
                       src={`/icons/${squareEvaluations[square]}.png`}
                       alt={squareEvaluations[square]}
                       title={squareEvaluations[square]}
-                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-5 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
+                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-6 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
                     />
                   )}
                 </div>

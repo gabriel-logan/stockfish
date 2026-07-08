@@ -96,7 +96,7 @@ export default function MoveList({
               {showEvaluation && (
                 <MoveClassificationIcon
                   classification={pair.white.classification}
-                  size={14}
+                  size={16}
                 />
               )}
             </button>
@@ -116,7 +116,7 @@ export default function MoveList({
                 {showEvaluation && (
                   <MoveClassificationIcon
                     classification={pair.black.classification}
-                    size={14}
+                    size={16}
                   />
                 )}
               </button>
