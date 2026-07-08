@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FaClipboard,
+  FaFlag,
   FaRedo,
   FaRobot,
   FaSave,
@@ -640,6 +641,25 @@ export default function PlayComputer() {
     toast.success("Game saved");
   }, [activeUserId, savedGameId, openingName, playerColor, saveGameToStore]);
 
+  const resign = useCallback(() => {
+    if (isGameOver || moves.length === 0) {
+      return;
+    }
+
+    analysisVersionRef.current += 1;
+    clearPendingBotMove();
+
+    const playEngine = playEngineRef.current;
+
+    if (playEngine?.connected && isEngineRunning.current) {
+      playEngine.stopAnalysis();
+      isEngineRunning.current = false;
+      setIsThinking(false);
+    }
+
+    setIsGameOver(true);
+  }, [isGameOver, moves.length, clearPendingBotMove]);
+
   const handleStartGame = useCallback(() => {
     gameStartedRef.current = true;
     setGameStarted(true);
@@ -974,7 +994,7 @@ export default function PlayComputer() {
           />
         </div>
 
-        <div className="grid grid-cols-4 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
+        <div className="grid grid-cols-5 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
           <button
             type="button"
             className={iconActionButtonClass}
@@ -1002,6 +1022,16 @@ export default function PlayComputer() {
             title="Copy PGN"
           >
             <FaClipboard aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={resign}
+            disabled={moves.length === 0 || isGameOver}
+            title="Resign"
+          >
+            <FaFlag aria-hidden="true" />
           </button>
 
           {activeUserId && (
