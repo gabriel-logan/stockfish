@@ -225,7 +225,7 @@ export default function Board({
                       alt={t(
                         `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
                       )}
-                      className="size-[86%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
+                      className="size-[90%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
                       draggable={false}
                     />
                   )}
@@ -243,7 +243,7 @@ export default function Board({
                       src={`/icons/${squareEvaluations[square]}.png`}
                       alt={t(`classification.${squareEvaluations[square]}`)}
                       title={t(`classification.${squareEvaluations[square]}`)}
-                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-7 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
+                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-9 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
                     />
                   )}
                 </div>
