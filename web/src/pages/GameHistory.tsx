@@ -43,15 +43,17 @@ export default function GameHistory() {
               const date = new Date(game.date);
 
               return (
-                <button
+                <article
                   key={game.id}
-                  type="button"
                   className="flex min-h-20 w-full items-center gap-4 rounded-lg border border-white/8 bg-[#2a2d28] p-4 text-left transition-colors hover:bg-[#323530]"
-                  onClick={() => {
-                    navigate("/pgn", { state: { pgn: game.pgn } });
-                  }}
                 >
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 flex-col gap-1 text-left"
+                    onClick={() => {
+                      navigate("/pgn", { state: { pgn: game.pgn } });
+                    }}
+                  >
                     <div className="flex items-center gap-3 text-sm">
                       <span className="font-extrabold text-white">
                         vs {game.opponent}
@@ -88,20 +90,19 @@ export default function GameHistory() {
                         })}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   <button
                     type="button"
                     className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
                     title="Delete game"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={() => {
                       setGameToDelete(game.id);
                     }}
                   >
                     <FaTrash aria-hidden="true" />
                   </button>
-                </button>
+                </article>
               );
             })}
           </div>

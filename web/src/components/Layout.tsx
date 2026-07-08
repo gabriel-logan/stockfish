@@ -92,76 +92,98 @@ export default function Layout({ children }: Props) {
             </button>
           </nav>
 
-          <div className="mt-4 border-t border-white/6 px-3 pt-3">
-            <h2 className="mb-2 text-xs font-extrabold text-[#aaa7a0] uppercase">
-              <FaUser
-                className="mr-1.5 inline text-[#97c45d]"
-                aria-hidden="true"
-              />
-              Users
-            </h2>
+          <div className="mt-4 border-t border-white/6 pt-4">
+            <div className="mb-3 flex items-center justify-between gap-2 px-1">
+              <h2 className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-[#b7d58a] uppercase">
+                <FaUser className="text-[#97c45d]" aria-hidden="true" />
+                Users
+              </h2>
 
-            {users.length > 0 && (
-              <div className="mb-2 flex gap-2">
-                <select
-                  className="h-9 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-                  value={activeUserId ?? ""}
-                  onChange={(e) => {
-                    setActiveUser(e.target.value);
+              <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-extrabold text-[#aaa7a0]">
+                {users.length}
+              </span>
+            </div>
+
+            <div className="rounded-md border border-white/8 bg-[#292d27] p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]">
+              <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
+                <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
+                  {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
+                    {activeUser?.name ?? "No user"}
+                  </div>
+                  <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
+                    {activeUser
+                      ? `${activeUser.games.length} saved games`
+                      : "Create a user to save games"}
+                  </div>
+                </div>
+              </div>
+
+              {users.length > 0 && (
+                <div className="mb-2 flex gap-2">
+                  <select
+                    className="h-9 min-w-0 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm font-bold text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                    value={activeUserId ?? ""}
+                    onChange={(e) => {
+                      setActiveUser(e.target.value);
+                    }}
+                  >
+                    {users.map((user) => {
+                      return (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  {activeUserId && (
+                    <button
+                      type="button"
+                      className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
+                      title="Delete user"
+                      onClick={() => {
+                        setShowDeleteUserModal(true);
+                      }}
+                    >
+                      <FaTrash aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
+                  onClick={() => {
+                    setShowCreateModal(true);
                   }}
                 >
-                  {users.map((user) => {
-                    return (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                      </option>
-                    );
-                  })}
-                </select>
+                  <FaUserPlus aria-hidden="true" />
+                  New
+                </button>
 
                 {activeUserId && (
                   <button
                     type="button"
-                    className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                    title="Delete user"
+                    className={`flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 text-xs font-extrabold transition-colors hover:text-white ${
+                      location.pathname === "/history"
+                        ? "bg-linear-to-br from-[#628d3f] to-[#3f735c] text-white"
+                        : "bg-[#3b3934] text-[#f0ece3] hover:bg-[#48453e]"
+                    }`}
                     onClick={() => {
-                      setShowDeleteUserModal(true);
+                      navigate("/history");
                     }}
                   >
-                    <FaTrash aria-hidden="true" />
+                    <FaHistory aria-hidden="true" />
+                    Games
                   </button>
                 )}
               </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
-                onClick={() => {
-                  setShowCreateModal(true);
-                }}
-              >
-                <FaUserPlus aria-hidden="true" />
-                New
-              </button>
-
-              {activeUserId && (
-                <button
-                  type="button"
-                  className={`flex min-h-8 flex-1 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white ${
-                    location.pathname === "/history"
-                      ? "bg-[#628d3f] text-white"
-                      : ""
-                  }`}
-                  onClick={() => {
-                    navigate("/history");
-                  }}
-                >
-                  <FaHistory aria-hidden="true" />
-                  Games
-                </button>
-              )}
             </div>
           </div>
 
@@ -196,12 +218,8 @@ export default function Layout({ children }: Props) {
             </Link>
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <span className="grid size-6 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
-              </span>
-              <strong className="overflow-hidden text-ellipsis whitespace-nowrap">
-                {activeUser?.name ?? "No user"}
-              </strong>
+              <FaUser className="text-[#97c45d]" aria-hidden="true" />
+              <strong>{users.length} users</strong>
             </div>
           </div>
         </aside>

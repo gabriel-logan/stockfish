@@ -742,25 +742,36 @@ export default function PlayComputer() {
         )}
 
         {isGameOver && (
-          <div className="flex min-h-8 flex-wrap items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
-            Game over.
-            <button
-              type="button"
-              className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
-              onClick={newGame}
-            >
-              New game
-            </button>
-            {activeUserId && (
+          <div className="flex w-[min(100%,50rem)] flex-wrap items-center justify-between gap-3 rounded-md border border-[#9dc47026] bg-[#20241f] px-3 py-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_5%)]">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="size-2.5 shrink-0 rounded-full bg-[#f2be1f]" />
+              <span className="text-sm font-extrabold text-[#f4f1e8]">
+                Game over
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#628d3f] px-3 text-xs font-extrabold text-white transition-colors hover:bg-[#7aa64c] disabled:cursor-not-allowed disabled:opacity-40"
-                onClick={saveCurrentGame}
-                disabled={!!savedGameId}
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] px-3 text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
+                onClick={newGame}
               >
-                {savedGameId ? "Saved" : "Save game"}
+                <FaRedo aria-hidden="true" />
+                New game
               </button>
-            )}
+
+              {activeUserId && (
+                <button
+                  type="button"
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-3 text-xs font-extrabold text-white transition hover:from-[#8bb75a] hover:to-[#5b9476] disabled:cursor-not-allowed disabled:opacity-45"
+                  onClick={saveCurrentGame}
+                  disabled={!!savedGameId}
+                >
+                  <FaSave aria-hidden="true" />
+                  {savedGameId ? "Saved" : "Save game"}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
