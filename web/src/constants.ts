@@ -18,7 +18,10 @@ export const MoveClassification = {
   Opening: "opening",
   Perfect: "perfect",
   Splendid: "splendid",
-} as const;
+} as const satisfies Record<
+  string,
+  keyof typeof resources.en.translation.classification
+>;
 
 export const ChessSide = {
   White: "w",

@@ -1,3 +1,4 @@
-import en from "../utils/locales/en.json";
+import { resources } from "../constants";
 
-export type ClassificationValue = keyof typeof en.classification;
+export type ClassificationValue =
+  keyof typeof resources.en.translation.classification;
