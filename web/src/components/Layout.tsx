@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
   FaChartLine,
   FaChessPawn,
@@ -6,6 +6,7 @@ import {
   FaGithub,
   FaHistory,
   FaPlay,
+  FaTrash,
   FaUser,
   FaUserPlus,
 } from "react-icons/fa";
@@ -14,6 +15,8 @@ import { toast } from "react-toastify";
 
 import { useHealthCheck } from "../hooks/useHealthCheck";
 import { useUserStore } from "../store/userStore";
+import ConfirmModal from "./ConfirmModal";
+import CreateUserModal from "./CreateUserModal";
 
 interface Props {
   children: ReactNode;
@@ -27,14 +30,15 @@ export default function Layout({ children }: Props) {
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const createUser = useUserStore((s) => s.createUser);
+  const deleteUser = useUserStore((s) => s.deleteUser);
   const setActiveUser = useUserStore((s) => s.setActiveUser);
 
-  function handleCreateUser() {
-    const name = window.prompt("Enter a name for the new user:");
-    if (name?.trim()) {
-      createUser(name.trim());
-      toast.success(`User "${name.trim()}" created`);
-    }
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+
+  function handleCreateUser(name: string) {
+    createUser(name);
+    toast.success(`User "${name}" created`);
   }
 
   function getNavButtonClass(path: string) {
@@ -96,28 +100,45 @@ export default function Layout({ children }: Props) {
           </h2>
 
           {users.length > 0 && (
-            <select
-              className="mx-3 mb-2 h-9 w-[calc(100%-1.5rem)] rounded border border-white/10 bg-[#373530] px-2 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-              value={activeUserId ?? ""}
-              onChange={(e) => {
-                setActiveUser(e.target.value);
-              }}
-            >
-              {users.map((user) => {
-                return (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                );
-              })}
-            </select>
+            <div className="mx-3 mb-2 flex gap-2">
+              <select
+                className="mx-3 mb-2 h-9 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                value={activeUserId ?? ""}
+                onChange={(e) => {
+                  setActiveUser(e.target.value);
+                }}
+              >
+                {users.map((user) => {
+                  return (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {activeUserId && (
+                <button
+                  type="button"
+                  className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
+                  title="Delete user"
+                  onClick={() => {
+                    setShowDeleteUserModal(true);
+                  }}
+                >
+                  <FaTrash aria-hidden="true" />
+                </button>
+              )}
+            </div>
           )}
 
           <div className="flex gap-2 px-3">
             <button
               type="button"
               className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-2 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
-              onClick={handleCreateUser}
+              onClick={() => {
+                setShowCreateModal(true);
+              }}
             >
               <FaUserPlus aria-hidden="true" />
               New
@@ -141,6 +162,36 @@ export default function Layout({ children }: Props) {
             )}
           </div>
         </div>
+
+        <CreateUserModal
+          open={showCreateModal}
+          onClose={() => {
+            setShowCreateModal(false);
+          }}
+          onSubmit={handleCreateUser}
+        />
+
+        <ConfirmModal
+          open={showDeleteUserModal}
+          title="Delete user"
+          message={
+            activeUserId
+              ? `Are you sure you want to delete "${
+                  users.find((u) => u.id === activeUserId)?.name
+                }"? All saved games will be lost.`
+              : ""
+          }
+          onConfirm={() => {
+            if (activeUserId) {
+              deleteUser(activeUserId);
+              toast.success("User deleted");
+            }
+            setShowDeleteUserModal(false);
+          }}
+          onCancel={() => {
+            setShowDeleteUserModal(false);
+          }}
+        />
 
         <div className="mt-4 flex flex-col gap-2 text-sm text-[#aaa7a0]">
           <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">

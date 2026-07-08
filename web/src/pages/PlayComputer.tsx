@@ -3,6 +3,7 @@ import {
   FaClipboard,
   FaRedo,
   FaRobot,
+  FaSave,
   FaUndo,
   FaUser,
   FaVolumeOff,
@@ -692,6 +693,7 @@ export default function PlayComputer() {
     setIsGameOver(false);
     setIsThinking(false);
     setError(null);
+    setSavedGameId(null);
 
     if (evalEngine?.connected) {
       evalEngine.setFullStrength();
@@ -972,7 +974,7 @@ export default function PlayComputer() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
+        <div className="grid grid-cols-4 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
           <button
             type="button"
             className={iconActionButtonClass}
@@ -1001,6 +1003,22 @@ export default function PlayComputer() {
           >
             <FaClipboard aria-hidden="true" />
           </button>
+
+          {activeUserId && (
+            <button
+              type="button"
+              className={
+                savedGameId
+                  ? `${iconActionButtonClass} bg-linear-to-br from-[#628d3f] to-[#3f735c] opacity-40`
+                  : iconActionButtonClass
+              }
+              onClick={saveCurrentGame}
+              disabled={moves.length === 0 || !activeUserId || !!savedGameId}
+              title={savedGameId ? "Saved" : "Save game"}
+            >
+              <FaSave aria-hidden="true" />
+            </button>
+          )}
         </div>
       </aside>
     </div>
