@@ -294,6 +294,20 @@ export default function PlayComputer() {
           const move = gameRef.current.move(bestMove);
 
           if (!move) {
+            const engine = playEngineRef.current;
+
+            if (
+              engine?.connected &&
+              gameStartedRef.current &&
+              gameRef.current.turn() === computerColorRef.current &&
+              !gameRef.current.isGameOver()
+            ) {
+              engine.setElo(botEloRef.current);
+              engine.startAnalysis(gameRef.current.fen(), 14, 1);
+              isEngineRunning.current = true;
+              setIsThinking(true);
+            }
+
             return;
           }
 

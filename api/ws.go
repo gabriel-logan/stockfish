@@ -12,6 +12,50 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type searchState struct {
+	mu            sync.Mutex
+	active        bool
+	dropBestMoves int
+}
+
+func (s *searchState) IsActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.active
+}
+
+func (s *searchState) MarkStarted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.active = true
+}
+
+func (s *searchState) MarkStoppedByClient() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.active {
+		s.dropBestMoves += 1
+	}
+
+	s.active = false
+}
+
+func (s *searchState) ShouldDropBestMove() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dropBestMoves > 0 {
+		s.dropBestMoves -= 1
+		return true
+	}
+
+	s.active = false
+	return false
+}
+
 // writeBinaryMsg marshals v to JSON and sends it as a WebSocket binary message.
 func writeBinaryMsg(conn *websocket.Conn, v any) error {
 	b, err := json.Marshal(v)
@@ -51,6 +95,7 @@ func handleWS(cfg Config) http.HandlerFunc {
 
 		writeBinaryMsg(conn, WSMessage{Type: "ready"})
 
+		state := &searchState{}
 		var closeOnce sync.Once
 		shutdown := func() {
 			closeOnce.Do(func() {
@@ -59,17 +104,20 @@ func handleWS(cfg Config) http.HandlerFunc {
 			})
 		}
 
-		safeGo(func() { writePump(conn, sf, shutdown) })
-		safeGo(func() { readPump(conn, sf, shutdown) })
+		safeGo(func() { writePump(conn, sf, state, shutdown) })
+		safeGo(func() { readPump(conn, sf, state, shutdown) })
 	}
 }
 
-func writePump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
+func writePump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown func()) {
 	defer shutdown()
 
 	for line := range sf.Lines() {
 		msg := parseSFLine(line)
 		if msg == nil {
+			continue
+		}
+		if msg.Type == "bestmove" && state.ShouldDropBestMove() {
 			continue
 		}
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -80,7 +128,7 @@ func writePump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 	}
 }
 
-func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
+func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown func()) {
 	defer shutdown()
 
 	for {
@@ -105,10 +153,13 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 
 			switch msg.Type {
 			case "start":
-				if err := sf.Stop(); err != nil {
-					log.Printf("readPump stop: %v", err)
+				if state.IsActive() {
+					state.MarkStoppedByClient()
+					if err := sf.Stop(); err != nil {
+						log.Printf("readPump stop: %v", err)
+					}
+					time.Sleep(15 * time.Millisecond)
 				}
-				time.Sleep(15 * time.Millisecond)
 
 				moves := strings.Fields(msg.Moves)
 				if err := sf.SetPosition(msg.FEN, moves); err != nil {
@@ -123,11 +174,16 @@ func readPump(conn *websocket.Conn, sf *Stockfish, shutdown func()) {
 
 				if err := sf.GoDepth(depth, msg.MultiPV); err != nil {
 					log.Printf("readPump go: %v", err)
+					continue
 				}
+				state.MarkStarted()
 
 			case "stop":
-				if err := sf.Stop(); err != nil {
-					log.Printf("readPump stop: %v", err)
+				if state.IsActive() {
+					state.MarkStoppedByClient()
+					if err := sf.Stop(); err != nil {
+						log.Printf("readPump stop: %v", err)
+					}
 				}
 
 			case "setoption":
