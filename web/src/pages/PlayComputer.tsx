@@ -17,7 +17,7 @@ import { openings } from "../data/openings";
 import { useSettingsStore } from "../store/settingsStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
-import { ELO_LEVELS, getSkillLevel } from "../utils/elo";
+import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 
 const BOT_MOVE_DELAY_MS = 1200;
 
@@ -181,8 +181,7 @@ export default function PlayComputer() {
         gameRef.current.turn() === computerColorRef.current &&
         !gameRef.current.isGameOver()
       ) {
-        const skill = getSkillLevel(botEloRef.current);
-        playEngine.setSkillLevel(skill);
+        playEngine.setElo(botEloRef.current);
         playEngine.startAnalysis(gameRef.current.fen(), 14, 1);
         isEngineRunning.current = true;
         setIsThinking(true);
@@ -190,7 +189,7 @@ export default function PlayComputer() {
     };
 
     evalEngine.onReady = () => {
-      evalEngine.setSkillLevel(20);
+      evalEngine.setFullStrength();
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     };
 
@@ -317,7 +316,7 @@ export default function PlayComputer() {
       return;
     }
 
-    evalEngine.setSkillLevel(20);
+    evalEngine.setFullStrength();
   }, [connected]);
 
   /*
@@ -339,8 +338,7 @@ export default function PlayComputer() {
       return;
     }
 
-    const skill = getSkillLevel(botEloRef.current);
-    engine.setSkillLevel(skill);
+    engine.setElo(botEloRef.current);
     engine.startAnalysis(gameRef.current.fen(), 14, 1);
     isEngineRunning.current = true;
     setIsThinking(true);
@@ -392,8 +390,7 @@ export default function PlayComputer() {
 
         const engine = playEngineRef.current;
         if (engine?.connected) {
-          const skill = getSkillLevel(botElo);
-          engine.setSkillLevel(skill);
+          engine.setElo(botElo);
           engine.startAnalysis(gameRef.current.fen(), 14, 1);
           isEngineRunning.current = true;
           setIsThinking(true);
@@ -504,7 +501,7 @@ export default function PlayComputer() {
     setSelectedSquare(null);
 
     if (evalEngine?.connected) {
-      evalEngine.setSkillLevel(20);
+      evalEngine.setFullStrength();
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     }
   }, [syncMoves, clearPendingBotMove]);
@@ -549,7 +546,7 @@ export default function PlayComputer() {
     setError(null);
 
     if (evalEngine?.connected) {
-      evalEngine.setSkillLevel(20);
+      evalEngine.setFullStrength();
       evalEngine.startAnalysis(newChess.fen(), 14, 1);
     }
 
@@ -557,8 +554,7 @@ export default function PlayComputer() {
       playEngine?.connected &&
       gameRef.current.turn() === computerColorRef.current
     ) {
-      const skill = getSkillLevel(botEloRef.current);
-      playEngine.setSkillLevel(skill);
+      playEngine.setElo(botEloRef.current);
       playEngine.startAnalysis(gameRef.current.fen(), 14, 1);
       isEngineRunning.current = true;
       setIsThinking(true);
@@ -700,22 +696,21 @@ export default function PlayComputer() {
             </label>
 
             <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-              <span>Bot level</span>
-              <select
-                className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+              <span>Bot Elo: {botElo}</span>
+              <input
+                className="h-2 w-full cursor-pointer accent-[#86a94f]"
+                type="range"
+                min={UCI_ELO_MIN}
+                max={UCI_ELO_MAX}
                 value={botElo}
                 onChange={(e) => {
                   setBotElo(Number(e.target.value));
                 }}
-              >
-                {ELO_LEVELS.map((level) => {
-                  return (
-                    <option key={level.elo} value={level.elo}>
-                      {level.label}
-                    </option>
-                  );
-                })}
-              </select>
+              />
+              <div className="flex justify-between text-[10px] text-[#7a786f]">
+                <span>{UCI_ELO_MIN}</span>
+                <span>{UCI_ELO_MAX}</span>
+              </div>
             </label>
           </div>
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -38,6 +39,15 @@ func handleAnalyze(stockfishPath string) http.HandlerFunc {
 			return
 		}
 		defer sf.Close()
+
+		if req.Elo > 0 {
+			if err := sf.SetOption("UCI_LimitStrength", "true"); err != nil {
+				log.Printf("set limit strength: %v", err)
+			}
+			if err := sf.SetOption("UCI_Elo", fmt.Sprintf("%d", req.Elo)); err != nil {
+				log.Printf("set elo: %v", err)
+			}
+		}
 
 		moves := strings.Fields(req.Moves)
 		if err := sf.SetPosition(req.FEN, moves); err != nil {

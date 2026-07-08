@@ -23,6 +23,7 @@ type AnalyzeRequest struct {
 	Depth   int    `json:"depth"`
 	MultiPV int    `json:"multi_pv"`
 	Moves   string `json:"moves,omitempty"`
+	Elo     int    `json:"elo,omitempty"`
 }
 
 type AnalyzeResponse struct {

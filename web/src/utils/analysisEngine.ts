@@ -100,19 +100,20 @@ export class AnalysisEngine {
     }
   }
 
-  private currentSkill: number = 10;
+  private sendEloOptions(elo: number): void {
+    this.send({ type: "setoption", fen: "UCI_LimitStrength", moves: "true" });
+    this.send({ type: "setoption", fen: "UCI_Elo", moves: String(elo) });
+  }
 
-  setSkillLevel(skill: number): void {
-    this.currentSkill = skill;
-    this.send({ type: "setoption", fen: "Skill Level", moves: String(skill) });
+  setElo(elo: number): void {
+    this.sendEloOptions(elo);
+  }
+
+  setFullStrength(): void {
+    this.send({ type: "setoption", fen: "UCI_LimitStrength", moves: "false" });
   }
 
   startAnalysis(fen: string, depth: number = 14, multiPv: number = 1): void {
-    this.send({
-      type: "setoption",
-      fen: "Skill Level",
-      moves: String(this.currentSkill),
-    });
     this.send({ type: "start", fen, depth, multi_pv: multiPv });
   }
 
