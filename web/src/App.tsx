@@ -18,14 +18,7 @@ function App() {
         </Routes>
       </Layout>
 
-      <ToastContainer
-        position="bottom-right"
-        theme="dark"
-        closeOnClick
-        pauseOnHover
-        newestOnTop
-        transition={Bounce}
-      />
+      <ToastContainer theme="dark" transition={Bounce} />
     </BrowserRouter>
   );
 }
