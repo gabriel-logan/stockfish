@@ -570,10 +570,30 @@ export default function PlayComputer() {
 
   return (
     <div className="grid w-[min(100%,108rem)] grid-cols-[minmax(0,1fr)_minmax(20rem,31.25rem)] gap-4 max-[72rem]:grid-cols-1">
+      {isThinking && (
+        <div className="absolute top-5 flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+          <span className="size-2 animate-pulse rounded-full bg-[#f7c948]" />
+          Thinking...
+        </div>
+      )}
+
       <div className="flex min-w-0 flex-col items-center gap-3">
         {error && (
           <div className="w-[min(100%,50rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
             {error}
+          </div>
+        )}
+
+        {isGameOver && (
+          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+            Game over.
+            <button
+              type="button"
+              className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
+              onClick={newGame}
+            >
+              New game
+            </button>
           </div>
         )}
 
@@ -627,26 +647,6 @@ export default function PlayComputer() {
           Opening
           <strong>{openingName ?? "not detected yet"}</strong>
         </div>
-
-        {isThinking && (
-          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
-            <span className="size-2 animate-pulse rounded-full bg-[#f7c948]" />
-            Thinking...
-          </div>
-        )}
-
-        {isGameOver && (
-          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
-            Game over.
-            <button
-              type="button"
-              className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
-              onClick={newGame}
-            >
-              New game
-            </button>
-          </div>
-        )}
       </div>
 
       <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
