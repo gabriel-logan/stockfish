@@ -19,6 +19,7 @@ import { useHealthCheck } from "../hooks/useHealthCheck";
 import { useUserStore } from "../store/userStore";
 import ConfirmModal from "./ConfirmModal";
 import CreateUserModal from "./CreateUserModal";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 interface Props {
   children: ReactNode;
@@ -36,9 +37,6 @@ export default function Layout({ children }: Props) {
   const createUser = useUserStore((s) => s.createUser);
   const deleteUser = useUserStore((s) => s.deleteUser);
   const setActiveUser = useUserStore((s) => s.setActiveUser);
-  const locale = useUserStore((s) => s.locale);
-  const setLocale = useUserStore((s) => s.setLocale);
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
 
@@ -215,17 +213,8 @@ export default function Layout({ children }: Props) {
             </div>
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaGlobe className="text-[#97c45d]" aria-hidden="true" />
-              <select
-                className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[#bebaae] outline-none"
-                value={locale}
-                onChange={(e) => {
-                  setLocale(e.target.value as "en" | "pt");
-                }}
-              >
-                <option value="en">English</option>
-                <option value="pt">Português</option>
-              </select>
+              <FaGlobe className="shrink-0 text-[#97c45d]" aria-hidden="true" />
+              <LanguageSwitcher />
             </div>
 
             <Link
