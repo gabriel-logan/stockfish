@@ -15,7 +15,11 @@ import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
 import { openings } from "../data/openings";
-import { useSettingsStore } from "../store/settingsStore";
+import {
+  PIECE_SETS,
+  type PieceSet,
+  useSettingsStore,
+} from "../store/settingsStore";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 
@@ -60,7 +64,8 @@ export default function PgnViewer() {
   );
 
   const abortRef = useRef(false);
-  const { showEvaluationBar, showMoveEvaluation } = useSettingsStore();
+  const { showEvaluationBar, showMoveEvaluation, pieceSet, setPieceSet } =
+    useSettingsStore();
 
   const moves: MoveEntry[] = positions
     .filter((p): p is PositionData & { san: string; color: "w" | "b" } => {
@@ -352,6 +357,7 @@ export default function PgnViewer() {
               lastMove={lastMove}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
+              pieceSet={pieceSet}
             />
           </div>
         </div>
@@ -461,6 +467,31 @@ export default function PgnViewer() {
           >
             {isAnalyzing ? "Analyzing..." : "Analyze"}
           </button>
+        </div>
+
+        <div className="border-b border-white/6 p-4">
+          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            Appearance
+          </h2>
+
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+            <span>Piece set</span>
+            <select
+              className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+              value={pieceSet}
+              onChange={(e) => {
+                setPieceSet(e.target.value as PieceSet);
+              }}
+            >
+              {PIECE_SETS.map((set) => {
+                return (
+                  <option key={set.value} value={set.value}>
+                    {set.label}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
         </div>
 
         <div className="border-b border-white/6 p-4">

@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { Chess, type Square } from "chess.js";
 
+import type { PieceSet } from "../store/settingsStore";
+
 interface BoardProps {
   game: Chess;
   onMove?: (from: Square, to: Square) => void;
@@ -11,6 +13,7 @@ interface BoardProps {
   interactive?: boolean;
   squareEvaluations?: Record<string, string>;
   showEvaluationIcons?: boolean;
+  pieceSet?: PieceSet;
 }
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -71,6 +74,7 @@ export default function Board({
   interactive = true,
   squareEvaluations = {},
   showEvaluationIcons = false,
+  pieceSet = "maestro",
 }: BoardProps) {
   const board = game.board();
 
@@ -204,9 +208,9 @@ export default function Board({
 
                   {piece && (
                     <img
-                      src={`/pieces/cburnett/${piece.color}${piece.type.toUpperCase()}.svg`}
+                      src={`/pieces/${pieceSet}/${piece.color}${piece.type.toUpperCase()}.svg`}
                       alt={`${piece.color}${piece.type}`}
-                      className="size-[86%] drop-shadow-[0_0.11rem_0.08rem_rgb(0_0_0_/_22%)]"
+                      className="size-[86%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
                       draggable={false}
                     />
                   )}

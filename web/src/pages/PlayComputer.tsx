@@ -15,7 +15,11 @@ import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
 import { openings } from "../data/openings";
-import { useSettingsStore } from "../store/settingsStore";
+import {
+  PIECE_SETS,
+  type PieceSet,
+  useSettingsStore,
+} from "../store/settingsStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
@@ -74,7 +78,9 @@ export default function PlayComputer() {
     soundEnabled,
     botElo,
     playerColor,
+    pieceSet,
     setPlayerColor,
+    setPieceSet,
     setShowEvaluationBar,
     setShowMoveEvaluation,
     setSoundEnabled,
@@ -706,6 +712,7 @@ export default function PlayComputer() {
               interactive={!isThinking && !isGameOver}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
+              pieceSet={pieceSet}
             />
           </div>
         </div>
@@ -823,6 +830,25 @@ export default function PlayComputer() {
                     <span>{UCI_ELO_MIN}</span>
                     <span>{UCI_ELO_MAX}</span>
                   </div>
+                </label>
+
+                <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+                  <span>Piece set</span>
+                  <select
+                    className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                    value={pieceSet}
+                    onChange={(e) => {
+                      setPieceSet(e.target.value as PieceSet);
+                    }}
+                  >
+                    {PIECE_SETS.map((set) => {
+                      return (
+                        <option key={set.value} value={set.value}>
+                          {set.label}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </label>
               </div>
 
