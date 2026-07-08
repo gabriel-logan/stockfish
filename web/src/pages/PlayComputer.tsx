@@ -26,6 +26,7 @@ import {
 import { type SavedGame, useUserStore } from "../store/userStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
+import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 import {
   playCaptureSound,
@@ -625,7 +626,7 @@ export default function PlayComputer() {
         : "*";
 
     const savedGame: SavedGame = {
-      id: crypto.randomUUID(),
+      id: createId(),
       pgn,
       date: new Date().toISOString(),
       result,

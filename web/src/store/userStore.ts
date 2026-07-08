@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { STORAGE_KEY_USER_STORE } from "../constants";
+import { createId } from "../utils/createId";
 
 export interface SavedGame {
   id: string;
@@ -39,7 +40,7 @@ export const useUserStore = create<UserState>()(
       activeUserId: null,
 
       createUser: (name: string) => {
-        const id = crypto.randomUUID();
+        const id = createId();
         const newUser: User = {
           id,
           name,
