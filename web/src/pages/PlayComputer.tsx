@@ -62,6 +62,7 @@ export default function PlayComputer() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardFlipped, setBoardFlipped] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
 
   const {
     showEvaluationBar,
@@ -82,6 +83,7 @@ export default function PlayComputer() {
   const playerColorRef = useRef(playerColor);
   const botEloRef = useRef(botElo);
   const soundEnabledRef = useRef(soundEnabled);
+  const gameStartedRef = useRef(gameStarted);
 
   useEffect(() => {
     computerColorRef.current = computerColor;
@@ -95,6 +97,9 @@ export default function PlayComputer() {
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
+  useEffect(() => {
+    gameStartedRef.current = gameStarted;
+  }, [gameStarted]);
   useEffect(() => {
     evaluationRef.current = evaluation;
   }, [evaluation]);
@@ -190,6 +195,7 @@ export default function PlayComputer() {
 
     playEngine.onReady = () => {
       if (
+        gameStartedRef.current &&
         gameRef.current.turn() === computerColorRef.current &&
         !gameRef.current.isGameOver()
       ) {
@@ -348,31 +354,6 @@ export default function PlayComputer() {
     evalEngine.setFullStrength();
   }, [connected]);
 
-  /*
-    This block intentionally uses the play engine only. Evaluation data comes
-    from evalEngineRef.
-  */
-  useEffect(() => {
-    const engine = playEngineRef.current;
-
-    if (!engine?.connected) {
-      return;
-    }
-
-    if (gameRef.current.isGameOver()) {
-      return;
-    }
-
-    if (gameRef.current.turn() !== computerColorRef.current) {
-      return;
-    }
-
-    engine.setElo(botEloRef.current);
-    engine.startAnalysis(gameRef.current.fen(), 14, 1);
-    isEngineRunning.current = true;
-    setIsThinking(true);
-  }, [connected]);
-
   const handlePlayerMove = useCallback(
     (from: Square, to: Square) => {
       if (gameRef.current.turn() !== playerColor) {
@@ -430,12 +411,14 @@ export default function PlayComputer() {
           return;
         }
 
-        const engine = playEngineRef.current;
-        if (engine?.connected) {
-          engine.setElo(botElo);
-          engine.startAnalysis(gameRef.current.fen(), 14, 1);
-          isEngineRunning.current = true;
-          setIsThinking(true);
+        if (gameStartedRef.current) {
+          const engine = playEngineRef.current;
+          if (engine?.connected) {
+            engine.setElo(botElo);
+            engine.startAnalysis(gameRef.current.fen(), 14, 1);
+            isEngineRunning.current = true;
+            setIsThinking(true);
+          }
         }
       } catch {
         // Invalid move
@@ -557,6 +540,25 @@ export default function PlayComputer() {
     setBoardFlipped((prev) => !prev);
   }, []);
 
+  const handleStartGame = useCallback(() => {
+    setGameStarted(true);
+
+    // If it's the bot's turn, start analysis immediately
+    if (
+      gameRef.current.turn() === computerColorRef.current &&
+      !gameRef.current.isGameOver()
+    ) {
+      const engine = playEngineRef.current;
+
+      if (engine?.connected) {
+        engine.setElo(botEloRef.current);
+        engine.startAnalysis(gameRef.current.fen(), 14, 1);
+        isEngineRunning.current = true;
+        setIsThinking(true);
+      }
+    }
+  }, []);
+
   const newGame = useCallback(() => {
     analysisVersionRef.current += 1;
     clearPendingBotMove();
@@ -583,6 +585,7 @@ export default function PlayComputer() {
     setLastMove(null);
     setEvaluation(null);
     setMate(null);
+    setGameStarted(false);
     setIsGameOver(false);
     setIsThinking(false);
     setError(null);
@@ -706,18 +709,37 @@ export default function PlayComputer() {
           </button>
         </div>
 
-        <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
-          <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
-            <FaRobot aria-hidden="true" />
-          </div>
+        {!gameStarted && moves.length === 0 ? (
+          <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
+            <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
+              <FaRobot aria-hidden="true" />
+            </div>
 
-          <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
-            <strong className="text-base text-[#f4f3ea]">
-              Ready for your move
-            </strong>
-            <span>Stockfish will respond after you play.</span>
+            <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476]"
+                onClick={handleStartGame}
+                disabled={!connected}
+              >
+                Start Game
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
+            <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
+              <FaRobot aria-hidden="true" />
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
+              <strong className="text-base text-[#f4f3ea]">
+                Ready for your move
+              </strong>
+              <span>Stockfish will respond after you play.</span>
+            </div>
+          </div>
+        )}
 
         <div className="border-b border-white/6 p-4">
           <div className="mb-3 hidden min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:flex">
@@ -725,7 +747,7 @@ export default function PlayComputer() {
             <strong>{openingName ?? "not detected yet"}</strong>
           </div>
 
-          {moves.length === 0 && (
+          {!gameStarted && moves.length === 0 && (
             <>
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
                 Game setup
@@ -793,13 +815,15 @@ export default function PlayComputer() {
             </>
           )}
 
-          <button
-            type="button"
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476]"
-            onClick={newGame}
-          >
-            New game
-          </button>
+          {moves.length > 0 && (
+            <button
+              type="button"
+              className="mt-2 inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476]"
+              onClick={newGame}
+            >
+              New game
+            </button>
+          )}
         </div>
 
         <div className="border-b border-white/6 p-4">
