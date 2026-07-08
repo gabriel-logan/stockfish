@@ -39,7 +39,7 @@ export default function MoveClassificationIcon({
       title={classification}
       width={size}
       height={size}
-      className="inline-block"
+      className="inline-block shrink-0"
     />
   );
 }

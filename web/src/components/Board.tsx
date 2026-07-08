@@ -89,19 +89,34 @@ export default function Board({
     const isLastMoveSquare =
       lastMove !== null && (lastMove.from === square || lastMove.to === square);
 
-    let cls = isLight ? "bg-[#f0d9b5]" : "bg-[#b58863]";
+    let className =
+      "relative flex items-center justify-center [width:clamp(2.3rem,min(5.4vw,8.8vh),7.4rem)] [height:clamp(2.3rem,min(5.4vw,8.8vh),7.4rem)]";
 
-    if (isSelected) {
-      cls = "bg-[#f6f669]";
-    } else if (isLastMoveSquare) {
-      cls = isLight ? "bg-[#ddd26b]" : "bg-[#aaa23a]";
+    if (interactive) {
+      className = `${className} cursor-pointer`;
     }
 
-    return cls;
+    if (isSelected) {
+      return `${className} bg-[#f6f669]`;
+    }
+
+    if (isLastMoveSquare) {
+      if (isLight) {
+        return `${className} bg-[#ddd26b]`;
+      }
+
+      return `${className} bg-[#aaa23a]`;
+    }
+
+    if (isLight) {
+      return `${className} bg-[#f0d9b5]`;
+    }
+
+    return `${className} bg-[#b58863]`;
   }
 
   return (
-    <div className="inline-block border-2 border-gray-800 select-none">
+    <div className="inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
       {displayRanks.map((rank, row) => {
         return (
           <div key={rank} className="flex">
@@ -115,7 +130,7 @@ export default function Board({
               return (
                 <div
                   key={square}
-                  className={`relative flex h-[60px] w-[60px] cursor-pointer items-center justify-center ${getSquareClass(row, col, square)}`}
+                  className={getSquareClass(row, col, square)}
                   onClick={() => {
                     handleClick(square);
                   }}
@@ -124,28 +139,26 @@ export default function Board({
                     <img
                       src={`/pieces/cburnett/${piece.color}${piece.type.toUpperCase()}.svg`}
                       alt={`${piece.color}${piece.type}`}
-                      className="h-[50px] w-[50px]"
+                      className="size-[86%] drop-shadow-[0_0.11rem_0.08rem_rgb(0_0_0_/_22%)]"
                       draggable={false}
                     />
                   )}
                   {isLegalTarget && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                       {piece ? (
-                        <div className="h-8 w-8 rounded-full border-4 border-gray-800/30" />
+                        <div className="size-[52%] rounded-full border-4 border-black/25" />
                       ) : (
-                        <div className="h-3 w-3 rounded-full bg-gray-800/30" />
+                        <div className="size-[22%] rounded-full bg-black/25" />
                       )}
                     </div>
                   )}
                   {showEvaluationIcons && squareEvaluations[square] && (
-                    <div className="pointer-events-none absolute top-0 right-0">
-                      <img
-                        src={`/icons/${squareEvaluations[square]}.png`}
-                        alt={squareEvaluations[square]}
-                        title={squareEvaluations[square]}
-                        className="h-4 w-4"
-                      />
-                    </div>
+                    <img
+                      src={`/icons/${squareEvaluations[square]}.png`}
+                      alt={squareEvaluations[square]}
+                      title={squareEvaluations[square]}
+                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-5 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
+                    />
                   )}
                 </div>
               );

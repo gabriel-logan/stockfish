@@ -1,18 +1,37 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  FaChartLine,
+  FaClipboard,
+  FaFastBackward,
+  FaFastForward,
+  FaStepBackward,
+  FaStepForward,
+  FaVolumeUp,
+} from "react-icons/fa";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
+import { openings } from "../data/openings";
 import { useSettingsStore } from "../store/settingsStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
+
+function getOpeningName(fen: string): string | null {
+  const placement = fen.split(" ")[0];
+  const match = openings.find((o) => o.fen === placement);
+
+  return match?.name ?? null;
+}
 
 interface PositionData {
   fen: string;
   san?: string;
   color?: "w" | "b";
+  from?: string;
+  to?: string;
   evaluation: number | null;
   mate: number | null;
   classification?: string;
@@ -44,6 +63,8 @@ export default function PgnViewer() {
         san: p.san,
         fen: p.fen,
         color: p.color,
+        from: p.from,
+        to: p.to,
         classification: p.classification,
         evaluation: p.evaluation ?? undefined,
         mate: p.mate ?? undefined,
@@ -52,6 +73,40 @@ export default function PgnViewer() {
 
   const currentEval = positions[currentIdx]?.evaluation ?? null;
   const currentMate = positions[currentIdx]?.mate ?? null;
+  const currentFen = positions[currentIdx]?.fen ?? gameAtIdx.fen();
+  const reviewPositionLabel =
+    positions.length > 0 ? `${currentIdx}/${positions.length - 1}` : "Ready";
+
+  const squareEvaluations = useMemo(() => {
+    const evals: Record<string, string> = {};
+    const position = positions[currentIdx];
+
+    if (position?.to && position.classification) {
+      evals[position.to] = position.classification;
+    }
+
+    return evals;
+  }, [positions, currentIdx]);
+
+  const openingName = useMemo(() => {
+    const fens = positions
+      .slice(0, currentIdx + 1)
+      .map((position) => position.fen);
+
+    if (fens.length === 0) {
+      fens.push(currentFen);
+    }
+
+    for (let i = fens.length - 1; i >= 0; i--) {
+      const name = getOpeningName(fens[i]);
+
+      if (name) {
+        return name;
+      }
+    }
+
+    return null;
+  }, [currentFen, positions, currentIdx]);
 
   const getGameAtMove = useCallback(
     (posIdx: number): Chess => {
@@ -132,6 +187,8 @@ export default function PgnViewer() {
             fen: move.after,
             san: move.san,
             color: move.color as "w" | "b",
+            from: move.from,
+            to: move.to,
             evaluation: null,
             mate: null,
           });
@@ -184,7 +241,12 @@ export default function PgnViewer() {
       setPositions([...posData]);
       setProgress(100);
       setIsAnalyzing(false);
-      goToPosition(0);
+
+      const initialGame = new Chess();
+      initialGame.load(posData[0].fen);
+      setCurrentIdx(0);
+      setGameAtIdx(initialGame);
+      setLastMove(null);
     } catch {
       setError("Invalid PGN. Check the format and try again.");
       setIsAnalyzing(false);
@@ -225,164 +287,225 @@ export default function PgnViewer() {
     }
   };
 
+  const iconActionButtonClass =
+    "inline-flex min-h-11 w-13 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
-    <div className="flex w-full max-w-6xl flex-col items-center gap-4">
-      <div className="w-full max-w-2xl">
-        <div className="mb-2 flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-300">
-            Paste PGN:
-          </label>
-          <button
-            type="button"
-            className="text-xs text-blue-400 hover:text-blue-300"
-            onClick={handlePaste}
-          >
-            Paste
-          </button>
-        </div>
-
-        <textarea
-          className="h-28 w-full rounded border border-gray-700 bg-gray-900 p-3 font-mono text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. 1. e4 e5 2. Nf3 Nc6 ..."
-          value={pgnInput}
-          onChange={(e) => {
-            setPgnInput(e.target.value);
-          }}
-        />
-
-        <button
-          type="button"
-          className="mt-2 rounded bg-blue-700 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
-          onClick={handleLoadPgn}
-          disabled={isAnalyzing || !pgnInput.trim()}
-        >
-          {isAnalyzing ? "Analyzing..." : "Analyze"}
-        </button>
-      </div>
-
-      {isAnalyzing && (
-        <div className="w-full max-w-md">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
-            <div
-              className="h-full bg-blue-600 transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
+    <div className="grid w-[min(100%,108rem)] grid-cols-[minmax(0,1fr)_minmax(20rem,31.25rem)] gap-4 max-[72rem]:grid-cols-1">
+      <div className="flex min-w-0 flex-col items-center gap-3">
+        {error && (
+          <div className="w-[min(100%,42rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
+            {error}
           </div>
-          <p className="mt-1 text-center text-xs text-gray-500">
-            {Math.round(progress)}%
-          </p>
-        </div>
-      )}
+        )}
 
-      {error && (
-        <div className="rounded bg-red-900/80 px-4 py-2 text-sm text-red-200">
-          {error}
-        </div>
-      )}
+        <div className="flex w-[min(100%,42rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-white">
+              <FaChartLine aria-hidden="true" />
+            </span>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+              Game Review
+            </span>
+          </div>
 
-      {positions.length > 0 && !isAnalyzing && (
-        <>
-          <div className="flex gap-3">
+          <span>{reviewPositionLabel}</span>
+        </div>
+
+        <div className="flex w-full min-w-0 justify-center">
+          <div className="flex min-w-0 items-stretch justify-center gap-2 max-[44rem]:gap-1">
             <Board
               game={gameAtIdx}
               onMove={() => {}}
               selectedSquare={null}
               onSelectSquare={() => {}}
               lastMove={lastMove}
+              squareEvaluations={squareEvaluations}
+              showEvaluationIcons={showMoveEvaluation}
             />
 
             {showEvaluationBar && (
-              <EvaluationBar
-                evaluation={currentEval}
-                mate={currentMate}
-                height={484}
-              />
+              <EvaluationBar evaluation={currentEval} mate={currentMate} />
             )}
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-              onClick={() => {
-                goToPosition(0);
-              }}
-              disabled={currentIdx <= 0}
-            >
-              {"⏮"}
-            </button>
-
-            <button
-              type="button"
-              className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-              onClick={() => {
-                goToPosition(currentIdx - 1);
-              }}
-              disabled={currentIdx <= 0}
-            >
-              {"◀"}
-            </button>
-
-            <span className="min-w-[80px] text-center text-sm text-gray-400">
-              {currentIdx}/{positions.length - 1}
-            </span>
-
-            <button
-              type="button"
-              className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-              onClick={() => {
-                goToPosition(currentIdx + 1);
-              }}
-              disabled={currentIdx >= positions.length - 1}
-            >
-              {"▶"}
-            </button>
-
-            <button
-              type="button"
-              className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-              onClick={() => {
-                goToPosition(positions.length - 1);
-              }}
-              disabled={currentIdx >= positions.length - 1}
-            >
-              {"⏭"}
-            </button>
-          </div>
-
-          <div className="w-full max-w-md">
-            <MoveList
-              moves={moves}
-              currentMoveIndex={currentIdx - 1}
-              onGoToMove={(idx) => {
-                goToPosition(idx + 1);
-              }}
-              showEvaluation={showMoveEvaluation}
-            />
-          </div>
-
-          <div className="flex gap-6 text-sm text-gray-400">
-            <div>
-              White accuracy:{" "}
-              <span className="font-semibold text-gray-200">
-                {computeAccuracy(moves, "w")}%
-              </span>
-            </div>
-            <div>
-              Black accuracy:{" "}
-              <span className="font-semibold text-gray-200">
-                {computeAccuracy(moves, "b")}%
-              </span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {positions.length === 0 && !isAnalyzing && (
-        <div className="py-12 text-center text-gray-500">
-          Paste a PGN and click "Analyze" to review the game
         </div>
-      )}
+
+        <div className="flex justify-center gap-2 rounded-md border border-[#accc821a] bg-[#1d211d] p-2">
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={() => {
+              goToPosition(0);
+            }}
+            disabled={currentIdx <= 0}
+            title="First move"
+          >
+            <FaFastBackward aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={() => {
+              goToPosition(currentIdx - 1);
+            }}
+            disabled={currentIdx <= 0}
+            title="Previous move"
+          >
+            <FaStepBackward aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={() => {
+              goToPosition(currentIdx + 1);
+            }}
+            disabled={currentIdx >= positions.length - 1}
+            title="Next move"
+          >
+            <FaStepForward aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={() => {
+              goToPosition(positions.length - 1);
+            }}
+            disabled={currentIdx >= positions.length - 1}
+            title="Last move"
+          >
+            <FaFastForward aria-hidden="true" />
+          </button>
+        </div>
+
+        {positions.length === 0 && !isAnalyzing && (
+          <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
+            Paste a PGN and click Analyze to review the game.
+          </div>
+        )}
+
+        <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+          Opening
+          <strong>{openingName ?? "not detected yet"}</strong>
+        </div>
+      </div>
+
+      <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
+        <div className="flex min-h-13 items-center justify-between border-b border-[#accc821a] bg-linear-to-br from-[#1f241f] to-[#20211e] px-4 text-base font-extrabold text-white">
+          <span>PGN Analysis</span>
+          <button
+            type="button"
+            className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
+            title="Sound"
+          >
+            <FaVolumeUp aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-md border border-white/6 bg-[#242321] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-base font-black text-white">Paste PGN</label>
+
+            <button
+              type="button"
+              className="inline-flex min-h-8 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
+              onClick={handlePaste}
+            >
+              <FaClipboard aria-hidden="true" />
+              Paste
+            </button>
+          </div>
+
+          <textarea
+            className="min-h-36 w-full resize-y rounded border border-white/10 bg-[#373530] p-3 font-mono text-sm leading-relaxed text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+            placeholder="e.g. 1. e4 e5 2. Nf3 Nc6 ..."
+            value={pgnInput}
+            onChange={(e) => {
+              setPgnInput(e.target.value);
+            }}
+          />
+
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476] disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={handleLoadPgn}
+            disabled={isAnalyzing || !pgnInput.trim()}
+          >
+            {isAnalyzing ? "Analyzing..." : "Analyze"}
+          </button>
+        </div>
+
+        <div className="border-b border-white/6 p-4">
+          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            Opening
+          </h2>
+
+          <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
+            {openingName ?? "No book match for this position yet"}
+          </div>
+        </div>
+
+        {isAnalyzing && (
+          <div className="px-4 pb-4">
+            <div className="h-2 overflow-hidden rounded-full bg-[#171614]">
+              <div
+                className="h-full bg-[#86a94f] transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-center text-xs font-extrabold text-[#aaa7a0]">
+              {Math.round(progress)}%
+            </p>
+          </div>
+        )}
+
+        {positions.length > 0 && !isAnalyzing && (
+          <>
+            <div className="min-h-48 flex-1 overflow-hidden border-b border-white/6 p-4">
+              <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+                Moves
+              </h2>
+
+              <MoveList
+                moves={moves}
+                currentMoveIndex={currentIdx - 1}
+                onGoToMove={(idx) => {
+                  goToPosition(idx + 1);
+                }}
+                showEvaluation={showMoveEvaluation}
+              />
+            </div>
+
+            <div className="border-b border-white/6 p-4">
+              <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+                Accuracy
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
+                <div className="min-h-18 rounded-md border border-white/6 bg-[#302e2a] p-3">
+                  <div className="text-xs font-extrabold text-[#aaa7a0] uppercase">
+                    White
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-white">
+                    {computeAccuracy(moves, "w")}%
+                  </div>
+                </div>
+
+                <div className="min-h-18 rounded-md border border-white/6 bg-[#302e2a] p-3">
+                  <div className="text-xs font-extrabold text-[#aaa7a0] uppercase">
+                    Black
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-white">
+                    {computeAccuracy(moves, "b")}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </aside>
     </div>
   );
 }

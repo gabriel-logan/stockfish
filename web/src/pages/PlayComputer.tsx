@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FaClipboard,
+  FaRedo,
+  FaRobot,
+  FaUndo,
+  FaUser,
+  FaVolumeUp,
+} from "react-icons/fa";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
@@ -11,17 +19,27 @@ import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { ELO_LEVELS, getSkillLevel } from "../utils/elo";
 
+function getOpeningName(fen: string): string | null {
+  const placement = fen.split(" ")[0];
+  const match = openings.find((o) => o.fen === placement);
+
+  return match?.name ?? null;
+}
+
 export default function PlayComputer() {
   const [game, setGame] = useState(() => {
     return new Chess();
   });
   const gameRef = useRef(game);
-  const engineRef = useRef<AnalysisEngine | null>(null);
+  const playEngineRef = useRef<AnalysisEngine | null>(null);
+  const evalEngineRef = useRef<AnalysisEngine | null>(null);
 
   const isEngineRunning = useRef(false);
   const prevEvalRef = useRef<number | null>(null);
   const evaluationRef = useRef<number | null>(null);
   const movesRef = useRef<MoveEntry[]>([]);
+  const analysisVersionRef = useRef(0);
+  const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(
@@ -71,56 +89,112 @@ export default function PlayComputer() {
     setMoves(newMoves);
   }, []);
 
-  // Setup AnalysisEngine (WebSocket)
-  useEffect(() => {
-    const engine = new AnalysisEngine();
-    engineRef.current = engine;
+  const classifyLastMove = useCallback(
+    async (moveIndex: number, fenBefore: string, version: number) => {
+      const evalEngine = evalEngineRef.current;
+      const moveEntry = movesRef.current[moveIndex];
 
-    engine.onReady = () => {
+      if (!evalEngine?.connected || !moveEntry) {
+        return null;
+      }
+
+      const previousEvalTask = evalQueueRef.current;
+      let releaseEvalTask = () => {};
+
+      evalQueueRef.current = previousEvalTask.then(() => {
+        return new Promise<void>((resolve) => {
+          releaseEvalTask = resolve;
+        });
+      });
+
+      await previousEvalTask;
+
+      try {
+        const before = await evalEngine.analyzePosition(fenBefore, 14);
+
+        if (analysisVersionRef.current !== version) {
+          return null;
+        }
+
+        const after = await evalEngine.analyzePosition(moveEntry.fen, 14);
+
+        if (analysisVersionRef.current !== version) {
+          return null;
+        }
+
+        const classification = classifyMove(
+          before.score,
+          after.score,
+          moveEntry.color,
+        );
+
+        const nextMoves = [...movesRef.current];
+        const currentEntry = nextMoves[moveIndex];
+
+        if (!currentEntry) {
+          return after.score;
+        }
+
+        nextMoves[moveIndex] = {
+          ...currentEntry,
+          classification,
+          evaluation: after.score ?? undefined,
+          mate: after.mate ?? undefined,
+        };
+
+        syncMoves(nextMoves);
+        evaluationRef.current = after.score;
+        setEvaluation(after.score);
+        setMate(after.mate);
+        prevEvalRef.current = after.score;
+
+        return after.score;
+      } finally {
+        releaseEvalTask();
+      }
+    },
+    [syncMoves],
+  );
+
+  // Setup engines (one plays, one evaluates at full strength)
+  useEffect(() => {
+    const playEngine = new AnalysisEngine();
+    const evalEngine = new AnalysisEngine();
+
+    playEngineRef.current = playEngine;
+    evalEngineRef.current = evalEngine;
+
+    playEngine.onReady = () => {
       if (
         gameRef.current.turn() === computerColorRef.current &&
         !gameRef.current.isGameOver()
       ) {
         const skill = getSkillLevel(botEloRef.current);
-        engine.setSkillLevel(skill);
-        engine.startAnalysis(gameRef.current.fen(), 14, 1);
+        playEngine.setSkillLevel(skill);
+        playEngine.startAnalysis(gameRef.current.fen(), 14, 1);
         isEngineRunning.current = true;
         setIsThinking(true);
       }
     };
 
-    engine.onAnalysis = (data) => {
+    evalEngine.onReady = () => {
+      evalEngine.setSkillLevel(20);
+      evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
+    };
+
+    evalEngine.onAnalysis = (data) => {
       evaluationRef.current = data.score;
       setEvaluation(data.score);
       setMate(data.mate);
     };
 
-    engine.onBestMove = (data) => {
+    playEngine.onBestMove = (data) => {
       isEngineRunning.current = false;
       setIsThinking(false);
 
       if (!data.bestmove || data.bestmove === "(none)") {
         setIsGameOver(true);
         return;
-      }
-
-      // Classify player's last unclassified move
-      const currentMoves = movesRef.current;
-      if (currentMoves.length > 0) {
-        const last = currentMoves[currentMoves.length - 1];
-        if (last.color === playerColorRef.current && !last.classification) {
-          const classification = classifyMove(
-            prevEvalRef.current,
-            evaluationRef.current,
-            last.color,
-          );
-          currentMoves[currentMoves.length - 1] = {
-            ...last,
-            classification,
-            evaluation: evaluationRef.current ?? undefined,
-          };
-          syncMoves([...currentMoves]);
-        }
       }
 
       // Play computer's move
@@ -132,12 +206,14 @@ export default function PlayComputer() {
       }
 
       try {
+        const fenBefore = gameRef.current.fen();
         const move = gameRef.current.move(data.bestmove);
 
         if (!move) {
           return;
         }
 
+        const version = analysisVersionRef.current;
         setLastMove({ from: move.from as Square, to: move.to as Square });
 
         const entry: MoveEntry = {
@@ -147,40 +223,72 @@ export default function PlayComputer() {
           from: move.from,
           to: move.to,
         };
-        syncMoves([...movesRef.current, entry]);
+        const nextMoves = [...movesRef.current, entry];
+        const moveIndex = nextMoves.length - 1;
+
+        syncMoves(nextMoves);
         setIsGameOver(gameRef.current.isGameOver());
+        void classifyLastMove(moveIndex, fenBefore, version);
       } catch {
         // Invalid move from engine
       }
     };
 
-    engine.onError = (msg) => {
+    playEngine.onError = (msg) => {
       setError(msg);
     };
 
-    engine.onDisconnect = () => {
+    evalEngine.onError = (msg) => {
+      setError(msg);
+    };
+
+    playEngine.onDisconnect = () => {
       setConnected(false);
       setError("Connection lost");
     };
 
-    engine
-      .connect()
+    evalEngine.onDisconnect = () => {
+      setConnected(false);
+      setError("Evaluation connection lost");
+    };
+
+    Promise.all([playEngine.connect(), evalEngine.connect()])
       .then(() => {
         setConnected(true);
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         setError(err.message);
       });
 
     return () => {
-      engine.disconnect();
-      engineRef.current = null;
+      playEngine.disconnect();
+      evalEngine.disconnect();
+      playEngineRef.current = null;
+      evalEngineRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [classifyLastMove]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When WebSocket connects and it's computer's turn, start analysis
+  /*
+    Keep a dedicated connection for playing moves and a separate full-strength
+    connection for evaluations/classifications so low-skill Stockfish moves can
+    be judged honestly.
+  */
   useEffect(() => {
-    const engine = engineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (!evalEngine?.connected) {
+      return;
+    }
+
+    evalEngine.setSkillLevel(20);
+  }, [connected]);
+
+  /*
+    This block intentionally uses the play engine only. Evaluation data comes
+    from evalEngineRef.
+  */
+  useEffect(() => {
+    const engine = playEngineRef.current;
 
     if (!engine?.connected) {
       return;
@@ -216,7 +324,8 @@ export default function PlayComputer() {
       }
 
       try {
-        prevEvalRef.current = evaluationRef.current;
+        const fenBefore = gameRef.current.fen();
+        const version = analysisVersionRef.current;
 
         const move = gameRef.current.move({ from, to, promotion: "q" });
 
@@ -233,15 +342,18 @@ export default function PlayComputer() {
           from: move.from,
           to: move.to,
         };
-        syncMoves([...movesRef.current, entry]);
+        const nextMoves = [...movesRef.current, entry];
+        const moveIndex = nextMoves.length - 1;
+
+        syncMoves(nextMoves);
+        void classifyLastMove(moveIndex, fenBefore, version);
 
         if (gameRef.current.isGameOver()) {
           setIsGameOver(true);
           return;
         }
 
-        // Start engine analysis to evaluate position and find response
-        const engine = engineRef.current;
+        const engine = playEngineRef.current;
         if (engine?.connected) {
           const skill = getSkillLevel(botElo);
           engine.setSkillLevel(skill);
@@ -253,7 +365,7 @@ export default function PlayComputer() {
         // Invalid move
       }
     },
-    [playerColor, botElo, syncMoves],
+    [playerColor, botElo, syncMoves, classifyLastMove],
   );
 
   const effectiveOrientation = useMemo(() => {
@@ -265,14 +377,10 @@ export default function PlayComputer() {
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, string> = {};
+    const move = moves[moves.length - 1];
 
-    for (let i = moves.length - 1; i >= 0; i--) {
-      const m = moves[i];
-
-      if (m.to && m.classification) {
-        evals[m.to] = m.classification;
-        break;
-      }
+    if (move?.to && move.classification) {
+      evals[move.to] = move.classification;
     }
 
     return evals;
@@ -281,20 +389,41 @@ export default function PlayComputer() {
   const currentFen = game.fen();
 
   const openingName = useMemo(() => {
-    const match = openings.find((o) => o.fen === currentFen);
-    return match?.name ?? null;
-  }, [currentFen]);
+    const fens = moves.map((move) => move.fen);
+    fens.push(currentFen);
+
+    for (let i = fens.length - 1; i >= 0; i--) {
+      const name = getOpeningName(fens[i]);
+
+      if (name) {
+        return name;
+      }
+    }
+
+    return null;
+  }, [currentFen, moves]);
+
+  const playerLabel = playerColor === "w" ? "White" : "Black";
+  const botLabel = computerColor === "w" ? "White" : "Black";
 
   const undoLastMove = useCallback(() => {
     if (gameRef.current.isGameOver()) {
       return;
     }
 
-    const engine = engineRef.current;
-    if (engine?.connected && isEngineRunning.current) {
-      engine.stopAnalysis();
+    analysisVersionRef.current += 1;
+
+    const playEngine = playEngineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (playEngine?.connected && isEngineRunning.current) {
+      playEngine.stopAnalysis();
       isEngineRunning.current = false;
       setIsThinking(false);
+    }
+
+    if (evalEngine?.connected) {
+      evalEngine.stopAnalysis();
     }
 
     const currentMoves = movesRef.current;
@@ -335,6 +464,11 @@ export default function PlayComputer() {
 
     setIsGameOver(false);
     setSelectedSquare(null);
+
+    if (evalEngine?.connected) {
+      evalEngine.setSkillLevel(20);
+      evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
+    }
   }, [syncMoves]);
 
   const copyPgn = useCallback(() => {
@@ -347,9 +481,17 @@ export default function PlayComputer() {
   }, []);
 
   const newGame = useCallback(() => {
-    const engine = engineRef.current;
-    if (engine?.connected) {
-      engine.stopAnalysis();
+    analysisVersionRef.current += 1;
+
+    const playEngine = playEngineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (playEngine?.connected) {
+      playEngine.stopAnalysis();
+    }
+
+    if (evalEngine?.connected) {
+      evalEngine.stopAnalysis();
     }
 
     const newChess = new Chess();
@@ -364,176 +506,264 @@ export default function PlayComputer() {
     setEvaluation(null);
     setMate(null);
     setIsGameOver(false);
+    setIsThinking(false);
     setError(null);
 
+    if (evalEngine?.connected) {
+      evalEngine.setSkillLevel(20);
+      evalEngine.startAnalysis(newChess.fen(), 14, 1);
+    }
+
     if (
-      engine?.connected &&
+      playEngine?.connected &&
       gameRef.current.turn() === computerColorRef.current
     ) {
       const skill = getSkillLevel(botEloRef.current);
-      engine.setSkillLevel(skill);
-      engine.startAnalysis(gameRef.current.fen(), 14, 1);
+      playEngine.setSkillLevel(skill);
+      playEngine.startAnalysis(gameRef.current.fen(), 14, 1);
       isEngineRunning.current = true;
       setIsThinking(true);
     }
   }, [syncMoves]);
 
+  const iconActionButtonClass =
+    "inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] p-0 text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
-    <div className="flex w-full max-w-6xl flex-col items-center gap-4">
-      {error && (
-        <div className="w-full max-w-3xl rounded bg-red-900/80 px-4 py-2 text-center text-sm text-red-200">
-          {error}
-        </div>
-      )}
+    <div className="grid w-[min(100%,108rem)] grid-cols-[minmax(0,1fr)_minmax(20rem,31.25rem)] gap-4 max-[72rem]:grid-cols-1">
+      <div className="flex min-w-0 flex-col items-center gap-3">
+        {error && (
+          <div className="w-[min(100%,42rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
+            {error}
+          </div>
+        )}
 
-      <div className="flex flex-wrap items-center justify-center gap-4 rounded-lg border border-gray-800 bg-gray-900 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">Play as:</label>
-          <select
-            className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-200"
-            value={playerColor}
-            onChange={(e) => {
-              setPlayerColor(e.target.value as "w" | "b");
-            }}
-          >
-            <option value="w">White</option>
-            <option value="b">Black</option>
-          </select>
-        </div>
+        <div className="flex w-[min(100%,42rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-white">
+              <FaRobot aria-hidden="true" />
+            </span>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+              Stockfish Engine
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">Bot level:</label>
-          <select
-            className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-200"
-            value={botElo}
-            onChange={(e) => {
-              setBotElo(Number(e.target.value));
-            }}
-          >
-            {ELO_LEVELS.map((level) => {
-              return (
-                <option key={level.elo} value={level.elo}>
-                  {level.label}
-                </option>
-              );
-            })}
-          </select>
+          <span>{botLabel}</span>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
-          <input
-            type="checkbox"
-            checked={showEvaluationBar}
-            onChange={(e) => {
-              setShowEvaluationBar(e.target.checked);
-            }}
-            className="h-4 w-4"
-          />
-          Eval bar
-        </label>
+        <div className="flex w-full min-w-0 justify-center">
+          <div className="flex min-w-0 items-stretch justify-center gap-2 max-[44rem]:gap-1">
+            <Board
+              game={game}
+              onMove={handlePlayerMove}
+              selectedSquare={selectedSquare}
+              onSelectSquare={setSelectedSquare}
+              lastMove={lastMove}
+              orientation={effectiveOrientation}
+              interactive={!isThinking && !isGameOver}
+              squareEvaluations={squareEvaluations}
+              showEvaluationIcons={showMoveEvaluation}
+            />
 
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-400">
-          <input
-            type="checkbox"
-            checked={showMoveEvaluation}
-            onChange={(e) => {
-              setShowMoveEvaluation(e.target.checked);
-            }}
-            className="h-4 w-4"
-          />
-          Move eval
-        </label>
+            {showEvaluationBar && (
+              <EvaluationBar evaluation={evaluation} mate={mate} />
+            )}
+          </div>
+        </div>
 
-        <button
-          type="button"
-          className="rounded bg-blue-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-600"
-          onClick={newGame}
-        >
-          New game
-        </button>
+        <div className="flex w-[min(100%,42rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-white">
+              <FaUser aria-hidden="true" />
+            </span>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+              Gabriel-Logan
+            </span>
+          </div>
+
+          <span>{playerLabel}</span>
+        </div>
+
+        <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+          Opening
+          <strong>{openingName ?? "not detected yet"}</strong>
+        </div>
+
+        {isThinking && (
+          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+            <span className="size-2 animate-pulse rounded-full bg-[#f7c948]" />
+            Thinking...
+          </div>
+        )}
+
+        {isGameOver && (
+          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+            Game over.
+            <button
+              type="button"
+              className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
+              onClick={newGame}
+            >
+              New game
+            </button>
+          </div>
+        )}
       </div>
 
-      {openingName && (
-        <div className="rounded bg-gray-800 px-3 py-1 text-sm text-gray-400">
-          Opening:{" "}
-          <span className="font-medium text-gray-200">{openingName}</span>
-        </div>
-      )}
-
-      <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-start">
-        <div className="flex gap-3">
-          <Board
-            game={game}
-            onMove={handlePlayerMove}
-            selectedSquare={selectedSquare}
-            onSelectSquare={setSelectedSquare}
-            lastMove={lastMove}
-            orientation={effectiveOrientation}
-            interactive={!isThinking && !isGameOver}
-            squareEvaluations={squareEvaluations}
-            showEvaluationIcons={showMoveEvaluation}
-          />
-
-          {showEvaluationBar && (
-            <EvaluationBar evaluation={evaluation} mate={mate} height={484} />
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
+      <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
+        <div className="flex min-h-13 items-center justify-between border-b border-[#accc821a] bg-linear-to-br from-[#1f241f] to-[#20211e] px-4 text-base font-extrabold text-white">
+          <span>Game Console</span>
           <button
             type="button"
-            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-            onClick={undoLastMove}
-            disabled={moves.length === 0 || isGameOver}
+            className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
+            title="Sound"
           >
-            Undo last move
-          </button>
-          <button
-            type="button"
-            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700"
-            onClick={toggleBoard}
-          >
-            Flip board
-          </button>
-          <button
-            type="button"
-            className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-30"
-            onClick={copyPgn}
-            disabled={moves.length === 0}
-          >
-            Copy PGN
+            <FaVolumeUp aria-hidden="true" />
           </button>
         </div>
-      </div>
 
-      {isThinking && (
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
-          Thinking...
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
+          <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
+            <FaRobot aria-hidden="true" />
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
+            <strong className="text-base text-[#f4f3ea]">
+              Ready for your move
+            </strong>
+            <span>Stockfish will respond after you play.</span>
+          </div>
         </div>
-      )}
 
-      {isGameOver && (
-        <div className="rounded bg-gray-800 px-4 py-2 text-sm text-gray-300">
-          Game over.{" "}
+        <div className="border-b border-white/6 p-4">
+          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            Game setup
+          </h2>
+
+          <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
+            <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+              <span>Play as</span>
+              <select
+                className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                value={playerColor}
+                onChange={(e) => {
+                  setPlayerColor(e.target.value as "w" | "b");
+                }}
+              >
+                <option value="w">White</option>
+                <option value="b">Black</option>
+              </select>
+            </label>
+
+            <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+              <span>Bot level</span>
+              <select
+                className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                value={botElo}
+                onChange={(e) => {
+                  setBotElo(Number(e.target.value));
+                }}
+              >
+                {ELO_LEVELS.map((level) => {
+                  return (
+                    <option key={level.elo} value={level.elo}>
+                      {level.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2">
+            <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
+              <span>Evaluation bar</span>
+              <input
+                className="size-4 accent-[#86a94f]"
+                type="checkbox"
+                checked={showEvaluationBar}
+                onChange={(e) => {
+                  setShowEvaluationBar(e.target.checked);
+                }}
+              />
+            </label>
+
+            <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
+              <span>Move evaluation</span>
+              <input
+                className="size-4 accent-[#86a94f]"
+                type="checkbox"
+                checked={showMoveEvaluation}
+                onChange={(e) => {
+                  setShowMoveEvaluation(e.target.checked);
+                }}
+              />
+            </label>
+          </div>
+
           <button
             type="button"
-            className="text-blue-400 underline hover:text-blue-300"
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476]"
             onClick={newGame}
           >
             New game
           </button>
         </div>
-      )}
 
-      <div className="w-full max-w-md">
-        <MoveList
-          moves={moves}
-          currentMoveIndex={moves.length - 1}
-          onGoToMove={() => {}}
-          showEvaluation={showMoveEvaluation}
-        />
-      </div>
+        <div className="border-b border-white/6 p-4">
+          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            Opening
+          </h2>
+
+          <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
+            {openingName ?? "No book match for this position yet"}
+          </div>
+        </div>
+
+        <div className="min-h-48 flex-1 overflow-hidden border-b border-white/6 p-4">
+          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            Moves
+          </h2>
+
+          <MoveList
+            moves={moves}
+            currentMoveIndex={moves.length - 1}
+            onGoToMove={() => {}}
+            showEvaluation={showMoveEvaluation}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={undoLastMove}
+            disabled={moves.length === 0 || isGameOver}
+            title="Undo last move"
+          >
+            <FaUndo aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={toggleBoard}
+            title="Flip board"
+          >
+            <FaRedo aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={copyPgn}
+            disabled={moves.length === 0}
+            title="Copy PGN"
+          >
+            <FaClipboard aria-hidden="true" />
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }
