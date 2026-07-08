@@ -9,4 +9,19 @@ export default defineConfig({
     tailwindcss(),
     babel({ presets: [reactCompilerPreset()] }),
   ],
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react-dom")) return "vendor";
+          if (id.includes("node_modules/react")) return "vendor";
+          if (id.includes("node_modules/chess.js")) return "chess";
+          if (id.includes("node_modules/axios")) return "axios";
+          if (id.includes("node_modules/react-icons")) return "ui";
+          if (id.includes("node_modules/zustand")) return "state";
+        },
+      },
+    },
+  },
 });
