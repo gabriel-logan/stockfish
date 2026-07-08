@@ -19,6 +19,7 @@ export default defineConfig({
           if (id.includes("node_modules/chess.js")) return "chess";
           if (id.includes("node_modules/axios")) return "axios";
           if (id.includes("node_modules/react-icons")) return "ui";
+          if (id.includes("node_modules/react-toastify")) return "ui";
           if (id.includes("node_modules/zustand")) return "state";
         },
       },
