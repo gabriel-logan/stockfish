@@ -20,7 +20,7 @@ const iconMap: Record<string, string> = {
 
 export default function MoveClassificationIcon({
   classification,
-  size = 20,
+  size = 26,
 }: Props) {
   if (!classification) {
     return null;

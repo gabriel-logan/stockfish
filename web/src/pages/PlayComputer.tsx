@@ -19,6 +19,8 @@ import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { ELO_LEVELS, getSkillLevel } from "../utils/elo";
 
+const BOT_MOVE_DELAY_MS = 1200;
+
 function getOpeningName(fen: string): string | null {
   const placement = fen.split(" ")[0];
   const match = openings.find((o) => o.fen === placement);
@@ -40,6 +42,7 @@ export default function PlayComputer() {
   const movesRef = useRef<MoveEntry[]>([]);
   const analysisVersionRef = useRef(0);
   const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const botMoveTimeoutRef = useRef<number | null>(null);
 
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(
@@ -87,6 +90,15 @@ export default function PlayComputer() {
   const syncMoves = useCallback((newMoves: MoveEntry[]) => {
     movesRef.current = newMoves;
     setMoves(newMoves);
+  }, []);
+
+  const clearPendingBotMove = useCallback(() => {
+    if (botMoveTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(botMoveTimeoutRef.current);
+    botMoveTimeoutRef.current = null;
   }, []);
 
   const classifyLastMove = useCallback(
@@ -189,10 +201,9 @@ export default function PlayComputer() {
     };
 
     playEngine.onBestMove = (data) => {
-      isEngineRunning.current = false;
-      setIsThinking(false);
-
       if (!data.bestmove || data.bestmove === "(none)") {
+        isEngineRunning.current = false;
+        setIsThinking(false);
         setIsGameOver(true);
         return;
       }
@@ -202,36 +213,61 @@ export default function PlayComputer() {
         gameRef.current.turn() !== computerColorRef.current ||
         gameRef.current.isGameOver()
       ) {
+        isEngineRunning.current = false;
+        setIsThinking(false);
         return;
       }
 
-      try {
-        const fenBefore = gameRef.current.fen();
-        const move = gameRef.current.move(data.bestmove);
+      const bestMove = data.bestmove;
+      const version = analysisVersionRef.current;
 
-        if (!move) {
+      clearPendingBotMove();
+      setIsThinking(true);
+
+      botMoveTimeoutRef.current = window.setTimeout(() => {
+        botMoveTimeoutRef.current = null;
+
+        if (analysisVersionRef.current !== version) {
           return;
         }
 
-        const version = analysisVersionRef.current;
-        setLastMove({ from: move.from as Square, to: move.to as Square });
+        isEngineRunning.current = false;
+        setIsThinking(false);
 
-        const entry: MoveEntry = {
-          san: move.san,
-          fen: gameRef.current.fen(),
-          color: move.color as "w" | "b",
-          from: move.from,
-          to: move.to,
-        };
-        const nextMoves = [...movesRef.current, entry];
-        const moveIndex = nextMoves.length - 1;
+        if (
+          gameRef.current.turn() !== computerColorRef.current ||
+          gameRef.current.isGameOver()
+        ) {
+          return;
+        }
 
-        syncMoves(nextMoves);
-        setIsGameOver(gameRef.current.isGameOver());
-        void classifyLastMove(moveIndex, fenBefore, version);
-      } catch {
-        // Invalid move from engine
-      }
+        try {
+          const fenBefore = gameRef.current.fen();
+          const move = gameRef.current.move(bestMove);
+
+          if (!move) {
+            return;
+          }
+
+          setLastMove({ from: move.from as Square, to: move.to as Square });
+
+          const entry: MoveEntry = {
+            san: move.san,
+            fen: gameRef.current.fen(),
+            color: move.color as "w" | "b",
+            from: move.from,
+            to: move.to,
+          };
+          const nextMoves = [...movesRef.current, entry];
+          const moveIndex = nextMoves.length - 1;
+
+          syncMoves(nextMoves);
+          setIsGameOver(gameRef.current.isGameOver());
+          void classifyLastMove(moveIndex, fenBefore, version);
+        } catch {
+          // Invalid move from engine
+        }
+      }, BOT_MOVE_DELAY_MS);
     };
 
     playEngine.onError = (msg) => {
@@ -261,6 +297,7 @@ export default function PlayComputer() {
       });
 
     return () => {
+      clearPendingBotMove();
       playEngine.disconnect();
       evalEngine.disconnect();
       playEngineRef.current = null;
@@ -412,6 +449,7 @@ export default function PlayComputer() {
     }
 
     analysisVersionRef.current += 1;
+    clearPendingBotMove();
 
     const playEngine = playEngineRef.current;
     const evalEngine = evalEngineRef.current;
@@ -469,7 +507,7 @@ export default function PlayComputer() {
       evalEngine.setSkillLevel(20);
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     }
-  }, [syncMoves]);
+  }, [syncMoves, clearPendingBotMove]);
 
   const copyPgn = useCallback(() => {
     const pgn = gameRef.current.pgn();
@@ -482,6 +520,7 @@ export default function PlayComputer() {
 
   const newGame = useCallback(() => {
     analysisVersionRef.current += 1;
+    clearPendingBotMove();
 
     const playEngine = playEngineRef.current;
     const evalEngine = evalEngineRef.current;
@@ -524,7 +563,7 @@ export default function PlayComputer() {
       isEngineRunning.current = true;
       setIsThinking(true);
     }
-  }, [syncMoves]);
+  }, [syncMoves, clearPendingBotMove]);
 
   const iconActionButtonClass =
     "inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] p-0 text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
