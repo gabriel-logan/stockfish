@@ -18,3 +18,5 @@ export const CLASSIFICATION_COLORS: Record<
 
 export const BaseUrlAPI = import.meta.env.VITE_BASE_URL_API;
 export const BaseUrlWS = import.meta.env.VITE_BASE_URL_WS;
+
+export const STORAGE_KEY_USER_STORE = "stockfish-user-store";

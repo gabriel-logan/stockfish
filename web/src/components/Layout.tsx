@@ -4,11 +4,16 @@ import {
   FaChessPawn,
   FaCircle,
   FaGithub,
+  FaHistory,
   FaPlay,
+  FaUser,
+  FaUserPlus,
 } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router";
+import { toast } from "react-toastify";
 
 import { useHealthCheck } from "../hooks/useHealthCheck";
+import { useUserStore } from "../store/userStore";
 
 interface Props {
   children: ReactNode;
@@ -19,6 +24,18 @@ export default function Layout({ children }: Props) {
   const location = useLocation();
 
   const healthStatus = useHealthCheck();
+  const users = useUserStore((s) => s.users);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const createUser = useUserStore((s) => s.createUser);
+  const setActiveUser = useUserStore((s) => s.setActiveUser);
+
+  function handleCreateUser() {
+    const name = window.prompt("Enter a name for the new user:");
+    if (name?.trim()) {
+      createUser(name.trim());
+      toast.success(`User "${name.trim()}" created`);
+    }
+  }
 
   function getNavButtonClass(path: string) {
     let className =
@@ -69,7 +86,63 @@ export default function Layout({ children }: Props) {
           </button>
         </nav>
 
-        <div className="mt-auto flex flex-col gap-2 text-sm text-[#aaa7a0]">
+        <div className="mt-4 border-t border-white/6 pt-3">
+          <h2 className="mb-2 px-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+            <FaUser
+              className="mr-1.5 inline text-[#97c45d]"
+              aria-hidden="true"
+            />
+            Users
+          </h2>
+
+          {users.length > 0 && (
+            <select
+              className="mx-3 mb-2 h-9 w-[calc(100%-1.5rem)] rounded border border-white/10 bg-[#373530] px-2 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+              value={activeUserId ?? ""}
+              onChange={(e) => {
+                setActiveUser(e.target.value);
+              }}
+            >
+              {users.map((user) => {
+                return (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                );
+              })}
+            </select>
+          )}
+
+          <div className="flex gap-2 px-3">
+            <button
+              type="button"
+              className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-2 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
+              onClick={handleCreateUser}
+            >
+              <FaUserPlus aria-hidden="true" />
+              New
+            </button>
+
+            {activeUserId && (
+              <button
+                type="button"
+                className={`flex min-h-8 flex-1 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-2 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white ${
+                  location.pathname === "/history"
+                    ? "bg-[#628d3f] text-white"
+                    : ""
+                }`}
+                onClick={() => {
+                  navigate("/history");
+                }}
+              >
+                <FaHistory aria-hidden="true" />
+                Games
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 text-sm text-[#aaa7a0]">
           <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
             <FaCircle
               size={10}
@@ -145,6 +218,20 @@ export default function Layout({ children }: Props) {
                 aria-hidden="true"
               />
               PGN
+            </button>
+
+            <button
+              type="button"
+              className={`${getNavButtonClass("/history")} min-h-9 w-auto max-[44rem]:flex-1 max-[44rem]:justify-center`}
+              onClick={() => {
+                navigate("/history");
+              }}
+            >
+              <FaHistory
+                className="text-xl text-[#a9d86f]"
+                aria-hidden="true"
+              />
+              Games
             </button>
           </nav>
         </header>

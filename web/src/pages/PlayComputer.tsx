@@ -21,6 +21,7 @@ import {
   type PieceSet,
   useSettingsStore,
 } from "../store/settingsStore";
+import { type SavedGame, useUserStore } from "../store/userStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
@@ -72,6 +73,10 @@ export default function PlayComputer() {
   const [error, setError] = useState<string | null>(null);
   const [boardFlipped, setBoardFlipped] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const [savedGameId, setSavedGameId] = useState<string | null>(null);
+
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const saveGameToStore = useUserStore((s) => s.saveGame);
 
   const {
     showEvaluationBar,
@@ -603,6 +608,37 @@ export default function PlayComputer() {
     setBoardFlipped((prev) => !prev);
   }, []);
 
+  const saveCurrentGame = useCallback(() => {
+    if (savedGameId || !activeUserId) {
+      return;
+    }
+
+    const pgn = gameRef.current.pgn();
+    const result = gameRef.current.isCheckmate()
+      ? gameRef.current.turn() === "w"
+        ? "0-1"
+        : "1-0"
+      : gameRef.current.isDraw()
+        ? "1/2-1/2"
+        : "*";
+
+    const savedGame: SavedGame = {
+      id: crypto.randomUUID(),
+      pgn,
+      date: new Date().toISOString(),
+      result,
+      opponent: `Stockfish (${botEloRef.current} Elo)`,
+      opening: openingName ?? undefined,
+      playerColor,
+      botElo: botEloRef.current,
+      moves: movesRef.current.length,
+    };
+
+    saveGameToStore(savedGame);
+    setSavedGameId(savedGame.id);
+    toast.success("Game saved");
+  }, [activeUserId, savedGameId, openingName, playerColor, saveGameToStore]);
+
   const handleStartGame = useCallback(() => {
     gameStartedRef.current = true;
     setGameStarted(true);
@@ -683,7 +719,7 @@ export default function PlayComputer() {
         )}
 
         {isGameOver && (
-          <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+          <div className="flex min-h-8 flex-wrap items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
             Game over.
             <button
               type="button"
@@ -692,6 +728,16 @@ export default function PlayComputer() {
             >
               New game
             </button>
+            {activeUserId && (
+              <button
+                type="button"
+                className="inline-flex min-h-8 items-center justify-center rounded border border-white/8 bg-[#628d3f] px-3 text-xs font-extrabold text-white transition-colors hover:bg-[#7aa64c] disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={saveCurrentGame}
+                disabled={!!savedGameId}
+              >
+                {savedGameId ? "Saved" : "Save game"}
+              </button>
+            )}
           </div>
         )}
 

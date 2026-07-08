@@ -8,6 +8,7 @@ import {
   FaStepForward,
   FaVolumeUp,
 } from "react-icons/fa";
+import { useLocation } from "react-router";
 import { toast } from "react-toastify";
 import { Chess, type Square } from "chess.js";
 
@@ -51,7 +52,10 @@ interface PositionData {
 }
 
 export default function PgnViewer() {
-  const [pgnInput, setPgnInput] = useState("");
+  const location = useLocation();
+  const initialPgn = (location.state as { pgn?: string })?.pgn;
+
+  const [pgnInput, setPgnInput] = useState(initialPgn ?? "");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
