@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#20241f" />
+  <path fill="#2f392c" d="M0 0h1200v630H0z" />
+  <path fill="#97c45d" fill-opacity=".22" d="M782 0h418v630H663l119-630Z" />
+  <path fill="#f4f1e8" d="M96 170h56v78h76v54h-76v72h68l-38 108H66L28 374h68v-72H20v-54h76v-78Z" />
+  <text x="294" y="276" fill="#f4f1e8" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="900">GLFish</text>
+  <text x="300" y="356" fill="#bfc9b2" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700">Play Stockfish. Analyze PGNs. Save your games.</text>
+  <text x="300" y="420" fill="#97c45d" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">Engine analysis for practical chess training</text>
+  <g fill="#f4f1e8" opacity=".9">
+    <circle cx="944" cy="178" r="34" />
+    <circle cx="1040" cy="274" r="34" />
+    <circle cx="848" cy="274" r="34" />
+    <circle cx="944" cy="370" r="34" />
+  </g>
+</svg>

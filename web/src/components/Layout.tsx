@@ -62,7 +62,7 @@ export default function Layout({ children }: Props) {
               className="text-[1.7rem] leading-none text-[#97c45d]"
               aria-hidden="true"
             />
-            <span>Stockfish Lab</span>
+            <span>GLFish</span>
           </div>
 
           <nav className="flex flex-col gap-1" aria-label="Primary">
@@ -231,7 +231,7 @@ export default function Layout({ children }: Props) {
                 className="text-[1.7rem] leading-none text-[#97c45d]"
                 aria-hidden="true"
               />
-              <span>Stockfish Lab</span>
+              <span>GLFish</span>
             </div>
 
             <nav

@@ -1,0 +1,17 @@
+{
+  "name": "GLFish",
+  "short_name": "GLFish",
+  "description": "Play Stockfish, analyze PGNs, classify moves, and save your chess games.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#20241f",
+  "theme_color": "#20241f",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
