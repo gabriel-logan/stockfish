@@ -1,21 +1,24 @@
 import { type ReactNode } from "react";
 import { FaChartLine, FaChessPawn, FaCircle, FaPlay } from "react-icons/fa";
+import { useLocation, useNavigate } from "react-router";
 
 import { useHealthCheck } from "../hooks/useHealthCheck";
 
 interface Props {
   children: ReactNode;
-  currentRoute: string;
-  navigate: (path: string) => void;
 }
 
-export default function Layout({ children, currentRoute, navigate }: Props) {
+export default function Layout({ children }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const healthStatus = useHealthCheck();
+
   function getNavButtonClass(path: string) {
     let className =
       "flex min-h-11 w-full items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-[0.95rem] font-bold whitespace-nowrap text-[#bebaae] transition-colors hover:bg-[#97c45d1a] hover:text-white";
 
-    if (currentRoute === path) {
+    if (location.pathname === path) {
       className = `${className} bg-linear-to-br from-[#628d3f] to-[#3f735c] text-[#f9fff0] shadow-[inset_0_0_0_1px_rgb(255_255_255_/_9%)]`;
     }
 
