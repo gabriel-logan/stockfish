@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { Bounce, ToastContainer } from "react-toastify";
 
@@ -8,19 +9,20 @@ import NotFound from "./pages/NotFound";
 import PgnViewer from "./pages/PgnViewer";
 import PlayComputer from "./pages/PlayComputer";
 
-const pageTitles: Record<string, string> = {
-  "/": "GLFish - Play Stockfish and analyze your games",
-  "/play": "Play Stockfish - GLFish",
-  "/pgn": "Analyze PGN - GLFish",
-  "/history": "Saved Games - GLFish",
-};
-
 function DocumentTitle() {
+  const { t } = useTranslation();
   const location = useLocation();
 
   useEffect(() => {
-    document.title = pageTitles[location.pathname] ?? "GLFish";
-  }, [location.pathname]);
+    const pageTitles: Record<string, string> = {
+      "/": t("app.pageTitles.home"),
+      "/play": t("app.pageTitles.play"),
+      "/pgn": t("app.pageTitles.pgn"),
+      "/history": t("app.pageTitles.history"),
+    };
+
+    document.title = pageTitles[location.pathname] ?? t("app.title");
+  }, [location.pathname, t]);
 
   return null;
 }

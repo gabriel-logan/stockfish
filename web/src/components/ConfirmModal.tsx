@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { FaTimes, FaTrash } from "react-icons/fa";
 
 interface Props {
@@ -13,10 +14,12 @@ export default function ConfirmModal({
   open,
   title,
   message,
-  confirmLabel = "Delete",
+  confirmLabel,
   onConfirm,
   onCancel,
 }: Props) {
+  const { t } = useTranslation();
+  const label = confirmLabel ?? t("modals.confirmLabel");
   if (!open) {
     return null;
   }
@@ -51,7 +54,7 @@ export default function ConfirmModal({
             className="inline-flex min-h-9 items-center justify-center rounded border border-white/8 bg-[#36342f] px-4 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
             onClick={onCancel}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
 
           <button
@@ -60,7 +63,7 @@ export default function ConfirmModal({
             onClick={onConfirm}
           >
             <FaTrash aria-hidden="true" />
-            {confirmLabel}
+            {label}
           </button>
         </div>
       </div>

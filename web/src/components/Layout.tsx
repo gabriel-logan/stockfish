@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FaChartLine,
   FaChessPawn,
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function Layout({ children }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -39,7 +41,7 @@ export default function Layout({ children }: Props) {
 
   function handleCreateUser(name: string) {
     createUser(name);
-    toast.success(`User "${name}" created`);
+    toast.success(t("success.userCreated", { name }));
   }
 
   function getNavButtonClass(path: string) {
@@ -62,7 +64,7 @@ export default function Layout({ children }: Props) {
               className="text-[1.7rem] leading-none text-[#97c45d]"
               aria-hidden="true"
             />
-            <span>GLFish</span>
+            <span>{t("app.title")}</span>
           </div>
 
           <nav className="flex flex-col gap-1" aria-label="Primary">
@@ -74,7 +76,7 @@ export default function Layout({ children }: Props) {
               }}
             >
               <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              Versus Engine
+              {t("common.versusEngine")}
             </button>
 
             <button
@@ -88,7 +90,7 @@ export default function Layout({ children }: Props) {
                 className="text-xl text-[#a9d86f]"
                 aria-hidden="true"
               />
-              Analyze PGN
+              {t("common.analyzePgn")}
             </button>
           </nav>
 
@@ -96,7 +98,7 @@ export default function Layout({ children }: Props) {
             <div className="mb-3 flex items-center justify-between gap-2 px-1">
               <h2 className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-[#b7d58a] uppercase">
                 <FaUser className="text-[#97c45d]" aria-hidden="true" />
-                Users
+                {t("layout.userSection")}
               </h2>
 
               <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-extrabold text-[#aaa7a0]">
@@ -112,12 +114,14 @@ export default function Layout({ children }: Props) {
 
                 <div className="min-w-0 flex-1">
                   <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
-                    {activeUser?.name ?? "No user"}
+                    {activeUser?.name ?? t("common.noUser")}
                   </div>
                   <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
                     {activeUser
-                      ? `${activeUser.games.length} saved games`
-                      : "Create a user to save games"}
+                      ? t("layout.savedGamesCount", {
+                          count: activeUser.games.length,
+                        })
+                      : t("layout.createUser")}
                   </div>
                 </div>
               </div>
@@ -144,7 +148,7 @@ export default function Layout({ children }: Props) {
                     <button
                       type="button"
                       className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                      title="Delete user"
+                      title={t("layout.deleteUser")}
                       onClick={() => {
                         setShowDeleteUserModal(true);
                       }}
@@ -164,7 +168,7 @@ export default function Layout({ children }: Props) {
                   }}
                 >
                   <FaUserPlus aria-hidden="true" />
-                  New
+                  {t("common.new")}
                 </button>
 
                 {activeUserId && (
@@ -180,7 +184,7 @@ export default function Layout({ children }: Props) {
                     }}
                   >
                     <FaHistory aria-hidden="true" />
-                    Games
+                    {t("common.games")}
                   </button>
                 )}
               </div>
@@ -201,10 +205,10 @@ export default function Layout({ children }: Props) {
                 aria-hidden="true"
               />
               {healthStatus === "connected"
-                ? "API Connected"
+                ? t("common.apiConnected")
                 : healthStatus === "checking"
-                  ? "Checking API..."
-                  : "API Disconnected"}
+                  ? t("common.apiChecking")
+                  : t("common.apiDisconnected")}
             </div>
 
             <Link
@@ -214,12 +218,12 @@ export default function Layout({ children }: Props) {
               className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2 transition-colors hover:bg-white/10"
             >
               <FaGithub className="text-[#97c45d]" aria-hidden="true" />
-              <strong>GitHub</strong>
+              <strong>{t("common.gitHub")}</strong>
             </Link>
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
               <FaUser className="text-[#97c45d]" aria-hidden="true" />
-              <strong>{users.length} users</strong>
+              <strong>{t("layout.userCount", { count: users.length })}</strong>
             </div>
           </div>
         </aside>
@@ -231,7 +235,7 @@ export default function Layout({ children }: Props) {
                 className="text-[1.7rem] leading-none text-[#97c45d]"
                 aria-hidden="true"
               />
-              <span>GLFish</span>
+              <span>{t("app.title")}</span>
             </div>
 
             <nav
@@ -246,7 +250,7 @@ export default function Layout({ children }: Props) {
                 }}
               >
                 <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
-                Play
+                {t("common.play")}
               </button>
 
               <button
@@ -260,7 +264,7 @@ export default function Layout({ children }: Props) {
                   className="text-xl text-[#a9d86f]"
                   aria-hidden="true"
                 />
-                PGN
+                {t("common.pgn")}
               </button>
 
               <button
@@ -274,7 +278,7 @@ export default function Layout({ children }: Props) {
                   className="text-xl text-[#a9d86f]"
                   aria-hidden="true"
                 />
-                Games
+                {t("common.games")}
               </button>
             </nav>
           </header>
@@ -295,18 +299,18 @@ export default function Layout({ children }: Props) {
 
       <ConfirmModal
         open={showDeleteUserModal}
-        title="Delete user"
+        title={t("layout.deleteUserTitle")}
         message={
           activeUserId
-            ? `Are you sure you want to delete "${
-                users.find((u) => u.id === activeUserId)?.name
-              }"? All saved games will be lost.`
+            ? t("layout.deleteUserMessage", {
+                name: users.find((u) => u.id === activeUserId)?.name,
+              })
             : ""
         }
         onConfirm={() => {
           if (activeUserId) {
             deleteUser(activeUserId);
-            toast.success("User deleted");
+            toast.success(t("success.userDeleted"));
           }
           setShowDeleteUserModal(false);
         }}

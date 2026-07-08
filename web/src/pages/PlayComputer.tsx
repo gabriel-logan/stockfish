@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FaClipboard,
   FaFlag,
@@ -48,6 +49,7 @@ function getMoveUci(move: { from: string; to: string; promotion?: string }) {
 }
 
 export default function PlayComputer() {
+  const { t } = useTranslation();
   const [game, setGame] = useState(() => {
     return new Chess();
   });
@@ -372,24 +374,24 @@ export default function PlayComputer() {
 
     playEngine.onDisconnect = () => {
       setConnected(false);
-      setError("Connection lost");
-      toast.error("Play engine disconnected");
+      setError(t("errors.connectionLost"));
+      toast.error(t("errors.playEngineDisconnected"));
     };
 
     evalEngine.onDisconnect = () => {
       setConnected(false);
-      setError("Evaluation connection lost");
-      toast.error("Evaluation engine disconnected");
+      setError(t("errors.evaluationConnectionLost"));
+      toast.error(t("errors.evalEngineDisconnected"));
     };
 
     Promise.all([playEngine.connect(), evalEngine.connect()])
       .then(() => {
         setConnected(true);
-        toast.success("Engines connected");
+        toast.success(t("success.enginesConnected"));
       })
       .catch((err: Error) => {
         setError(err.message);
-        toast.error(`Connection failed: ${err.message}`);
+        toast.error(t("errors.connectionFailed", { message: err.message }));
       });
 
     return () => {
@@ -399,7 +401,7 @@ export default function PlayComputer() {
       playEngineRef.current = null;
       evalEngineRef.current = null;
     };
-  }, [classifyLastMove, clearPendingBotMove, syncMoves]);
+  }, [classifyLastMove, clearPendingBotMove, syncMoves, t]);
 
   /*
     Keep a dedicated connection for playing moves and a separate full-strength
@@ -528,8 +530,10 @@ export default function PlayComputer() {
     return null;
   }, [currentFen, moves]);
 
-  const playerLabel = playerColor === "w" ? "White" : "Black";
-  const botLabel = computerColor === "w" ? "White" : "Black";
+  const playerLabel =
+    playerColor === "w" ? t("common.white") : t("common.black");
+  const botLabel =
+    computerColor === "w" ? t("common.white") : t("common.black");
 
   const undoLastMove = useCallback(() => {
     if (gameRef.current.isGameOver()) {
@@ -602,10 +606,10 @@ export default function PlayComputer() {
     navigator.clipboard
       .writeText(pgn)
       .then(() => {
-        toast.success("PGN copied to clipboard");
+        toast.success(t("success.pgnCopied"));
       })
       .catch(() => {});
-  }, []);
+  }, [t]);
 
   const toggleBoard = useCallback(() => {
     setBoardFlipped((prev) => !prev);
@@ -630,7 +634,7 @@ export default function PlayComputer() {
       pgn,
       date: new Date().toISOString(),
       result,
-      opponent: `Stockfish (${botEloRef.current} Elo)`,
+      opponent: `Stockfish (${botEloRef.current} ${t("common.elo")})`,
       opening: openingName ?? undefined,
       playerColor,
       botElo: botEloRef.current,
@@ -639,8 +643,8 @@ export default function PlayComputer() {
 
     saveGameToStore(savedGame);
     setSavedGameId(savedGame.id);
-    toast.success("Game saved");
-  }, [activeUserId, savedGameId, openingName, playerColor, saveGameToStore]);
+    toast.success(t("success.gameSaved"));
+  }, [activeUserId, savedGameId, openingName, playerColor, saveGameToStore, t]);
 
   const resign = useCallback(() => {
     if (isGameOver || moves.length === 0) {
@@ -730,7 +734,7 @@ export default function PlayComputer() {
       {isThinking && (
         <div className="absolute top-5 flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
           <span className="size-2 animate-pulse rounded-full bg-[#f7c948]" />
-          Thinking...
+          {t("playComputer.thinking")}
         </div>
       )}
 
@@ -746,7 +750,7 @@ export default function PlayComputer() {
             <div className="flex min-w-0 items-center gap-2">
               <span className="size-2.5 shrink-0 rounded-full bg-[#f2be1f]" />
               <span className="text-sm font-extrabold text-[#f4f1e8]">
-                Game over
+                {t("playComputer.gameOver")}
               </span>
             </div>
 
@@ -757,7 +761,7 @@ export default function PlayComputer() {
                 onClick={newGame}
               >
                 <FaRedo aria-hidden="true" />
-                New game
+                {t("common.newGame")}
               </button>
 
               {activeUserId && (
@@ -768,7 +772,7 @@ export default function PlayComputer() {
                   disabled={!!savedGameId}
                 >
                   <FaSave aria-hidden="true" />
-                  {savedGameId ? "Saved" : "Save game"}
+                  {savedGameId ? t("common.saved") : t("common.save")}
                 </button>
               )}
             </div>
@@ -781,7 +785,7 @@ export default function PlayComputer() {
               <FaRobot aria-hidden="true" />
             </span>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-              Stockfish Engine
+              {t("playComputer.title")}
             </span>
           </div>
 
@@ -815,7 +819,7 @@ export default function PlayComputer() {
               <FaUser aria-hidden="true" />
             </span>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-              Gabriel-Logan
+              {t("playComputer.playerName")}
             </span>
           </div>
 
@@ -823,18 +827,22 @@ export default function PlayComputer() {
         </div>
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:hidden">
-          Opening
-          <strong>{openingName ?? "not detected yet"}</strong>
+          {t("common.opening")}
+          <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
         </div>
       </div>
 
       <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
         <div className="flex min-h-13 items-center justify-between border-b border-[#accc821a] bg-linear-to-br from-[#1f241f] to-[#20211e] px-4 text-base font-extrabold text-white">
-          <span>Game Console</span>
+          <span>{t("playComputer.gameConsole")}</span>
           <button
             type="button"
             className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
-            title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+            title={
+              soundEnabled
+                ? t("playComputer.muteSounds")
+                : t("playComputer.enableSounds")
+            }
             onClick={() => {
               setSoundEnabled(!soundEnabled);
             }}
@@ -860,7 +868,7 @@ export default function PlayComputer() {
                 onClick={handleStartGame}
                 disabled={!connected}
               >
-                Start Game
+                {t("playComputer.startGame")}
               </button>
             </div>
           </div>
@@ -872,28 +880,28 @@ export default function PlayComputer() {
 
             <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
               <strong className="text-base text-[#f4f3ea]">
-                Ready for your move
+                {t("playComputer.readyForMove")}
               </strong>
-              <span>Stockfish will respond after you play.</span>
+              <span>{t("playComputer.stockfishWillRespond")}</span>
             </div>
           </div>
         )}
 
         <div className="border-b border-white/6 p-4">
           <div className="mb-3 hidden min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:flex">
-            Opening
-            <strong>{openingName ?? "not detected yet"}</strong>
+            {t("common.opening")}
+            <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
           </div>
 
           {!gameStarted && moves.length === 0 && (
             <>
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-                Game setup
+                {t("playComputer.gameSetup")}
               </h2>
 
               <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
                 <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-                  <span>Play as</span>
+                  <span>{t("playComputer.playAs")}</span>
                   <select
                     className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
                     value={playerColor}
@@ -901,13 +909,13 @@ export default function PlayComputer() {
                       setPlayerColor(e.target.value as "w" | "b");
                     }}
                   >
-                    <option value="w">White</option>
-                    <option value="b">Black</option>
+                    <option value="w">{t("common.white")}</option>
+                    <option value="b">{t("common.black")}</option>
                   </select>
                 </label>
 
                 <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-                  <span>Bot Elo: {botElo}</span>
+                  <span>{t("playComputer.botElo", { elo: botElo })}</span>
                   <input
                     className="h-2 w-full cursor-pointer accent-[#86a94f]"
                     type="range"
@@ -925,7 +933,7 @@ export default function PlayComputer() {
                 </label>
 
                 <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-                  <span>Piece set</span>
+                  <span>{t("common.pieceSet")}</span>
                   <select
                     className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
                     value={pieceSet}
@@ -946,7 +954,7 @@ export default function PlayComputer() {
 
               <div className="mt-3 flex flex-col gap-2">
                 <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
-                  <span>Evaluation bar</span>
+                  <span>{t("common.evaluationBar")}</span>
                   <input
                     className="size-4 accent-[#86a94f]"
                     type="checkbox"
@@ -958,7 +966,7 @@ export default function PlayComputer() {
                 </label>
 
                 <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
-                  <span>Move evaluation</span>
+                  <span>{t("common.moveEvaluation")}</span>
                   <input
                     className="size-4 accent-[#86a94f]"
                     type="checkbox"
@@ -978,24 +986,24 @@ export default function PlayComputer() {
               className="mt-2 inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476]"
               onClick={newGame}
             >
-              New game
+              {t("common.newGame")}
             </button>
           )}
         </div>
 
         <div className="border-b border-white/6 p-4">
           <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            Opening
+            {t("common.opening")}
           </h2>
 
           <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
-            {openingName ?? "No book match for this position yet"}
+            {openingName ?? t("pgnViewer.noBookMatch")}
           </div>
         </div>
 
         <div className="min-h-48 flex-1 overflow-hidden border-b border-white/6 p-4">
           <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            Moves
+            {t("common.moves")}
           </h2>
 
           <MoveList
@@ -1012,7 +1020,7 @@ export default function PlayComputer() {
             className={iconActionButtonClass}
             onClick={undoLastMove}
             disabled={moves.length === 0 || isGameOver}
-            title="Undo last move"
+            title={t("playComputer.undoLastMove")}
           >
             <FaUndo aria-hidden="true" />
           </button>
@@ -1021,7 +1029,7 @@ export default function PlayComputer() {
             type="button"
             className={iconActionButtonClass}
             onClick={toggleBoard}
-            title="Flip board"
+            title={t("playComputer.flipBoard")}
           >
             <FaRedo aria-hidden="true" />
           </button>
@@ -1031,7 +1039,7 @@ export default function PlayComputer() {
             className={iconActionButtonClass}
             onClick={copyPgn}
             disabled={moves.length === 0}
-            title="Copy PGN"
+            title={t("playComputer.copyPgn")}
           >
             <FaClipboard aria-hidden="true" />
           </button>
@@ -1041,7 +1049,7 @@ export default function PlayComputer() {
             className={iconActionButtonClass}
             onClick={resign}
             disabled={moves.length === 0 || isGameOver}
-            title="Resign"
+            title={t("playComputer.resign")}
           >
             <FaFlag aria-hidden="true" />
           </button>
@@ -1056,7 +1064,7 @@ export default function PlayComputer() {
               }
               onClick={saveCurrentGame}
               disabled={moves.length === 0 || !activeUserId || !!savedGameId}
-              title={savedGameId ? "Saved" : "Save game"}
+              title={savedGameId ? t("common.saved") : t("common.save")}
             >
               <FaSave aria-hidden="true" />
             </button>

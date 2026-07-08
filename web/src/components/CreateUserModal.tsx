@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FaTimes } from "react-icons/fa";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
 
   if (!open) {
@@ -35,7 +37,9 @@ export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
     >
       <div className="w-[min(100%,22rem)] rounded-lg border border-white/10 bg-[#242321] p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-extrabold text-[#f4f1e8]">New User</h2>
+          <h2 className="text-base font-extrabold text-[#f4f1e8]">
+            {t("modals.newUser")}
+          </h2>
 
           <button
             type="button"
@@ -48,7 +52,7 @@ export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
 
         <input
           className="mb-5 h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-          placeholder="Enter a name..."
+          placeholder={t("modals.enterName")}
           value={name}
           onChange={(e) => {
             setName(e.target.value);
@@ -67,7 +71,7 @@ export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
             className="inline-flex min-h-9 items-center justify-center rounded border border-white/8 bg-[#36342f] px-4 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
             onClick={onClose}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
 
           <button
@@ -76,7 +80,7 @@ export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
             onClick={handleSubmit}
             disabled={!name.trim()}
           >
-            Create
+            {t("common.create")}
           </button>
         </div>
       </div>

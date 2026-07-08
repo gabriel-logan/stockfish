@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import MoveClassificationIcon from "./MoveClassificationIcon";
 
@@ -27,6 +28,7 @@ export default function MoveList({
   onGoToMove,
   showEvaluation = true,
 }: Props) {
+  const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
 
@@ -66,7 +68,9 @@ export default function MoveList({
       className="h-full max-h-[28rem] overflow-y-auto text-sm text-[#dcd8cf]"
     >
       {pairs.length === 0 && (
-        <p className="m-0 p-5 text-center text-[#8f8b84]">No moves yet</p>
+        <p className="m-0 p-5 text-center text-[#8f8b84]">
+          {t("moveList.noMovesYet")}
+        </p>
       )}
       {pairs.map((pair) => {
         const whiteIndex = pair.num * 2 - 2;

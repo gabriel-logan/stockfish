@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router";
 
@@ -6,6 +7,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { useUserStore } from "../store/userStore";
 
 export default function GameHistory() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
@@ -18,9 +20,11 @@ export default function GameHistory() {
   if (!activeUser) {
     return (
       <div className="flex w-[min(100%,50rem)] flex-col items-center gap-6 pt-12 text-center">
-        <h1 className="text-2xl font-black text-[#f4f1e8]">Game History</h1>
+        <h1 className="text-2xl font-black text-[#f4f1e8]">
+          {t("gameHistory.title")}
+        </h1>
         <p className="text-sm text-[#aaa7a0]">
-          No user selected. Create or switch to a user in the sidebar.
+          {t("gameHistory.noUserSelected")}
         </p>
       </div>
     );
@@ -30,12 +34,12 @@ export default function GameHistory() {
     <Fragment>
       <div className="flex w-[min(100%,50rem)] flex-col gap-6 pt-4">
         <h1 className="text-2xl font-black text-[#f4f1e8]">
-          {activeUser.name}'s Games
+          {t("gameHistory.gamesTitle", { name: activeUser.name })}
         </h1>
 
         {activeUser.games.length === 0 ? (
           <p className="text-sm text-[#aaa7a0]">
-            No saved games yet. Play a game and save it!
+            {t("gameHistory.noSavedGames")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -56,7 +60,9 @@ export default function GameHistory() {
                   >
                     <div className="flex items-center gap-3 text-sm">
                       <span className="font-extrabold text-white">
-                        vs {game.opponent}
+                        {t("gameHistory.vsOpponent", {
+                          opponent: game.opponent,
+                        })}
                       </span>
                       <span
                         className={`text-xs font-bold ${
@@ -79,7 +85,9 @@ export default function GameHistory() {
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#aaa7a0]">
                       {game.opening && <span>{game.opening}</span>}
-                      <span>{game.moves} moves</span>
+                      <span>
+                        {t("gameHistory.movesCount", { count: game.moves })}
+                      </span>
                       <span>
                         {date.toLocaleDateString(undefined, {
                           year: "numeric",
@@ -95,7 +103,7 @@ export default function GameHistory() {
                   <button
                     type="button"
                     className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                    title="Delete game"
+                    title={t("gameHistory.deleteGame")}
                     onClick={() => {
                       setGameToDelete(game.id);
                     }}
@@ -111,8 +119,8 @@ export default function GameHistory() {
 
       <ConfirmModal
         open={gameToDelete !== null}
-        title="Delete game"
-        message="Are you sure you want to delete this game? This cannot be undone."
+        title={t("gameHistory.deleteConfirmTitle")}
+        message={t("gameHistory.deleteConfirmMessage")}
         onConfirm={() => {
           if (gameToDelete) {
             deleteGame(gameToDelete);

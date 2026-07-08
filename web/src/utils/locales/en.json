@@ -1,0 +1,130 @@
+{
+  "app": {
+    "title": "GLFish",
+    "pageTitles": {
+      "home": "GLFish - Play Stockfish and analyze your games",
+      "play": "Play Stockfish - GLFish",
+      "pgn": "Analyze PGN - GLFish",
+      "history": "Saved Games - GLFish"
+    }
+  },
+  "common": {
+    "white": "White",
+    "black": "Black",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "new": "New",
+    "games": "Games",
+    "save": "Save game",
+    "saved": "Saved",
+    "newGame": "New game",
+    "analyze": "Analyze",
+    "analyzing": "Analyzing...",
+    "paste": "Paste",
+    "opening": "Opening",
+    "moves": "Moves",
+    "accuracy": "Accuracy",
+    "appearance": "Appearance",
+    "pieceSet": "Piece set",
+    "noUser": "No user",
+    "users": "Users",
+    "versusEngine": "Versus Engine",
+    "analyzePgn": "Analyze PGN",
+    "play": "Play",
+    "pgn": "PGN",
+    "gitHub": "GitHub",
+    "apiConnected": "API Connected",
+    "apiChecking": "Checking API...",
+    "apiDisconnected": "API Disconnected",
+    "evaluationBar": "Evaluation bar",
+    "moveEvaluation": "Move evaluation",
+    "elo": "Elo"
+  },
+  "errors": {
+    "pasteValidPgn": "Paste a valid PGN",
+    "invalidPgn": "Invalid PGN. Check the format and try again.",
+    "cannotAccessClipboard": "Cannot access clipboard",
+    "playEngineDisconnected": "Play engine disconnected",
+    "evalEngineDisconnected": "Evaluation engine disconnected",
+    "connectionFailed": "Connection failed: {{message}}",
+    "connectionLost": "Connection lost",
+    "evaluationConnectionLost": "Evaluation connection lost"
+  },
+  "success": {
+    "analysisComplete": "Analysis complete",
+    "pgnCopied": "PGN copied to clipboard",
+    "pgnPasted": "PGN pasted from clipboard",
+    "enginesConnected": "Engines connected",
+    "gameSaved": "Game saved",
+    "userCreated": "User \"{{name}}\" created",
+    "userDeleted": "User deleted"
+  },
+  "notFound": {
+    "title": "404",
+    "message": "Page not found — this position is off the board.",
+    "backToGame": "Back to Game"
+  },
+  "playComputer": {
+    "title": "Stockfish Engine",
+    "gameConsole": "Game Console",
+    "thinking": "Thinking...",
+    "gameOver": "Game over",
+    "startGame": "Start Game",
+    "readyForMove": "Ready for your move",
+    "stockfishWillRespond": "Stockfish will respond after you play.",
+    "gameSetup": "Game setup",
+    "playAs": "Play as",
+    "botElo": "Bot Elo: {{elo}}",
+    "playerName": "Gabriel-Logan",
+    "undoLastMove": "Undo last move",
+    "flipBoard": "Flip board",
+    "copyPgn": "Copy PGN",
+    "resign": "Resign",
+    "muteSounds": "Mute sounds",
+    "enableSounds": "Enable sounds"
+  },
+  "pgnViewer": {
+    "gameReview": "Game Review",
+    "ready": "Ready",
+    "pgnAnalysis": "PGN Analysis",
+    "pastePgn": "Paste PGN",
+    "pastePlaceholder": "e.g. 1. e4 e5 2. Nf3 Nc6 ...",
+    "emptyState": "Paste a PGN and click Analyze to review the game.",
+    "firstMove": "First move",
+    "previousMove": "Previous move",
+    "nextMove": "Next move",
+    "lastMove": "Last move",
+    "sound": "Sound",
+    "openingNotDetected": "not detected yet",
+    "noBookMatch": "No book match for this position yet"
+  },
+  "gameHistory": {
+    "title": "Game History",
+    "gamesTitle": "{{name}}'s Games",
+    "noUserSelected": "No user selected. Create or switch to a user in the sidebar.",
+    "noSavedGames": "No saved games yet. Play a game and save it!",
+    "deleteGame": "Delete game",
+    "deleteConfirmTitle": "Delete game",
+    "deleteConfirmMessage": "Are you sure you want to delete this game? This cannot be undone.",
+    "vsOpponent": "vs {{opponent}}",
+    "movesCount": "{{count}} moves"
+  },
+  "layout": {
+    "userSection": "Users",
+    "createUser": "Create a user to save games",
+    "savedGamesCount": "{{count}} saved games",
+    "deleteUser": "Delete user",
+    "deleteUserTitle": "Delete user",
+    "deleteUserMessage": "Are you sure you want to delete \"{{name}}\"? All saved games will be lost.",
+    "userCount": "{{count}} users"
+  },
+  "moveList": {
+    "noMovesYet": "No moves yet"
+  },
+  "modals": {
+    "newUser": "New User",
+    "enterName": "Enter a name...",
+    "confirmLabel": "Delete"
+  }
+}

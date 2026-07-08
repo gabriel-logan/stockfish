@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FaChartLine,
   FaClipboard,
@@ -52,6 +53,7 @@ interface PositionData {
 }
 
 export default function PgnViewer() {
+  const { t } = useTranslation();
   const location = useLocation();
   const initialPgn = (location.state as { pgn?: string })?.pgn;
 
@@ -94,7 +96,9 @@ export default function PgnViewer() {
   const currentMate = positions[currentIdx]?.mate ?? null;
   const currentFen = positions[currentIdx]?.fen ?? gameAtIdx.fen();
   const reviewPositionLabel =
-    positions.length > 0 ? `${currentIdx}/${positions.length - 1}` : "Ready";
+    positions.length > 0
+      ? `${currentIdx}/${positions.length - 1}`
+      : t("pgnViewer.ready");
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, string> = {};
@@ -181,8 +185,8 @@ export default function PgnViewer() {
 
   const handleLoadPgn = async () => {
     if (!pgnInput.trim()) {
-      setError("Paste a valid PGN");
-      toast.error("Paste a valid PGN");
+      setError(t("errors.pasteValidPgn"));
+      toast.error(t("errors.pasteValidPgn"));
       return;
     }
 
@@ -285,10 +289,10 @@ export default function PgnViewer() {
       setGameAtIdx(initialGame);
       setLastMove(null);
 
-      toast.success("Analysis complete");
+      toast.success(t("success.analysisComplete"));
     } catch {
-      setError("Invalid PGN. Check the format and try again.");
-      toast.error("Invalid PGN. Check the format and try again.");
+      setError(t("errors.invalidPgn"));
+      toast.error(t("errors.invalidPgn"));
       setIsAnalyzing(false);
     }
   };
@@ -322,10 +326,10 @@ export default function PgnViewer() {
     try {
       const text = await navigator.clipboard.readText();
       setPgnInput(text);
-      toast.success("PGN pasted from clipboard");
+      toast.success(t("success.pgnPasted"));
     } catch {
-      setError("Cannot access clipboard");
-      toast.error("Cannot access clipboard");
+      setError(t("errors.cannotAccessClipboard"));
+      toast.error(t("errors.cannotAccessClipboard"));
     }
   };
 
@@ -347,7 +351,7 @@ export default function PgnViewer() {
               <FaChartLine aria-hidden="true" />
             </span>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-              Game Review
+              {t("pgnViewer.gameReview")}
             </span>
           </div>
 
@@ -381,7 +385,7 @@ export default function PgnViewer() {
               goToPosition(0);
             }}
             disabled={currentIdx <= 0}
-            title="First move"
+            title={t("pgnViewer.firstMove")}
           >
             <FaFastBackward aria-hidden="true" />
           </button>
@@ -393,7 +397,7 @@ export default function PgnViewer() {
               goToPosition(currentIdx - 1);
             }}
             disabled={currentIdx <= 0}
-            title="Previous move"
+            title={t("pgnViewer.previousMove")}
           >
             <FaStepBackward aria-hidden="true" />
           </button>
@@ -405,7 +409,7 @@ export default function PgnViewer() {
               goToPosition(currentIdx + 1);
             }}
             disabled={currentIdx >= positions.length - 1}
-            title="Next move"
+            title={t("pgnViewer.nextMove")}
           >
             <FaStepForward aria-hidden="true" />
           </button>
@@ -417,7 +421,7 @@ export default function PgnViewer() {
               goToPosition(positions.length - 1);
             }}
             disabled={currentIdx >= positions.length - 1}
-            title="Last move"
+            title={t("pgnViewer.lastMove")}
           >
             <FaFastForward aria-hidden="true" />
           </button>
@@ -425,23 +429,23 @@ export default function PgnViewer() {
 
         {positions.length === 0 && !isAnalyzing && (
           <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
-            Paste a PGN and click Analyze to review the game.
+            {t("pgnViewer.emptyState")}
           </div>
         )}
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
-          Opening
-          <strong>{openingName ?? "not detected yet"}</strong>
+          {t("common.opening")}
+          <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
         </div>
       </div>
 
       <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
         <div className="flex min-h-13 items-center justify-between border-b border-[#accc821a] bg-linear-to-br from-[#1f241f] to-[#20211e] px-4 text-base font-extrabold text-white">
-          <span>PGN Analysis</span>
+          <span>{t("pgnViewer.pgnAnalysis")}</span>
           <button
             type="button"
             className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
-            title="Sound"
+            title={t("pgnViewer.sound")}
           >
             <FaVolumeUp aria-hidden="true" />
           </button>
@@ -449,7 +453,9 @@ export default function PgnViewer() {
 
         <div className="flex flex-col gap-3 rounded-md border border-white/6 bg-[#242321] p-4">
           <div className="flex items-center justify-between gap-3">
-            <label className="text-base font-black text-white">Paste PGN</label>
+            <label className="text-base font-black text-white">
+              {t("pgnViewer.pastePgn")}
+            </label>
 
             <button
               type="button"
@@ -457,13 +463,13 @@ export default function PgnViewer() {
               onClick={handlePaste}
             >
               <FaClipboard aria-hidden="true" />
-              Paste
+              {t("common.paste")}
             </button>
           </div>
 
           <textarea
             className="min-h-36 w-full resize-y rounded border border-white/10 bg-[#373530] p-3 font-mono text-sm leading-relaxed text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-            placeholder="e.g. 1. e4 e5 2. Nf3 Nc6 ..."
+            placeholder={t("pgnViewer.pastePlaceholder")}
             value={pgnInput}
             onChange={(e) => {
               setPgnInput(e.target.value);
@@ -476,17 +482,17 @@ export default function PgnViewer() {
             onClick={handleLoadPgn}
             disabled={isAnalyzing || !pgnInput.trim()}
           >
-            {isAnalyzing ? "Analyzing..." : "Analyze"}
+            {isAnalyzing ? t("common.analyzing") : t("common.analyze")}
           </button>
         </div>
 
         <div className="border-b border-white/6 p-4">
           <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            Appearance
+            {t("common.appearance")}
           </h2>
 
           <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-            <span>Piece set</span>
+            <span>{t("common.pieceSet")}</span>
             <select
               className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
               value={pieceSet}
@@ -507,11 +513,11 @@ export default function PgnViewer() {
 
         <div className="border-b border-white/6 p-4">
           <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            Opening
+            {t("common.opening")}
           </h2>
 
           <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
-            {openingName ?? "No book match for this position yet"}
+            {openingName ?? t("pgnViewer.noBookMatch")}
           </div>
         </div>
 
@@ -533,7 +539,7 @@ export default function PgnViewer() {
           <>
             <div className="min-h-48 flex-1 overflow-hidden border-b border-white/6 p-4">
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-                Moves
+                {t("common.moves")}
               </h2>
 
               <MoveList
@@ -548,13 +554,13 @@ export default function PgnViewer() {
 
             <div className="border-b border-white/6 p-4">
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-                Accuracy
+                {t("common.accuracy")}
               </h2>
 
               <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
                 <div className="min-h-18 rounded-md border border-white/6 bg-[#302e2a] p-3">
                   <div className="text-xs font-extrabold text-[#aaa7a0] uppercase">
-                    White
+                    {t("common.white")}
                   </div>
                   <div className="mt-1 text-2xl font-black text-white">
                     {computeAccuracy(moves, "w")}%
@@ -563,7 +569,7 @@ export default function PgnViewer() {
 
                 <div className="min-h-18 rounded-md border border-white/6 bg-[#302e2a] p-3">
                   <div className="text-xs font-extrabold text-[#aaa7a0] uppercase">
-                    Black
+                    {t("common.black")}
                   </div>
                   <div className="mt-1 text-2xl font-black text-white">
                     {computeAccuracy(moves, "b")}%
