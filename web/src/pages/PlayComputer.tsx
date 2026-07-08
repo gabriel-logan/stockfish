@@ -419,6 +419,11 @@ export default function PlayComputer() {
           return;
         }
 
+        if (!gameStartedRef.current) {
+          gameStartedRef.current = true;
+          setGameStarted(true);
+        }
+
         setLastMove({ from: move.from as Square, to: move.to as Square });
 
         const entry: MoveEntry = {
@@ -453,14 +458,12 @@ export default function PlayComputer() {
           return;
         }
 
-        if (gameStartedRef.current) {
-          const engine = playEngineRef.current;
-          if (engine?.connected) {
-            engine.setElo(botElo);
-            engine.startAnalysis(gameRef.current.fen(), 14, 1);
-            isEngineRunning.current = true;
-            setIsThinking(true);
-          }
+        const engine = playEngineRef.current;
+        if (engine?.connected) {
+          engine.setElo(botElo);
+          engine.startAnalysis(gameRef.current.fen(), 14, 1);
+          isEngineRunning.current = true;
+          setIsThinking(true);
         }
       } catch {
         // Invalid move
