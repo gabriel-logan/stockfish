@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 
-import { BaseUrlAPI } from "../constants";
+import api from "../lib/apiInstance";
 
 export type HealthStatus = "checking" | "connected" | "disconnected";
 
@@ -13,7 +12,7 @@ export function useHealthCheck(intervalMs = 30000) {
 
     const check = async () => {
       try {
-        await axios.get(`${BaseUrlAPI}/health`, { timeout: 5000 });
+        await api.get("/health", { timeout: 5000 });
         if (!cancelled) setStatus("connected");
       } catch {
         if (!cancelled) setStatus("disconnected");
