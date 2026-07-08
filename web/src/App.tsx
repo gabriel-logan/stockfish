@@ -20,7 +20,7 @@ function App() {
         </Routes>
       </Layout>
 
-      <ToastContainer theme="dark" transition={Bounce} />
+      <ToastContainer theme="dark" transition={Bounce} autoClose={1500} />
     </BrowserRouter>
   );
 }
