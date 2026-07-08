@@ -8,6 +8,7 @@ import {
   FaStepForward,
   FaVolumeUp,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
@@ -177,6 +178,7 @@ export default function PgnViewer() {
   const handleLoadPgn = async () => {
     if (!pgnInput.trim()) {
       setError("Paste a valid PGN");
+      toast.error("Paste a valid PGN");
       return;
     }
 
@@ -278,8 +280,11 @@ export default function PgnViewer() {
       setCurrentIdx(0);
       setGameAtIdx(initialGame);
       setLastMove(null);
+
+      toast.success("Analysis complete");
     } catch {
       setError("Invalid PGN. Check the format and try again.");
+      toast.error("Invalid PGN. Check the format and try again.");
       setIsAnalyzing(false);
     }
   };
@@ -313,8 +318,10 @@ export default function PgnViewer() {
     try {
       const text = await navigator.clipboard.readText();
       setPgnInput(text);
+      toast.success("PGN pasted from clipboard");
     } catch {
       setError("Cannot access clipboard");
+      toast.error("Cannot access clipboard");
     }
   };
 

@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router";
+import { Bounce, ToastContainer } from "react-toastify";
 
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
@@ -16,6 +17,15 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
+
+      <ToastContainer
+        position="bottom-right"
+        theme="dark"
+        closeOnClick
+        pauseOnHover
+        newestOnTop
+        transition={Bounce}
+      />
     </BrowserRouter>
   );
 }

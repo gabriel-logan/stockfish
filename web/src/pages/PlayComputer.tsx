@@ -8,6 +8,7 @@ import {
   FaVolumeOff,
   FaVolumeUp,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
@@ -353,28 +354,34 @@ export default function PlayComputer() {
 
     playEngine.onError = (msg) => {
       setError(msg);
+      toast.error(msg);
     };
 
     evalEngine.onError = (msg) => {
       setError(msg);
+      toast.error(msg);
     };
 
     playEngine.onDisconnect = () => {
       setConnected(false);
       setError("Connection lost");
+      toast.error("Play engine disconnected");
     };
 
     evalEngine.onDisconnect = () => {
       setConnected(false);
       setError("Evaluation connection lost");
+      toast.error("Evaluation engine disconnected");
     };
 
     Promise.all([playEngine.connect(), evalEngine.connect()])
       .then(() => {
         setConnected(true);
+        toast.success("Engines connected");
       })
       .catch((err: Error) => {
         setError(err.message);
+        toast.error(`Connection failed: ${err.message}`);
       });
 
     return () => {
@@ -584,7 +591,12 @@ export default function PlayComputer() {
 
   const copyPgn = useCallback(() => {
     const pgn = gameRef.current.pgn();
-    navigator.clipboard.writeText(pgn).catch(() => {});
+    navigator.clipboard
+      .writeText(pgn)
+      .then(() => {
+        toast.success("PGN copied to clipboard");
+      })
+      .catch(() => {});
   }, []);
 
   const toggleBoard = useCallback(() => {

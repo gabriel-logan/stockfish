@@ -1,5 +1,11 @@
 import { type ReactNode } from "react";
-import { FaChartLine, FaChessPawn, FaCircle, FaPlay } from "react-icons/fa";
+import {
+  FaChartLine,
+  FaChessPawn,
+  FaCircle,
+  FaGithub,
+  FaPlay,
+} from "react-icons/fa";
 import { useLocation, useNavigate } from "react-router";
 
 import { useHealthCheck } from "../hooks/useHealthCheck";
@@ -82,6 +88,16 @@ export default function Layout({ children }: Props) {
                 ? "Checking API..."
                 : "API Disconnected"}
           </div>
+
+          <a
+            href="https://github.com/gabriel-logan/stockfish"
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2 transition-colors hover:bg-white/10"
+          >
+            <FaGithub className="text-[#97c45d]" aria-hidden="true" />
+            <strong>GitHub</strong>
+          </a>
 
           <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
             <span className="grid size-6 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
