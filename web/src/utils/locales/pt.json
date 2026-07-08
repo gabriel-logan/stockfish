@@ -1,0 +1,161 @@
+{
+  "app": {
+    "title": "GLFish",
+    "pageTitles": {
+      "home": "GLFish - Jogue contra o Stockfish e analise suas partidas",
+      "play": "Jogar contra Stockfish - GLFish",
+      "pgn": "Analisar PGN - GLFish",
+      "history": "Partidas Salvas - GLFish"
+    }
+  },
+  "common": {
+    "white": "Brancas",
+    "black": "Pretas",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "create": "Criar",
+    "new": "Novo",
+    "games": "Partidas",
+    "save": "Salvar partida",
+    "saved": "Salvo",
+    "newGame": "Nova partida",
+    "analyze": "Analisar",
+    "analyzing": "Analisando...",
+    "paste": "Colar",
+    "opening": "Abertura",
+    "moves": "Lances",
+    "accuracy": "Precisão",
+    "appearance": "Aparência",
+    "pieceSet": "Conjunto de peças",
+    "noUser": "Nenhum usuário",
+    "users": "Usuários",
+    "versusEngine": "Contra o Motor",
+    "analyzePgn": "Analisar PGN",
+    "play": "Jogar",
+    "pgn": "PGN",
+    "gitHub": "GitHub",
+    "apiConnected": "API Conectada",
+    "apiChecking": "Verificando API...",
+    "apiDisconnected": "API Desconectada",
+    "evaluationBar": "Barra de avaliação",
+    "moveEvaluation": "Avaliação de lances",
+    "elo": "Elo"
+  },
+  "errors": {
+    "pasteValidPgn": "Cole um PGN válido",
+    "invalidPgn": "PGN inválido. Verifique o formato e tente novamente.",
+    "cannotAccessClipboard": "Não foi possível acessar a área de transferência",
+    "playEngineDisconnected": "Motor de jogo desconectado",
+    "evalEngineDisconnected": "Motor de avaliação desconectado",
+    "connectionFailed": "Falha na conexão: {{message}}",
+    "connectionLost": "Conexão perdida",
+    "evaluationConnectionLost": "Conexão de avaliação perdida"
+  },
+  "success": {
+    "analysisComplete": "Análise concluída",
+    "pgnCopied": "PGN copiado para a área de transferência",
+    "pgnPasted": "PGN colado da área de transferência",
+    "enginesConnected": "Motores conectados",
+    "gameSaved": "Partida salva",
+    "userCreated": "Usuário \"{{name}}\" criado",
+    "userDeleted": "Usuário excluído"
+  },
+  "notFound": {
+    "title": "404",
+    "message": "Página não encontrada — esta posição está fora do tabuleiro.",
+    "backToGame": "Voltar ao Jogo"
+  },
+  "playComputer": {
+    "title": "Motor Stockfish",
+    "gameConsole": "Console da Partida",
+    "thinking": "Pensando...",
+    "gameOver": "Fim de jogo",
+    "startGame": "Iniciar Partida",
+    "readyForMove": "Pronto para seu lance",
+    "stockfishWillRespond": "O Stockfish responderá depois que você jogar.",
+    "gameSetup": "Configuração da partida",
+    "playAs": "Jogar como",
+    "botElo": "Elo do Bot: {{elo}}",
+    "playerName": "Gabriel-Logan",
+    "undoLastMove": "Desfazer último lance",
+    "flipBoard": "Virar tabuleiro",
+    "copyPgn": "Copiar PGN",
+    "resign": "Abandonar",
+    "muteSounds": "Silenciar sons",
+    "enableSounds": "Ativar sons"
+  },
+  "pgnViewer": {
+    "gameReview": "Revisão da Partida",
+    "ready": "Pronto",
+    "pgnAnalysis": "Análise de PGN",
+    "pastePgn": "Colar PGN",
+    "pastePlaceholder": "ex: 1. e4 e5 2. Nf3 Nc6 ...",
+    "emptyState": "Cole um PGN e clique em Analisar para revisar a partida.",
+    "firstMove": "Primeiro lance",
+    "previousMove": "Lance anterior",
+    "nextMove": "Próximo lance",
+    "lastMove": "Último lance",
+    "sound": "Som",
+    "openingNotDetected": "ainda não detectada",
+    "noBookMatch": "Nenhuma abertura encontrada para esta posição ainda"
+  },
+  "gameHistory": {
+    "title": "Histórico de Partidas",
+    "gamesTitle": "Partidas de {{name}}",
+    "noUserSelected": "Nenhum usuário selecionado. Crie ou alterne para um usuário na barra lateral.",
+    "noSavedGames": "Nenhuma partida salva ainda. Jogue uma partida e salve-a!",
+    "deleteGame": "Excluir partida",
+    "deleteConfirmTitle": "Excluir partida",
+    "deleteConfirmMessage": "Tem certeza que deseja excluir esta partida? Esta ação não pode ser desfeita.",
+    "vsOpponent": "vs {{opponent}}",
+    "movesCount": "{{count}} lances"
+  },
+  "layout": {
+    "userSection": "Usuários",
+    "createUser": "Crie um usuário para salvar partidas",
+    "savedGamesCount": "{{count}} partidas salvas",
+    "deleteUser": "Excluir usuário",
+    "deleteUserTitle": "Excluir usuário",
+    "deleteUserMessage": "Tem certeza que deseja excluir \"{{name}}\"? Todas as partidas salvas serão perdidas.",
+    "userCount": "{{count}} usuários"
+  },
+  "moveList": {
+    "noMovesYet": "Nenhum lance ainda"
+  },
+  "classification": {
+    "blunder": "Erro grave",
+    "mistake": "Erro",
+    "inaccuracy": "Imprecisão",
+    "okay": "Ok",
+    "excellent": "Excelente",
+    "best": "Melhor",
+    "forced": "Forçado",
+    "opening": "Livro de aberturas",
+    "perfect": "Perfeito",
+    "splendid": "Esplêndido"
+  },
+  "board": {
+    "pieceAlt": "{{pieceName}}",
+    "whitePawn": "Peão branco",
+    "whiteKnight": "Cavalo branco",
+    "whiteBishop": "Bispo branco",
+    "whiteRook": "Torre branca",
+    "whiteQueen": "Rainha branca",
+    "whiteKing": "Rei branco",
+    "blackPawn": "Peão preto",
+    "blackKnight": "Cavalo preto",
+    "blackBishop": "Bispo preto",
+    "blackRook": "Torre preta",
+    "blackQueen": "Rainha preta",
+    "blackKing": "Rei preto"
+  },
+  "nav": {
+    "primary": "Principal",
+    "primaryMobile": "Principal mobile"
+  },
+  "modals": {
+    "newUser": "Novo Usuário",
+    "enterName": "Digite um nome...",
+    "confirmLabel": "Excluir"
+  }
+}

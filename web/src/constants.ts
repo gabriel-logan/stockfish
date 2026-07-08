@@ -1,9 +1,13 @@
 import type { ClassificationValue } from "./types/chess-types";
 import en from "./utils/locales/en.json";
+import pt from "./utils/locales/pt.json";
 
 export const resources = {
   en: {
     translation: en,
+  },
+  pt: {
+    translation: pt,
   },
 };
 

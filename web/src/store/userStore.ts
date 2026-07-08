@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { STORAGE_KEY_USER_STORE } from "../constants";
+import type { Locale } from "../types/locales";
 import { createId } from "../utils/createId";
 
 export interface SavedGame {
@@ -26,10 +27,11 @@ export interface User {
 interface UserState {
   users: User[];
   activeUserId: string | null;
-  locale: string;
+  locale: Locale;
   createUser: (name: string) => string;
   deleteUser: (id: string) => void;
   setActiveUser: (id: string) => void;
+  setLocale: (locale: Locale) => void;
   saveGame: (game: SavedGame) => void;
   deleteGame: (gameId: string) => void;
 }
@@ -74,6 +76,10 @@ export const useUserStore = create<UserState>()(
 
       setActiveUser: (id: string) => {
         set({ activeUserId: id });
+      },
+
+      setLocale: (locale: Locale) => {
+        set({ locale });
       },
 
       saveGame: (game: SavedGame) => {
