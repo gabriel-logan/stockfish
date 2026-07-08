@@ -294,12 +294,12 @@ export default function PgnViewer() {
     <div className="grid w-[min(100%,108rem)] grid-cols-[minmax(0,1fr)_minmax(20rem,31.25rem)] gap-4 max-[72rem]:grid-cols-1">
       <div className="flex min-w-0 flex-col items-center gap-3">
         {error && (
-          <div className="w-[min(100%,42rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
+          <div className="w-[min(100%,50rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
             {error}
           </div>
         )}
 
-        <div className="flex w-[min(100%,42rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
+        <div className="flex w-[min(100%,50rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-white">
               <FaChartLine aria-hidden="true" />
@@ -314,6 +314,10 @@ export default function PgnViewer() {
 
         <div className="flex w-full min-w-0 justify-center">
           <div className="flex min-w-0 items-stretch justify-center gap-2 max-[44rem]:gap-1">
+            {showEvaluationBar && (
+              <EvaluationBar evaluation={currentEval} mate={currentMate} />
+            )}
+
             <Board
               game={gameAtIdx}
               onMove={() => {}}
@@ -323,10 +327,6 @@ export default function PgnViewer() {
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
             />
-
-            {showEvaluationBar && (
-              <EvaluationBar evaluation={currentEval} mate={currentMate} />
-            )}
           </div>
         </div>
 

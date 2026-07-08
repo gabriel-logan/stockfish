@@ -16,6 +16,51 @@ interface BoardProps {
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
+const SQUARE_SIZE_CLASS =
+  "[width:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)] [height:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)]";
+
+function getCoordinateColorClass(row: number, col: number): string {
+  const isLight = (row + col) % 2 === 0;
+
+  if (isLight) {
+    return "text-[#b58863]";
+  }
+
+  return "text-[#f0d9b5]";
+}
+
+function getDisplayRanks(orientation: "w" | "b"): string[] {
+  if (orientation === "w") {
+    return RANKS;
+  }
+
+  return [...RANKS].reverse();
+}
+
+function getDisplayFiles(orientation: "w" | "b"): string[] {
+  if (orientation === "w") {
+    return FILES;
+  }
+
+  return [...FILES].reverse();
+}
+
+function getBoardRow(row: number, orientation: "w" | "b"): number {
+  if (orientation === "w") {
+    return row;
+  }
+
+  return 7 - row;
+}
+
+function getBoardCol(col: number, orientation: "w" | "b"): number {
+  if (orientation === "w") {
+    return col;
+  }
+
+  return 7 - col;
+}
+
 export default function Board({
   game,
   onMove = () => {},
@@ -29,8 +74,9 @@ export default function Board({
 }: BoardProps) {
   const board = game.board();
 
-  const displayRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
-  const displayFiles = orientation === "w" ? FILES : [...FILES].reverse();
+  const displayRanks = getDisplayRanks(orientation);
+
+  const displayFiles = getDisplayFiles(orientation);
 
   const legalTargets = useMemo(() => {
     if (!selectedSquare) {
@@ -89,8 +135,7 @@ export default function Board({
     const isLastMoveSquare =
       lastMove !== null && (lastMove.from === square || lastMove.to === square);
 
-    let className =
-      "relative flex items-center justify-center [width:clamp(2.3rem,min(5.4vw,8.8vh),7.4rem)] [height:clamp(2.3rem,min(5.4vw,8.8vh),7.4rem)]";
+    let className = `relative flex items-center justify-center ${SQUARE_SIZE_CLASS}`;
 
     if (interactive) {
       className = `${className} cursor-pointer`;
@@ -120,12 +165,18 @@ export default function Board({
       {displayRanks.map((rank, row) => {
         return (
           <div key={rank} className="flex">
-            {displayFiles.map((_file, col) => {
-              const boardRow = orientation === "w" ? row : 7 - row;
-              const boardCol = orientation === "w" ? col : 7 - col;
+            {displayFiles.map((file, col) => {
+              const boardRow = getBoardRow(row, orientation);
+
+              const boardCol = getBoardCol(col, orientation);
+
               const square = `${FILES[boardCol]}${RANKS[boardRow]}` as Square;
+
               const piece = board[boardRow][boardCol];
+
               const isLegalTarget = legalTargets.has(square);
+
+              const coordinateColorClass = getCoordinateColorClass(row, col);
 
               return (
                 <div
@@ -135,6 +186,22 @@ export default function Board({
                     handleClick(square);
                   }}
                 >
+                  {col === 0 && (
+                    <span
+                      className={`pointer-events-none absolute top-0.5 left-1 z-10 text-[0.65rem] leading-none font-black select-none ${coordinateColorClass}`}
+                    >
+                      {rank}
+                    </span>
+                  )}
+
+                  {row === 7 && (
+                    <span
+                      className={`pointer-events-none absolute right-1 bottom-0.5 z-10 text-[0.65rem] leading-none font-black select-none ${coordinateColorClass}`}
+                    >
+                      {file}
+                    </span>
+                  )}
+
                   {piece && (
                     <img
                       src={`/pieces/cburnett/${piece.color}${piece.type.toUpperCase()}.svg`}
