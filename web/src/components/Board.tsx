@@ -225,7 +225,7 @@ export default function Board({
                       alt={t(
                         `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
                       )}
-                      className="size-[90%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
+                      className="size-[95%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
                       draggable={false}
                     />
                   )}
