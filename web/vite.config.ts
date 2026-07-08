@@ -16,6 +16,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes("node_modules/react-dom")) return "vendor";
           if (id.includes("node_modules/react")) return "vendor";
+          if (id.includes("src/utils/locales")) return "locales";
           if (id.includes("node_modules/chess.js")) return "chess";
           if (id.includes("node_modules/axios")) return "axios";
           if (id.includes("node_modules/react-icons")) return "ui";
