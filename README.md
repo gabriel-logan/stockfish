@@ -1,6 +1,8 @@
 # stockfish
 
-Chess analysis platform — Stockfish engine exposed via a Go API and a React frontend.
+**Analyze any chess position with the Stockfish engine — via REST API, real-time WebSocket, or a polished web interface.**
+
+A complete platform that exposes Stockfish's power through a Go API and a React frontend. Perfect for training, game analysis, or integrating chess analysis into your own projects.
 
 ## Packages
 
