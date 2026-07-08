@@ -29,6 +29,7 @@ export default function Layout({ children }: Props) {
   const healthStatus = useHealthCheck();
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
+  const activeUser = users.find((u) => u.id === activeUserId);
   const createUser = useUserStore((s) => s.createUser);
   const deleteUser = useUserStore((s) => s.deleteUser);
   const setActiveUser = useUserStore((s) => s.setActiveUser);
@@ -196,9 +197,11 @@ export default function Layout({ children }: Props) {
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
               <span className="grid size-6 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                GL
+                {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
               </span>
-              <strong>Gabriel-Logan</strong>
+              <strong className="overflow-hidden text-ellipsis whitespace-nowrap">
+                {activeUser?.name ?? "No user"}
+              </strong>
             </div>
           </div>
         </aside>
