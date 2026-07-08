@@ -5,6 +5,7 @@ import {
   FaRobot,
   FaUndo,
   FaUser,
+  FaVolumeOff,
   FaVolumeUp,
 } from "react-icons/fa";
 import { Chess, type Square } from "chess.js";
@@ -18,6 +19,11 @@ import { useSettingsStore } from "../store/settingsStore";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
+import {
+  playCaptureSound,
+  playGameOverSound,
+  playMoveSound,
+} from "../utils/sounds";
 
 const BOT_MOVE_DELAY_MS = 1200;
 
@@ -60,11 +66,13 @@ export default function PlayComputer() {
   const {
     showEvaluationBar,
     showMoveEvaluation,
+    soundEnabled,
     botElo,
     playerColor,
     setPlayerColor,
     setShowEvaluationBar,
     setShowMoveEvaluation,
+    setSoundEnabled,
     setBotElo,
   } = useSettingsStore();
 
@@ -73,6 +81,7 @@ export default function PlayComputer() {
   const computerColorRef = useRef(computerColor);
   const playerColorRef = useRef(playerColor);
   const botEloRef = useRef(botElo);
+  const soundEnabledRef = useRef(soundEnabled);
 
   useEffect(() => {
     computerColorRef.current = computerColor;
@@ -83,6 +92,9 @@ export default function PlayComputer() {
   useEffect(() => {
     botEloRef.current = botElo;
   }, [botElo]);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
   useEffect(() => {
     evaluationRef.current = evaluation;
   }, [evaluation]);
@@ -204,6 +216,11 @@ export default function PlayComputer() {
         isEngineRunning.current = false;
         setIsThinking(false);
         setIsGameOver(true);
+
+        if (soundEnabledRef.current) {
+          playGameOverSound();
+        }
+
         return;
       }
 
@@ -261,8 +278,20 @@ export default function PlayComputer() {
           const moveIndex = nextMoves.length - 1;
 
           syncMoves(nextMoves);
-          setIsGameOver(gameRef.current.isGameOver());
+
+          const gameOver = gameRef.current.isGameOver();
+          setIsGameOver(gameOver);
           void classifyLastMove(moveIndex, fenBefore, version);
+
+          if (soundEnabledRef.current) {
+            if (gameOver) {
+              playGameOverSound();
+            } else if (move.captured) {
+              playCaptureSound();
+            } else {
+              playMoveSound();
+            }
+          }
         } catch {
           // Invalid move from engine
         }
@@ -383,8 +412,21 @@ export default function PlayComputer() {
         syncMoves(nextMoves);
         void classifyLastMove(moveIndex, fenBefore, version);
 
+        if (soundEnabledRef.current) {
+          if (move.captured) {
+            playCaptureSound();
+          } else {
+            playMoveSound();
+          }
+        }
+
         if (gameRef.current.isGameOver()) {
           setIsGameOver(true);
+
+          if (soundEnabledRef.current) {
+            playGameOverSound();
+          }
+
           return;
         }
 
@@ -651,9 +693,16 @@ export default function PlayComputer() {
           <button
             type="button"
             className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
-            title="Sound"
+            title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+            onClick={() => {
+              setSoundEnabled(!soundEnabled);
+            }}
           >
-            <FaVolumeUp aria-hidden="true" />
+            {soundEnabled ? (
+              <FaVolumeUp aria-hidden="true" />
+            ) : (
+              <FaVolumeOff aria-hidden="true" />
+            )}
           </button>
         </div>
 
@@ -676,69 +725,73 @@ export default function PlayComputer() {
             <strong>{openingName ?? "not detected yet"}</strong>
           </div>
 
-          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            Game setup
-          </h2>
+          {moves.length === 0 && (
+            <>
+              <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+                Game setup
+              </h2>
 
-          <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
-            <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-              <span>Play as</span>
-              <select
-                className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-                value={playerColor}
-                onChange={(e) => {
-                  setPlayerColor(e.target.value as "w" | "b");
-                }}
-              >
-                <option value="w">White</option>
-                <option value="b">Black</option>
-              </select>
-            </label>
+              <div className="grid grid-cols-2 gap-3 max-[44rem]:grid-cols-1">
+                <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+                  <span>Play as</span>
+                  <select
+                    className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                    value={playerColor}
+                    onChange={(e) => {
+                      setPlayerColor(e.target.value as "w" | "b");
+                    }}
+                  >
+                    <option value="w">White</option>
+                    <option value="b">Black</option>
+                  </select>
+                </label>
 
-            <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-              <span>Bot Elo: {botElo}</span>
-              <input
-                className="h-2 w-full cursor-pointer accent-[#86a94f]"
-                type="range"
-                min={UCI_ELO_MIN}
-                max={UCI_ELO_MAX}
-                value={botElo}
-                onChange={(e) => {
-                  setBotElo(Number(e.target.value));
-                }}
-              />
-              <div className="flex justify-between text-[10px] text-[#7a786f]">
-                <span>{UCI_ELO_MIN}</span>
-                <span>{UCI_ELO_MAX}</span>
+                <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+                  <span>Bot Elo: {botElo}</span>
+                  <input
+                    className="h-2 w-full cursor-pointer accent-[#86a94f]"
+                    type="range"
+                    min={UCI_ELO_MIN}
+                    max={UCI_ELO_MAX}
+                    value={botElo}
+                    onChange={(e) => {
+                      setBotElo(Number(e.target.value));
+                    }}
+                  />
+                  <div className="flex justify-between text-[10px] text-[#7a786f]">
+                    <span>{UCI_ELO_MIN}</span>
+                    <span>{UCI_ELO_MAX}</span>
+                  </div>
+                </label>
               </div>
-            </label>
-          </div>
 
-          <div className="mt-3 flex flex-col gap-2">
-            <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
-              <span>Evaluation bar</span>
-              <input
-                className="size-4 accent-[#86a94f]"
-                type="checkbox"
-                checked={showEvaluationBar}
-                onChange={(e) => {
-                  setShowEvaluationBar(e.target.checked);
-                }}
-              />
-            </label>
+              <div className="mt-3 flex flex-col gap-2">
+                <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
+                  <span>Evaluation bar</span>
+                  <input
+                    className="size-4 accent-[#86a94f]"
+                    type="checkbox"
+                    checked={showEvaluationBar}
+                    onChange={(e) => {
+                      setShowEvaluationBar(e.target.checked);
+                    }}
+                  />
+                </label>
 
-            <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
-              <span>Move evaluation</span>
-              <input
-                className="size-4 accent-[#86a94f]"
-                type="checkbox"
-                checked={showMoveEvaluation}
-                onChange={(e) => {
-                  setShowMoveEvaluation(e.target.checked);
-                }}
-              />
-            </label>
-          </div>
+                <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
+                  <span>Move evaluation</span>
+                  <input
+                    className="size-4 accent-[#86a94f]"
+                    type="checkbox"
+                    checked={showMoveEvaluation}
+                    onChange={(e) => {
+                      setShowMoveEvaluation(e.target.checked);
+                    }}
+                  />
+                </label>
+              </div>
+            </>
+          )}
 
           <button
             type="button"
