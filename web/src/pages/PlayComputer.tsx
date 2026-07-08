@@ -240,6 +240,10 @@ export default function PlayComputer() {
     };
 
     playEngine.onBestMove = (data) => {
+      if (!gameStartedRef.current || !isEngineRunning.current) {
+        return;
+      }
+
       if (!data.bestmove || data.bestmove === "(none)") {
         isEngineRunning.current = false;
         setIsThinking(false);
@@ -565,6 +569,7 @@ export default function PlayComputer() {
   }, []);
 
   const handleStartGame = useCallback(() => {
+    gameStartedRef.current = true;
     setGameStarted(true);
 
     // If it's the bot's turn, start analysis immediately
@@ -586,6 +591,9 @@ export default function PlayComputer() {
   const newGame = useCallback(() => {
     analysisVersionRef.current += 1;
     clearPendingBotMove();
+    isEngineRunning.current = false;
+    gameStartedRef.current = false;
+    evalQueueRef.current = Promise.resolve();
 
     const playEngine = playEngineRef.current;
     const evalEngine = evalEngineRef.current;
@@ -617,16 +625,6 @@ export default function PlayComputer() {
     if (evalEngine?.connected) {
       evalEngine.setFullStrength();
       evalEngine.startAnalysis(newChess.fen(), 14, 1);
-    }
-
-    if (
-      playEngine?.connected &&
-      gameRef.current.turn() === computerColorRef.current
-    ) {
-      playEngine.setElo(botEloRef.current);
-      playEngine.startAnalysis(gameRef.current.fen(), 14, 1);
-      isEngineRunning.current = true;
-      setIsThinking(true);
     }
   }, [syncMoves, clearPendingBotMove]);
 
