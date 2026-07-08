@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { ClassificationValue } from "../types/chess-types";
 import MoveClassificationIcon from "./MoveClassificationIcon";
 
 export interface MoveEntry {
@@ -10,7 +11,7 @@ export interface MoveEntry {
   from?: string;
   to?: string;
   uci?: string;
-  classification?: string;
+  classification?: ClassificationValue;
   evaluation?: number;
   mate?: number;
 }

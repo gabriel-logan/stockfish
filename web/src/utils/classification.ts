@@ -1,6 +1,7 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
 
-import { MoveClassification } from "../types/chess-types";
+import { MoveClassification } from "../constants";
+import type { ClassificationValue } from "../types/chess-types";
 
 interface MoveClassificationContext {
   fenBefore?: string;
@@ -198,7 +199,7 @@ function isPieceSacrifice(
   return playerMaterialDiff < 0;
 }
 
-function getClassificationRank(classification: string): number {
+function getClassificationRank(classification: ClassificationValue): number {
   switch (classification) {
     case MoveClassification.Blunder:
       return 5;
@@ -215,7 +216,10 @@ function getClassificationRank(classification: string): number {
   }
 }
 
-function getWorstClassification(first: string, second: string): string {
+function getWorstClassification(
+  first: ClassificationValue,
+  second: ClassificationValue,
+): ClassificationValue {
   if (getClassificationRank(first) >= getClassificationRank(second)) {
     return first;
   }
@@ -223,7 +227,9 @@ function getWorstClassification(first: string, second: string): string {
   return second;
 }
 
-function classifyWinPercentageLoss(winPercentageLoss: number): string {
+function classifyWinPercentageLoss(
+  winPercentageLoss: number,
+): ClassificationValue {
   if (winPercentageLoss > 20) {
     return MoveClassification.Blunder;
   }
@@ -243,7 +249,7 @@ function classifyWinPercentageLoss(winPercentageLoss: number): string {
   return MoveClassification.Excellent;
 }
 
-function classifyScoreLoss(scoreLoss: number): string {
+function classifyScoreLoss(scoreLoss: number): ClassificationValue {
   if (scoreLoss > 2.5) {
     return MoveClassification.Blunder;
   }
@@ -321,7 +327,7 @@ export function classifyMove(
   isForced: boolean = false,
   isOpening: boolean = false,
   context: MoveClassificationContext = {},
-): string {
+): ClassificationValue {
   if (isOpening) {
     return MoveClassification.Opening;
   }

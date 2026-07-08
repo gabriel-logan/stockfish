@@ -122,6 +122,37 @@
   "moveList": {
     "noMovesYet": "No moves yet"
   },
+  "classification": {
+    "blunder": "Blunder",
+    "mistake": "Mistake",
+    "inaccuracy": "Inaccuracy",
+    "okay": "Okay",
+    "excellent": "Excellent",
+    "best": "Best",
+    "forced": "Forced",
+    "opening": "Book move",
+    "perfect": "Perfect",
+    "splendid": "Splendid"
+  },
+  "board": {
+    "pieceAlt": "{{pieceName}}",
+    "whitePawn": "White pawn",
+    "whiteKnight": "White knight",
+    "whiteBishop": "White bishop",
+    "whiteRook": "White rook",
+    "whiteQueen": "White queen",
+    "whiteKing": "White king",
+    "blackPawn": "Black pawn",
+    "blackKnight": "Black knight",
+    "blackBishop": "Black bishop",
+    "blackRook": "Black rook",
+    "blackQueen": "Black queen",
+    "blackKing": "Black king"
+  },
+  "nav": {
+    "primary": "Primary",
+    "primaryMobile": "Primary mobile"
+  },
   "modals": {
     "newUser": "New User",
     "enterName": "Enter a name...",

@@ -25,6 +25,7 @@ import {
   useSettingsStore,
 } from "../store/settingsStore";
 import { type SavedGame, useUserStore } from "../store/userStore";
+import type { ClassificationValue } from "../types/chess-types";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { createId } from "../utils/createId";
@@ -503,7 +504,7 @@ export default function PlayComputer() {
   }, [boardFlipped, playerColor]);
 
   const squareEvaluations = useMemo(() => {
-    const evals: Record<string, string> = {};
+    const evals: Record<string, ClassificationValue> = {};
     const move = moves[moves.length - 1];
 
     if (move?.to && move.classification) {

@@ -1,7 +1,9 @@
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Chess, type Square } from "chess.js";
 
 import type { PieceSet } from "../store/settingsStore";
+import type { ClassificationValue } from "../types/chess-types";
 
 interface BoardProps {
   game: Chess;
@@ -11,7 +13,7 @@ interface BoardProps {
   lastMove?: { from: Square; to: Square } | null;
   orientation?: "w" | "b";
   interactive?: boolean;
-  squareEvaluations?: Record<string, string>;
+  squareEvaluations?: Record<string, ClassificationValue>;
   showEvaluationIcons?: boolean;
   pieceSet?: PieceSet;
 }
@@ -76,6 +78,17 @@ export default function Board({
   showEvaluationIcons = false,
   pieceSet = "maestro",
 }: BoardProps) {
+  const { t } = useTranslation();
+
+  const pieceTypeName = {
+    p: "Pawn",
+    n: "Knight",
+    b: "Bishop",
+    r: "Rook",
+    q: "Queen",
+    k: "King",
+  } as const;
+
   const board = game.board();
 
   const displayRanks = getDisplayRanks(orientation);
@@ -209,7 +222,9 @@ export default function Board({
                   {piece && (
                     <img
                       src={`/pieces/${pieceSet}/${piece.color}${piece.type.toUpperCase()}.svg`}
-                      alt={`${piece.color}${piece.type}`}
+                      alt={t(
+                        `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
+                      )}
                       className="size-[86%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
                       draggable={false}
                     />
@@ -226,8 +241,8 @@ export default function Board({
                   {showEvaluationIcons && squareEvaluations[square] && (
                     <img
                       src={`/icons/${squareEvaluations[square]}.png`}
-                      alt={squareEvaluations[square]}
-                      title={squareEvaluations[square]}
+                      alt={t(`classification.${squareEvaluations[square]}`)}
+                      title={t(`classification.${squareEvaluations[square]}`)}
                       className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-7 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
                     />
                   )}

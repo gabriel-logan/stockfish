@@ -67,7 +67,7 @@ export default function Layout({ children }: Props) {
             <span>{t("app.title")}</span>
           </div>
 
-          <nav className="flex flex-col gap-1" aria-label="Primary">
+          <nav className="flex flex-col gap-1" aria-label={t("nav.primary")}>
             <button
               type="button"
               className={getNavButtonClass("/play")}
@@ -240,7 +240,7 @@ export default function Layout({ children }: Props) {
 
             <nav
               className="flex gap-2 max-[44rem]:w-full"
-              aria-label="Primary mobile"
+              aria-label={t("nav.primaryMobile")}
             >
               <button
                 type="button"

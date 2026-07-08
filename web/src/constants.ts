@@ -1,4 +1,4 @@
-import { MoveClassification } from "./types/chess-types";
+import type { ClassificationValue } from "./types/chess-types";
 import en from "./utils/locales/en.json";
 
 export const resources = {
@@ -7,20 +7,35 @@ export const resources = {
   },
 };
 
-export const CLASSIFICATION_COLORS: Record<
-  (typeof MoveClassification)[keyof typeof MoveClassification],
-  string
-> = {
-  [MoveClassification.Opening]: "#dbac86",
-  [MoveClassification.Forced]: "#dbac86",
-  [MoveClassification.Splendid]: "#19d4af",
-  [MoveClassification.Perfect]: "#3894eb",
-  [MoveClassification.Best]: "#22ac38",
-  [MoveClassification.Excellent]: "#22ac38",
-  [MoveClassification.Okay]: "#74b038",
-  [MoveClassification.Inaccuracy]: "#f2be1f",
-  [MoveClassification.Mistake]: "#e69f00",
+export const MoveClassification = {
+  Blunder: "blunder",
+  Mistake: "mistake",
+  Inaccuracy: "inaccuracy",
+  Okay: "okay",
+  Excellent: "excellent",
+  Best: "best",
+  Forced: "forced",
+  Opening: "opening",
+  Perfect: "perfect",
+  Splendid: "splendid",
+} as const;
+
+export const ChessSide = {
+  White: "w",
+  Black: "b",
+} as const;
+
+export const CLASSIFICATION_COLORS: Record<ClassificationValue, string> = {
   [MoveClassification.Blunder]: "#df5353",
+  [MoveClassification.Mistake]: "#e69f00",
+  [MoveClassification.Inaccuracy]: "#f2be1f",
+  [MoveClassification.Okay]: "#74b038",
+  [MoveClassification.Excellent]: "#22ac38",
+  [MoveClassification.Best]: "#22ac38",
+  [MoveClassification.Forced]: "#dbac86",
+  [MoveClassification.Opening]: "#dbac86",
+  [MoveClassification.Perfect]: "#3894eb",
+  [MoveClassification.Splendid]: "#19d4af",
 };
 
 export const BaseUrlAPI = import.meta.env.VITE_BASE_URL_API;

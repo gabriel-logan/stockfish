@@ -23,6 +23,7 @@ import {
   type PieceSet,
   useSettingsStore,
 } from "../store/settingsStore";
+import type { ClassificationValue } from "../types/chess-types";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 
@@ -49,7 +50,7 @@ interface PositionData {
   bestmove?: string | null;
   lineCount?: number;
   lines?: AnalysisLine[];
-  classification?: string;
+  classification?: ClassificationValue;
 }
 
 export default function PgnViewer() {
@@ -101,7 +102,7 @@ export default function PgnViewer() {
       : t("pgnViewer.ready");
 
   const squareEvaluations = useMemo(() => {
-    const evals: Record<string, string> = {};
+    const evals: Record<string, ClassificationValue> = {};
     const position = positions[currentIdx];
 
     if (position?.to && position.classification) {

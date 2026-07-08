@@ -1,7 +1,10 @@
-import { MoveClassification } from "../types/chess-types";
+import { useTranslation } from "react-i18next";
+
+import { MoveClassification } from "../constants";
+import type { ClassificationValue } from "../types/chess-types";
 
 interface Props {
-  classification?: string | null;
+  classification?: ClassificationValue | null;
   size?: number;
 }
 
@@ -22,6 +25,8 @@ export default function MoveClassificationIcon({
   classification,
   size = 16,
 }: Props) {
+  const { t } = useTranslation();
+
   if (!classification) {
     return null;
   }
@@ -35,8 +40,8 @@ export default function MoveClassificationIcon({
   return (
     <img
       src={src}
-      alt={classification}
-      title={classification}
+      alt={t(`classification.${classification}`)}
+      title={t(`classification.${classification}`)}
       width={size}
       height={size}
       className="inline-block shrink-0"
