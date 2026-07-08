@@ -643,7 +643,7 @@ export default function PlayComputer() {
           <span>{playerLabel}</span>
         </div>
 
-        <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
+        <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:hidden">
           Opening
           <strong>{openingName ?? "not detected yet"}</strong>
         </div>
@@ -675,6 +675,11 @@ export default function PlayComputer() {
         </div>
 
         <div className="border-b border-white/6 p-4">
+          <div className="mb-3 hidden min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:flex">
+            Opening
+            <strong>{openingName ?? "not detected yet"}</strong>
+          </div>
+
           <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
             Game setup
           </h2>
