@@ -26,6 +26,7 @@ export interface User {
 interface UserState {
   users: User[];
   activeUserId: string | null;
+  locale: string;
   createUser: (name: string) => string;
   deleteUser: (id: string) => void;
   setActiveUser: (id: string) => void;
@@ -37,6 +38,7 @@ export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
       users: [],
+      locale: "en",
       activeUserId: null,
 
       createUser: (name: string) => {

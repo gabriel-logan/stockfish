@@ -1,4 +1,11 @@
 import { MoveClassification } from "./types/chess-types";
+import en from "./utils/locales/en.json";
+
+export const resources = {
+  en: {
+    translation: en,
+  },
+};
 
 export const CLASSIFICATION_COLORS: Record<
   (typeof MoveClassification)[keyof typeof MoveClassification],

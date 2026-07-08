@@ -21,6 +21,8 @@ export default defineConfig({
           if (id.includes("node_modules/react-icons")) return "ui";
           if (id.includes("node_modules/react-toastify")) return "ui";
           if (id.includes("node_modules/zustand")) return "state";
+          if (id.includes("node_modules/i18next")) return "i18n";
+          if (id.includes("node_modules/react-i18next")) return "i18n";
         },
       },
     },
