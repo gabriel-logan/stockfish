@@ -8,6 +8,7 @@ export interface MoveEntry {
   color: "w" | "b";
   from?: string;
   to?: string;
+  uci?: string;
   classification?: string;
   evaluation?: number;
   mate?: number;

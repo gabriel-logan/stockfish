@@ -8,9 +8,18 @@ import type {
 
 export type { AnalysisData, BestMoveData };
 
+export interface AnalysisLine {
+  score: number | null;
+  mate: number | null;
+  depth: number;
+  multiPv: number;
+  pv: string[];
+}
+
 export class AnalysisEngine {
   private ws: WebSocket | null = null;
   private isConnected = false;
+  private activeFen: string | null = null;
 
   onAnalysis: ((data: AnalysisData) => void) | null = null;
   onBestMove: ((data: BestMoveData) => void) | null = null;
@@ -56,10 +65,11 @@ export class AnalysisEngine {
 
           case "analysis":
             this.onAnalysis?.({
-              score: msg.score ?? null,
-              mate: msg.mate ?? null,
+              score: this.normalizeScore(msg.score),
+              mate: this.normalizeMate(msg.mate),
               depth: msg.depth,
-              pv: msg.pv,
+              multiPv: msg.multi_pv ?? 1,
+              pv: msg.pv ?? [],
             });
             break;
 
@@ -114,6 +124,7 @@ export class AnalysisEngine {
   }
 
   startAnalysis(fen: string, depth: number = 14, multiPv: number = 1): void {
+    this.activeFen = fen;
     this.send({ type: "start", fen, depth, multi_pv: multiPv });
   }
 
@@ -124,11 +135,15 @@ export class AnalysisEngine {
   analyzePosition(
     fen: string,
     depth: number = 14,
+    multiPv: number = 1,
     timeoutMs: number = 30000,
-  ): Promise<AnalysisData & { bestmove: string | null }> {
+  ): Promise<
+    AnalysisData & { bestmove: string | null; lines: AnalysisLine[] }
+  > {
     return new Promise((resolve) => {
       let lastScore: number | null = null;
       let lastMate: number | null = null;
+      const lines = new Map<number, AnalysisLine>();
 
       const prevOnAnalysis = this.onAnalysis;
       const prevOnBestMove = this.onBestMove;
@@ -140,21 +155,36 @@ export class AnalysisEngine {
           score: lastScore,
           mate: lastMate,
           depth,
+          multiPv: 1,
           pv: [],
           bestmove: null,
+          lines: this.getSortedLines(lines),
         });
       }, timeoutMs);
 
       this.onAnalysis = (data) => {
-        if (data.score !== null) {
+        const line: AnalysisLine = {
+          score: data.score,
+          mate: data.mate,
+          depth: data.depth,
+          multiPv: data.multiPv,
+          pv: data.pv,
+        };
+        const existingLine = lines.get(data.multiPv);
+
+        if (!existingLine || data.depth >= existingLine.depth) {
+          lines.set(data.multiPv, line);
+        }
+
+        if (data.multiPv === 1 && data.score !== null) {
           lastScore = data.score;
         }
 
-        if (data.mate !== null) {
+        if (data.multiPv === 1 && data.mate !== null) {
           lastMate = data.mate;
         }
 
-        if (prevOnAnalysis) {
+        if (prevOnAnalysis && data.multiPv === 1) {
           prevOnAnalysis(data);
         }
       };
@@ -167,12 +197,48 @@ export class AnalysisEngine {
           score: lastScore,
           mate: lastMate,
           depth,
+          multiPv: 1,
           pv: [],
           bestmove: data.bestmove,
+          lines: this.getSortedLines(lines),
         });
       };
 
-      this.startAnalysis(fen, depth, 1);
+      this.startAnalysis(fen, depth, multiPv);
     });
+  }
+
+  private isBlackToMove(): boolean {
+    return this.activeFen?.split(" ")[1] === "b";
+  }
+
+  private getSortedLines(lines: Map<number, AnalysisLine>): AnalysisLine[] {
+    return [...lines.values()].sort((a, b) => {
+      return a.multiPv - b.multiPv;
+    });
+  }
+
+  private normalizeScore(score: number | undefined): number | null {
+    if (score === undefined) {
+      return null;
+    }
+
+    if (this.isBlackToMove()) {
+      return -score;
+    }
+
+    return score;
+  }
+
+  private normalizeMate(mate: number | undefined): number | null {
+    if (mate === undefined) {
+      return null;
+    }
+
+    if (this.isBlackToMove()) {
+      return -mate;
+    }
+
+    return mate;
   }
 }

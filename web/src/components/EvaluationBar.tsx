@@ -3,20 +3,30 @@ interface Props {
   mate: number | null;
 }
 
-export default function EvaluationBar({ evaluation, mate }: Props) {
-  let whitePercent = 50;
-
+function getWhitePercentage(evaluation: number | null, mate: number | null) {
   if (mate !== null) {
     if (mate > 0) {
-      whitePercent = 98;
-    } else if (mate < 0) {
-      whitePercent = 2;
+      return 98;
     }
-  } else if (evaluation !== null) {
-    const clamped = Math.max(-5, Math.min(5, evaluation));
 
-    whitePercent = Math.max(2, Math.min(98, 50 - clamped * 10));
+    if (mate < 0) {
+      return 2;
+    }
   }
+
+  if (evaluation === null) {
+    return 50;
+  }
+
+  const centipawns = Math.max(-1000, Math.min(1000, evaluation * 100));
+  const winningChances = 2 / (1 + Math.exp(-0.00368208 * centipawns)) - 1;
+  const percentage = 50 + 50 * winningChances;
+
+  return Math.max(2, Math.min(98, percentage));
+}
+
+export default function EvaluationBar({ evaluation, mate }: Props) {
+  const whitePercent = getWhitePercentage(evaluation, mate);
 
   let pawnText = null;
 

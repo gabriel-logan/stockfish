@@ -212,14 +212,15 @@ func parseInfoLine(line string) *WSMessage {
 					if i+2 < len(fields) {
 						n, err := strconv.Atoi(fields[i+2])
 						if err == nil {
-							msg.Score = float64(n) / 100.0
+							score := float64(n) / 100.0
+							msg.Score = &score
 						}
 					}
 				case "mate":
 					if i+2 < len(fields) {
 						n, err := strconv.Atoi(fields[i+2])
 						if err == nil {
-							msg.Mate = n
+							msg.Mate = &n
 						}
 					}
 				}
@@ -254,7 +255,7 @@ func parseInfoLine(line string) *WSMessage {
 			return nil
 		}
 	}
-	if msg.Depth == 0 && msg.Mate == 0 && len(msg.PV) == 0 {
+	if msg.Depth == 0 && msg.Mate == nil && len(msg.PV) == 0 {
 		return nil
 	}
 	return msg

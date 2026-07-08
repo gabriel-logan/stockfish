@@ -7,8 +7,8 @@ type WSMessage struct {
 	MultiPV  int      `json:"multi_pv,omitempty"`
 	Moves    string   `json:"moves,omitempty"`
 	SelDepth int      `json:"seldepth,omitempty"`
-	Score    float64  `json:"score,omitempty"`
-	Mate     int      `json:"mate,omitempty"`
+	Score    *float64 `json:"score,omitempty"`
+	Mate     *int     `json:"mate,omitempty"`
 	PV       []string `json:"pv,omitempty"`
 	Nodes    int64    `json:"nodes,omitempty"`
 	NPS      int64    `json:"nps,omitempty"`

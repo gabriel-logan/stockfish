@@ -34,6 +34,10 @@ function getOpeningName(fen: string): string | null {
   return match?.name ?? null;
 }
 
+function getMoveUci(move: { from: string; to: string; promotion?: string }) {
+  return `${move.from}${move.to}${move.promotion ?? ""}`;
+}
+
 export default function PlayComputer() {
   const [game, setGame] = useState(() => {
     return new Chess();
@@ -139,7 +143,7 @@ export default function PlayComputer() {
       await previousEvalTask;
 
       try {
-        const before = await evalEngine.analyzePosition(fenBefore, 14);
+        const before = await evalEngine.analyzePosition(fenBefore, 14, 3);
 
         if (analysisVersionRef.current !== version) {
           return null;
@@ -151,10 +155,28 @@ export default function PlayComputer() {
           return null;
         }
 
+        const alternativeLine = before.lines.find((line) => {
+          return line.pv[0] !== moveEntry.uci;
+        });
+
         const classification = classifyMove(
           before.score,
           after.score,
           moveEntry.color,
+          before.mate,
+          after.mate,
+          before.bestmove === moveEntry.uci,
+          before.lines.length === 1,
+          getOpeningName(moveEntry.fen) !== null,
+          {
+            fenBefore,
+            playedMove: moveEntry.uci,
+            bestLinePvAfter: after.lines[0]?.pv,
+            alternativeEvalBefore: alternativeLine?.score,
+            alternativeMateBefore: alternativeLine?.mate,
+            fenTwoMovesAgo: movesRef.current[moveIndex - 2]?.fen ?? null,
+            previousMove: movesRef.current[moveIndex - 1]?.uci ?? null,
+          },
         );
 
         const nextMoves = [...movesRef.current];
@@ -279,6 +301,7 @@ export default function PlayComputer() {
             color: move.color as "w" | "b",
             from: move.from,
             to: move.to,
+            uci: getMoveUci(move),
           };
           const nextMoves = [...movesRef.current, entry];
           const moveIndex = nextMoves.length - 1;
@@ -386,6 +409,7 @@ export default function PlayComputer() {
           color: move.color as "w" | "b",
           from: move.from,
           to: move.to,
+          uci: getMoveUci(move),
         };
         const nextMoves = [...movesRef.current, entry];
         const moveIndex = nextMoves.length - 1;

@@ -16,7 +16,7 @@ import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
 import { openings } from "../data/openings";
 import { useSettingsStore } from "../store/settingsStore";
-import { AnalysisEngine } from "../utils/analysisEngine";
+import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 
 function getOpeningName(fen: string): string | null {
@@ -26,14 +26,22 @@ function getOpeningName(fen: string): string | null {
   return match?.name ?? null;
 }
 
+function getMoveUci(move: { from: string; to: string; promotion?: string }) {
+  return `${move.from}${move.to}${move.promotion ?? ""}`;
+}
+
 interface PositionData {
   fen: string;
   san?: string;
   color?: "w" | "b";
   from?: string;
   to?: string;
+  uci?: string;
   evaluation: number | null;
   mate: number | null;
+  bestmove?: string | null;
+  lineCount?: number;
+  lines?: AnalysisLine[];
   classification?: string;
 }
 
@@ -65,6 +73,7 @@ export default function PgnViewer() {
         color: p.color,
         from: p.from,
         to: p.to,
+        uci: p.uci,
         classification: p.classification,
         evaluation: p.evaluation ?? undefined,
         mate: p.mate ?? undefined,
@@ -189,6 +198,7 @@ export default function PgnViewer() {
             color: move.color as "w" | "b",
             from: move.from,
             to: move.to,
+            uci: getMoveUci(move),
             evaluation: null,
             mate: null,
           });
@@ -209,23 +219,39 @@ export default function PgnViewer() {
         }
 
         try {
-          const result = await engine.analyzePosition(posData[i].fen, 14);
+          const result = await engine.analyzePosition(posData[i].fen, 14, 3);
 
           posData[i].evaluation = result.score;
           posData[i].mate = result.mate;
+          posData[i].bestmove = result.bestmove;
+          posData[i].lineCount = result.lines.length;
+          posData[i].lines = result.lines;
 
           const color = posData[i].color;
 
-          if (
-            i > 0 &&
-            posData[i - 1].evaluation !== null &&
-            result.score !== null &&
-            color
-          ) {
+          if (i > 0 && color) {
+            const alternativeLine = posData[i - 1].lines?.find((line) => {
+              return line.pv[0] !== posData[i].uci;
+            });
+
             posData[i].classification = classifyMove(
               posData[i - 1].evaluation,
               result.score,
               color,
+              posData[i - 1].mate,
+              result.mate,
+              posData[i - 1].bestmove === posData[i].uci,
+              posData[i - 1].lineCount === 1,
+              getOpeningName(posData[i].fen) !== null,
+              {
+                fenBefore: posData[i - 1].fen,
+                playedMove: posData[i].uci,
+                bestLinePvAfter: result.lines[0]?.pv,
+                alternativeEvalBefore: alternativeLine?.score,
+                alternativeMateBefore: alternativeLine?.mate,
+                fenTwoMovesAgo: posData[i - 2]?.fen ?? null,
+                previousMove: posData[i - 1].uci ?? null,
+              },
             );
           }
 

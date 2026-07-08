@@ -30,9 +30,9 @@ export type WSServerMessage =
       depth: number;
       seldepth?: number;
       multi_pv?: number;
-      score: number;
-      mate: number;
-      pv: string[];
+      score?: number;
+      mate?: number;
+      pv?: string[];
       nodes?: number;
       nps?: number;
       time_ms?: number;
@@ -80,6 +80,7 @@ export interface AnalysisData {
   score: number | null;
   mate: number | null;
   depth: number;
+  multiPv: number;
   pv: string[];
 }
 
