@@ -27,6 +27,7 @@ export default function LanguageSwitcher() {
             className={`min-w-12 flex-1 px-2 py-1.5 text-center text-xs font-extrabold tracking-wide transition-colors ${isActive ? activeClass : inactiveClass}`}
             onClick={() => {
               setLocale(lang.value);
+              window.location.reload();
             }}
           >
             {lang.label}
