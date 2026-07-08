@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { FaChartLine, FaChessPawn, FaCircle, FaPlay } from "react-icons/fa";
 
+import { useHealthCheck } from "../hooks/useHealthCheck";
+
 interface Props {
   children: ReactNode;
   currentRoute: string;
@@ -8,6 +10,7 @@ interface Props {
 }
 
 export default function Layout({ children, currentRoute, navigate }: Props) {
+  const healthStatus = useHealthCheck();
   function getNavButtonClass(path: string) {
     let className =
       "flex min-h-11 w-full items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-[0.95rem] font-bold whitespace-nowrap text-[#bebaae] transition-colors hover:bg-[#97c45d1a] hover:text-white";
@@ -59,8 +62,22 @@ export default function Layout({ children, currentRoute, navigate }: Props) {
 
         <div className="mt-auto flex flex-col gap-2 text-sm text-[#aaa7a0]">
           <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-            <FaCircle size={10} color="#8ab84f" aria-hidden="true" />
-            Local engine
+            <FaCircle
+              size={10}
+              color={
+                healthStatus === "connected"
+                  ? "#8ab84f"
+                  : healthStatus === "checking"
+                    ? "#f2be1f"
+                    : "#df5353"
+              }
+              aria-hidden="true"
+            />
+            {healthStatus === "connected"
+              ? "API Connected"
+              : healthStatus === "checking"
+                ? "Checking API..."
+                : "API Disconnected"}
           </div>
 
           <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
