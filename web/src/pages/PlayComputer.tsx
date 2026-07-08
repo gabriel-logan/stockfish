@@ -18,7 +18,6 @@ import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
-import { openings } from "../data/openings";
 import {
   PIECE_SETS,
   type PieceSet,
@@ -30,6 +29,7 @@ import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
+import { getOpeningKey, getOpeningName } from "../utils/openingNames";
 import {
   playCaptureSound,
   playGameOverSound,
@@ -37,13 +37,6 @@ import {
 } from "../utils/sounds";
 
 const BOT_MOVE_DELAY_MS = 1200;
-
-function getOpeningName(fen: string): string | null {
-  const placement = fen.split(" ")[0];
-  const match = openings.find((o) => o.fen === placement);
-
-  return match?.name ?? null;
-}
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
@@ -829,7 +822,11 @@ export default function PlayComputer() {
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:hidden">
           {t("common.opening")}
-          <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
+          <strong>
+            {openingName
+              ? t(`openings.${getOpeningKey(openingName)}`)
+              : t("pgnViewer.openingNotDetected")}
+          </strong>
         </div>
       </div>
 
@@ -891,7 +888,11 @@ export default function PlayComputer() {
         <div className="border-b border-white/6 p-4">
           <div className="mb-3 hidden min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0] xl:flex">
             {t("common.opening")}
-            <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
+            <strong>
+              {openingName
+                ? t(`openings.${getOpeningKey(openingName)}`)
+                : t("pgnViewer.openingNotDetected")}
+            </strong>
           </div>
 
           {!gameStarted && moves.length === 0 && (
@@ -998,7 +999,9 @@ export default function PlayComputer() {
           </h2>
 
           <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
-            {openingName ?? t("pgnViewer.noBookMatch")}
+            {openingName
+              ? t(`openings.${getOpeningKey(openingName)}`)
+              : t("pgnViewer.noBookMatch")}
           </div>
         </div>
 

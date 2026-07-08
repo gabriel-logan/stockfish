@@ -17,7 +17,6 @@ import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
 import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
-import { openings } from "../data/openings";
 import {
   PIECE_SETS,
   type PieceSet,
@@ -26,13 +25,7 @@ import {
 import type { ClassificationValue } from "../types/chess-types";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
-
-function getOpeningName(fen: string): string | null {
-  const placement = fen.split(" ")[0];
-  const match = openings.find((o) => o.fen === placement);
-
-  return match?.name ?? null;
-}
+import { getOpeningKey, getOpeningName } from "../utils/openingNames";
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
@@ -436,7 +429,11 @@ export default function PgnViewer() {
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
           {t("common.opening")}
-          <strong>{openingName ?? t("pgnViewer.openingNotDetected")}</strong>
+          <strong>
+            {openingName
+              ? t(`openings.${getOpeningKey(openingName)}`)
+              : t("pgnViewer.openingNotDetected")}
+          </strong>
         </div>
       </div>
 
@@ -518,7 +515,9 @@ export default function PgnViewer() {
           </h2>
 
           <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
-            {openingName ?? t("pgnViewer.noBookMatch")}
+            {openingName
+              ? t(`openings.${getOpeningKey(openingName)}`)
+              : t("pgnViewer.noBookMatch")}
           </div>
         </div>
 
