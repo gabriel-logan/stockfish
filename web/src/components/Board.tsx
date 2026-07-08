@@ -224,7 +224,7 @@ export default function Board({
                       src={`/icons/${squareEvaluations[square]}.png`}
                       alt={squareEvaluations[square]}
                       title={squareEvaluations[square]}
-                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-5 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
+                      className="pointer-events-none absolute top-0.5 right-0.5 z-10 size-7 drop-shadow-[0_0.06rem_0.1rem_rgb(0_0_0_/_40%)]"
                     />
                   )}
                 </div>
