@@ -40,7 +40,7 @@ export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
       users: [],
-      locale: "en",
+      locale: (navigator.language.split("-")[0] as Locale) || "en",
       activeUserId: null,
 
       createUser: (name: string) => {
