@@ -1,10 +1,10 @@
-import { BaseUrlWS } from "../constants";
+import { baseUrlEngineWS } from "../constants";
 import type {
   AnalysisData,
   BestMoveData,
   WSClientMessage,
   WSServerMessage,
-} from "../types/api";
+} from "../types/engine";
 
 export type { AnalysisData, BestMoveData };
 
@@ -39,7 +39,7 @@ export class AnalysisEngine {
         return;
       }
 
-      const ws = new WebSocket(BaseUrlWS);
+      const ws = new WebSocket(baseUrlEngineWS);
       ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {

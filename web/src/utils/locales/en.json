@@ -37,9 +37,9 @@
     "play": "Play",
     "pgn": "PGN",
     "gitHub": "GitHub",
-    "apiConnected": "API Connected",
-    "apiChecking": "Checking API...",
-    "apiDisconnected": "API Disconnected",
+    "engineConnected": "Engine Connected",
+    "engineChecking": "Checking Engine...",
+    "engineDisconnected": "Engine Disconnected",
     "evaluationBar": "Evaluation bar",
     "moveEvaluation": "Move evaluation",
     "elo": "Elo"

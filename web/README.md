@@ -2,7 +2,7 @@
 
 Chess analysis frontend built with React + TypeScript + Vite.
 
-Connects to the [stockfish-api](../api/README.md) for engine analysis via WebSocket and REST.
+Connects to the [stockfish-engine](../engine/README.md) for engine analysis via WebSocket and REST.
 
 ## Quick Start
 

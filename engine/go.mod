@@ -1,4 +1,4 @@
-module github.com/gabriel-logan/stockfish/api
+module github.com/gabriel-logan/stockfish/engine
 
 go 1.26.4
 

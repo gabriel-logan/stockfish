@@ -1,4 +1,4 @@
-# stockfish-api
+# stockfish-engine
 
 Go HTTP server that wraps Stockfish engine analysis via REST and WebSocket.
 
@@ -6,14 +6,14 @@ Go HTTP server that wraps Stockfish engine analysis via REST and WebSocket.
 
 ```bash
 # Build
-docker build -t stockfish-api .
+docker build -t stockfish-engine .
 
 # Run (detached)
 docker run -d \
-  --name stockfish-api \
+  --name stockfish-engine \
   -p 3000:3000 \
-  stockfish-api
+  stockfish-engine
 
 # Stop & remove
-docker stop stockfish-api && docker rm stockfish-api
+docker stop stockfish-engine && docker rm stockfish-engine
 ```

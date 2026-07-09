@@ -1,9 +1,9 @@
-import api from "../lib/apiInstance";
+import engineApi from "../lib/engineInstance";
 import type {
   AnalysisEntry,
   AnalyzeRequest,
   AnalyzeResponse,
-} from "../types/api";
+} from "../types/engine";
 
 export async function analyzePosition(
   fen: string,
@@ -12,7 +12,7 @@ export async function analyzePosition(
 ): Promise<AnalyzeResponse> {
   const body: AnalyzeRequest = { fen, depth, multi_pv: multiPv };
 
-  const response = await api.post<AnalyzeResponse>("/api/analyze", body);
+  const response = await engineApi.post<AnalyzeResponse>("/analyze", body);
 
   return response.data;
 }

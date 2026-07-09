@@ -17,7 +17,7 @@ func main() {
 	})
 
 	mux.HandleFunc("/ws", handleWS(cfg))
-	mux.HandleFunc("/api/analyze", handleAnalyze(cfg.StockfishPath))
+	mux.HandleFunc("/analyze", handleAnalyze(cfg.StockfishPath))
 
 	h := corsMiddleware(mux)
 	h = recoverMiddleware(h)

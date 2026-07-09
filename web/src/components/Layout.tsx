@@ -16,7 +16,7 @@ import {
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "react-toastify";
 
-import { useHealthCheck } from "../hooks/useHealthCheck";
+import { useEngineHealthCheck } from "../hooks/useEngineHealth";
 import { useUserStore } from "../store/userStore";
 import ConfirmModal from "./ConfirmModal";
 import CreateUserModal from "./CreateUserModal";
@@ -31,7 +31,7 @@ export default function Layout({ children }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const healthStatus = useHealthCheck();
+  const engineHealthStatus = useEngineHealthCheck();
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeUser = users.find((u) => u.id === activeUserId);
@@ -209,19 +209,19 @@ export default function Layout({ children }: Props) {
               <FaCircle
                 size={10}
                 color={
-                  healthStatus === "connected"
+                  engineHealthStatus === "connected"
                     ? "#8ab84f"
-                    : healthStatus === "checking"
+                    : engineHealthStatus === "checking"
                       ? "#f2be1f"
                       : "#df5353"
                 }
                 aria-hidden="true"
               />
-              {healthStatus === "connected"
-                ? t("common.apiConnected")
-                : healthStatus === "checking"
-                  ? t("common.apiChecking")
-                  : t("common.apiDisconnected")}
+              {engineHealthStatus === "connected"
+                ? t("common.engineConnected")
+                : engineHealthStatus === "checking"
+                  ? t("common.engineChecking")
+                  : t("common.engineDisconnected")}
             </div>
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
