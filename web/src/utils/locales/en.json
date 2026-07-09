@@ -4,6 +4,7 @@
     "pageTitles": {
       "home": "GLFish - Play Stockfish and analyze your games",
       "play": "Play Stockfish - GLFish",
+      "freePlay": "Free Play - GLFish",
       "pgn": "Analyze PGN - GLFish",
       "history": "Saved Games - GLFish"
     }
@@ -30,6 +31,8 @@
     "noUser": "No user",
     "users": "Users",
     "versusEngine": "Versus Engine",
+    "freePlay": "Free Play",
+    "free": "Free",
     "analyzePgn": "Analyze PGN",
     "play": "Play",
     "pgn": "PGN",
@@ -76,7 +79,6 @@
     "gameSetup": "Game setup",
     "playAs": "Play as",
     "botElo": "Bot Elo: {{elo}}",
-    "playerName": "Gabriel-Logan",
     "undoLastMove": "Undo last move",
     "flipBoard": "Flip board",
     "copyPgn": "Copy PGN",
@@ -86,6 +88,13 @@
     "material": "Material",
     "materialEven": "Even",
     "materialAdvantage": "{{color}} {{score}}"
+  },
+  "freePlay": {
+    "title": "Free Play",
+    "whiteToMove": "White to move",
+    "blackToMove": "Black to move",
+    "selfPlayStatus": "Move both sides with full analysis.",
+    "selfOpponent": "Free play"
   },
   "pgnViewer": {
     "gameReview": "Game Review",
