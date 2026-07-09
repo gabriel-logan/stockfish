@@ -109,7 +109,9 @@
     "lastMove": "Last move",
     "sound": "Sound",
     "openingNotDetected": "not detected yet",
-    "noBookMatch": "No book match for this position yet"
+    "noBookMatch": "No book match for this position yet",
+    "engineLines": "Engine lines",
+    "noLine": "No line"
   },
   "gameHistory": {
     "title": "Game History",

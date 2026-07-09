@@ -38,6 +38,18 @@ function getMoveUci(move: { from: string; to: string; promotion?: string }) {
 
 type PromotionPiece = "q" | "r" | "b" | "n";
 
+function getUciMoveParams(uciMove: string) {
+  if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uciMove)) {
+    return null;
+  }
+
+  return {
+    from: uciMove.slice(0, 2) as Square,
+    to: uciMove.slice(2, 4) as Square,
+    promotion: (uciMove.slice(4, 5) || undefined) as PromotionPiece | undefined,
+  };
+}
+
 function getMoveParams(move: MoveEntry) {
   if (!move.from || !move.to) {
     return null;
@@ -48,6 +60,51 @@ function getMoveParams(move: MoveEntry) {
     to: move.to as Square,
     promotion: move.uci?.slice(4, 5) || undefined,
   };
+}
+
+function getFormattedScore(score: number | null, mate: number | null) {
+  if (mate !== null) {
+    const prefix = mate > 0 ? "+" : "-";
+
+    return `M${prefix}${Math.abs(mate)}`;
+  }
+
+  if (score === null) {
+    return "-";
+  }
+
+  if (score > 0) {
+    return `+${score.toFixed(2)}`;
+  }
+
+  return score.toFixed(2);
+}
+
+function getSanLine(fen: string, pv: string[]) {
+  const game = new Chess(fen);
+  const moves: string[] = [];
+
+  for (const uciMove of pv) {
+    const params = getUciMoveParams(uciMove);
+
+    if (!params) {
+      break;
+    }
+
+    try {
+      const move = game.move(params);
+
+      if (!move) {
+        break;
+      }
+
+      moves.push(move.san);
+    } catch {
+      break;
+    }
+  }
+
+  return moves;
 }
 
 interface PositionData {
@@ -128,6 +185,9 @@ export default function PgnViewer() {
     latestPracticeMove?.mate ?? positions[currentIdx]?.mate ?? null;
   const currentFen =
     latestPracticeMove?.fen ?? positions[currentIdx]?.fen ?? gameAtIdx.fen();
+  const currentAnalysisPosition =
+    activePracticeMoves.length > 0 ? null : positions[currentIdx];
+  const currentAnalysisLines = currentAnalysisPosition?.lines ?? [];
   const reviewPositionLabel =
     activePracticeMoves.length > 0
       ? `${t("common.moves")} ${moves.length}`
@@ -822,6 +882,40 @@ export default function PgnViewer() {
               : t("pgnViewer.noBookMatch")}
           </div>
         </div>
+
+        {currentAnalysisPosition && currentAnalysisLines.length > 0 && (
+          <div className="border-b border-white/6 p-4">
+            <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+              {t("pgnViewer.engineLines")}
+            </h2>
+
+            <div className="flex flex-col gap-2">
+              {currentAnalysisLines.map((line) => {
+                const sanMoves = getSanLine(
+                  currentAnalysisPosition.fen,
+                  line.pv,
+                );
+
+                return (
+                  <div
+                    key={line.multiPv}
+                    className="grid min-h-9 grid-cols-[4rem_minmax(0,1fr)] items-center gap-3 rounded-md border border-white/6 bg-[#302e2a] px-2.5 py-2 text-sm"
+                  >
+                    <span className="rounded bg-black px-2 py-1 text-center font-mono text-xs font-black text-white">
+                      {getFormattedScore(line.score, line.mate)}
+                    </span>
+
+                    <span className="min-w-0 overflow-hidden font-bold text-ellipsis whitespace-nowrap text-[#ebe8df]">
+                      {sanMoves.length > 0
+                        ? sanMoves.join(", ")
+                        : t("pgnViewer.noLine")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {isAnalyzing && (
           <div className="px-4 pb-4">
