@@ -37,9 +37,64 @@ import {
 } from "../utils/sounds";
 
 const BOT_MOVE_DELAY_MS = 1200;
+const CAPTURED_PIECE_ORDER = ["q", "r", "b", "n", "p"] as const;
+const PIECE_VALUES = {
+  p: 1,
+  n: 3,
+  b: 3,
+  r: 5,
+  q: 9,
+} as const;
+const CAPTURED_PIECE_ALT_KEYS = {
+  w: {
+    p: "board.whitePawn",
+    n: "board.whiteKnight",
+    b: "board.whiteBishop",
+    r: "board.whiteRook",
+    q: "board.whiteQueen",
+  },
+  b: {
+    p: "board.blackPawn",
+    n: "board.blackKnight",
+    b: "board.blackBishop",
+    r: "board.blackRook",
+    q: "board.blackQueen",
+  },
+} as const;
+
+type CapturedPiece = (typeof CAPTURED_PIECE_ORDER)[number];
+type PromotionPiece = "q" | "r" | "b" | "n";
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
+}
+
+function getCapturedPieces(moves: MoveEntry[]) {
+  const capturedByWhite: CapturedPiece[] = [];
+  const capturedByBlack: CapturedPiece[] = [];
+
+  for (const move of moves) {
+    if (!move.captured) {
+      continue;
+    }
+
+    if (move.color === "w") {
+      capturedByWhite.push(move.captured);
+    } else {
+      capturedByBlack.push(move.captured);
+    }
+  }
+
+  return {
+    w: capturedByWhite,
+    b: capturedByBlack,
+  };
+}
+
+function getCapturedValue(pieces: CapturedPiece[]) {
+  return pieces.reduce((total, piece) => {
+    return total + PIECE_VALUES[piece];
+  }, 0);
 }
 
 export default function PlayComputer() {
@@ -331,6 +386,7 @@ export default function PlayComputer() {
             from: move.from,
             to: move.to,
             uci: getMoveUci(move),
+            captured: move.captured as CapturedPiece | undefined,
           };
           const nextMoves = [...movesRef.current, entry];
           const moveIndex = nextMoves.length - 1;
@@ -413,7 +469,7 @@ export default function PlayComputer() {
   }, [connected]);
 
   const handlePlayerMove = useCallback(
-    (from: Square, to: Square) => {
+    (from: Square, to: Square, promotion: PromotionPiece = "q") => {
       if (gameRef.current.turn() !== playerColor) {
         return;
       }
@@ -430,7 +486,7 @@ export default function PlayComputer() {
         const fenBefore = gameRef.current.fen();
         const version = analysisVersionRef.current;
 
-        const move = gameRef.current.move({ from, to, promotion: "q" });
+        const move = gameRef.current.move({ from, to, promotion });
 
         if (!move) {
           return;
@@ -450,6 +506,7 @@ export default function PlayComputer() {
           from: move.from,
           to: move.to,
           uci: getMoveUci(move),
+          captured: move.captured as CapturedPiece | undefined,
         };
         const nextMoves = [...movesRef.current, entry];
         const moveIndex = nextMoves.length - 1;
@@ -528,6 +585,41 @@ export default function PlayComputer() {
     playerColor === "w" ? t("common.white") : t("common.black");
   const botLabel =
     computerColor === "w" ? t("common.white") : t("common.black");
+  const capturedPieces = useMemo(() => {
+    const pieces = getCapturedPieces(moves);
+    const whiteValue = getCapturedValue(pieces.w);
+    const blackValue = getCapturedValue(pieces.b);
+
+    return {
+      pieces,
+      whiteValue,
+      blackValue,
+      materialScore: whiteValue - blackValue,
+    };
+  }, [moves]);
+
+  function renderCapturedPieces(capturer: "w" | "b", pieces: CapturedPiece[]) {
+    if (pieces.length === 0) {
+      return <span className="text-[#77746c]">-</span>;
+    }
+
+    const capturedColor = capturer === "w" ? "b" : "w";
+    const sortedPieces = [...pieces].sort((a, b) => {
+      return CAPTURED_PIECE_ORDER.indexOf(a) - CAPTURED_PIECE_ORDER.indexOf(b);
+    });
+
+    return sortedPieces.map((piece, index) => {
+      return (
+        <img
+          key={`${piece}-${index}`}
+          src={`/pieces/${pieceSet}/${capturedColor}${piece.toUpperCase()}.svg`}
+          alt={t(CAPTURED_PIECE_ALT_KEYS[capturedColor][piece])}
+          className="size-6 object-contain"
+          draggable={false}
+        />
+      );
+    });
+  }
 
   const undoLastMove = useCallback(() => {
     if (gameRef.current.isGameOver()) {
@@ -1002,6 +1094,58 @@ export default function PlayComputer() {
             {openingName
               ? t(`openings.${getOpeningKey(openingName)}`)
               : t("pgnViewer.noBookMatch")}
+          </div>
+        </div>
+
+        <div className="border-b border-white/6 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-xs font-extrabold text-[#aaa7a0] uppercase">
+              {t("playComputer.material")}
+            </h2>
+
+            <span className="rounded border border-white/7 bg-black/20 px-2 py-1 text-xs font-extrabold text-[#f4f1e8]">
+              {capturedPieces.materialScore === 0
+                ? t("playComputer.materialEven")
+                : capturedPieces.materialScore > 0
+                  ? t("playComputer.materialAdvantage", {
+                      color: t("common.white"),
+                      score: `+${capturedPieces.materialScore}`,
+                    })
+                  : t("playComputer.materialAdvantage", {
+                      color: t("common.black"),
+                      score: `+${Math.abs(capturedPieces.materialScore)}`,
+                    })}
+            </span>
+          </div>
+
+          <div className="grid gap-2 text-sm">
+            <div className="grid grid-cols-[5.5rem_1fr_auto] items-center gap-2 rounded border border-white/6 bg-[#302e2a] px-3 py-2">
+              <span className="text-xs font-extrabold text-[#aaa7a0]">
+                {t("common.white")}
+              </span>
+
+              <div className="flex min-h-6 flex-wrap items-center gap-1">
+                {renderCapturedPieces("w", capturedPieces.pieces.w)}
+              </div>
+
+              <span className="text-xs font-extrabold text-[#dcd8cf]">
+                {capturedPieces.whiteValue}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-[5.5rem_1fr_auto] items-center gap-2 rounded border border-white/6 bg-[#302e2a] px-3 py-2">
+              <span className="text-xs font-extrabold text-[#aaa7a0]">
+                {t("common.black")}
+              </span>
+
+              <div className="flex min-h-6 flex-wrap items-center gap-1">
+                {renderCapturedPieces("b", capturedPieces.pieces.b)}
+              </div>
+
+              <span className="text-xs font-extrabold text-[#dcd8cf]">
+                {capturedPieces.blackValue}
+              </span>
+            </div>
           </div>
         </div>
 

@@ -153,3 +153,5 @@ Avoid unnecessary compression.
 Avoid excessive fragmentation.
 
 Use whitespace intentionally to communicate structure.
+
+If you are updating the internationalization, modify ONLY en.json; do not modify any others.

@@ -11,6 +11,7 @@ export interface MoveEntry {
   from?: string;
   to?: string;
   uci?: string;
+  captured?: "p" | "n" | "b" | "r" | "q";
   classification?: ClassificationValue;
   evaluation?: number;
   mate?: number;

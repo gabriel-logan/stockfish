@@ -82,7 +82,10 @@
     "copyPgn": "Copy PGN",
     "resign": "Resign",
     "muteSounds": "Mute sounds",
-    "enableSounds": "Enable sounds"
+    "enableSounds": "Enable sounds",
+    "material": "Material",
+    "materialEven": "Even",
+    "materialAdvantage": "{{color}} {{score}}"
   },
   "pgnViewer": {
     "gameReview": "Game Review",

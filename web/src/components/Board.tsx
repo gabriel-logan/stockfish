@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chess, type Square } from "chess.js";
 
@@ -7,7 +7,7 @@ import type { ClassificationValue } from "../types/chess-types";
 
 interface BoardProps {
   game: Chess;
-  onMove?: (from: Square, to: Square) => void;
+  onMove?: (from: Square, to: Square, promotion?: PromotionPiece) => void;
   selectedSquare?: Square | null;
   onSelectSquare?: (square: Square | null) => void;
   lastMove?: { from: Square; to: Square } | null;
@@ -18,8 +18,11 @@ interface BoardProps {
   pieceSet?: PieceSet;
 }
 
+type PromotionPiece = "q" | "r" | "b" | "n";
+
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
+const PROMOTION_PIECES: PromotionPiece[] = ["q", "r", "b", "n"];
 
 const SQUARE_SIZE_CLASS =
   "[width:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)] [height:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)]";
@@ -66,6 +69,26 @@ function getBoardCol(col: number, orientation: "w" | "b"): number {
   return 7 - col;
 }
 
+function isPromotionMove(game: Chess, from: Square, to: Square): boolean {
+  const piece = game.get(from);
+
+  if (!piece || piece.type !== "p") {
+    return false;
+  }
+
+  const promotionRank = piece.color === "w" ? "8" : "1";
+
+  if (!to.endsWith(promotionRank)) {
+    return false;
+  }
+
+  const moves = game.moves({ square: from, verbose: true });
+
+  return moves.some((move) => {
+    return move.to === to && !!move.promotion;
+  });
+}
+
 export default function Board({
   game,
   onMove = () => {},
@@ -79,6 +102,11 @@ export default function Board({
   pieceSet = "maestro",
 }: BoardProps) {
   const { t } = useTranslation();
+  const [promotionMove, setPromotionMove] = useState<{
+    from: Square;
+    to: Square;
+    color: "w" | "b";
+  } | null>(null);
 
   const pieceTypeName = {
     p: "Pawn",
@@ -119,6 +147,10 @@ export default function Board({
         return;
       }
 
+      if (promotionMove) {
+        return;
+      }
+
       const piece = game.get(square);
 
       if (!selectedSquare) {
@@ -139,11 +171,33 @@ export default function Board({
       }
 
       if (legalTargets.has(square)) {
+        if (isPromotionMove(game, selectedSquare, square)) {
+          const selectedPiece = game.get(selectedSquare);
+
+          if (selectedPiece) {
+            setPromotionMove({
+              from: selectedSquare,
+              to: square,
+              color: selectedPiece.color,
+            });
+          }
+
+          return;
+        }
+
         onMove(selectedSquare, square);
         onSelectSquare(null);
       }
     },
-    [selectedSquare, game, onMove, onSelectSquare, legalTargets, interactive],
+    [
+      selectedSquare,
+      game,
+      onMove,
+      onSelectSquare,
+      legalTargets,
+      interactive,
+      promotionMove,
+    ],
   );
 
   function getSquareClass(row: number, col: number, square: Square): string {
@@ -178,7 +232,7 @@ export default function Board({
   }
 
   return (
-    <div className="inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
+    <div className="relative inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
       {displayRanks.map((rank, row) => {
         return (
           <div key={rank} className="flex">
@@ -252,6 +306,39 @@ export default function Board({
           </div>
         );
       })}
+
+      {promotionMove && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45">
+          <div className="grid grid-cols-4 gap-2 rounded-md border border-white/10 bg-[#252820] p-2 shadow-[0_1rem_2rem_rgb(0_0_0_/_35%)]">
+            {PROMOTION_PIECES.map((piece) => {
+              const label = t(
+                `board.${promotionMove.color === "w" ? "white" : "black"}${pieceTypeName[piece]}`,
+              );
+
+              return (
+                <button
+                  key={piece}
+                  type="button"
+                  className="grid size-14 place-items-center rounded border border-white/8 bg-[#3b3934] transition-colors hover:bg-[#4b493f]"
+                  title={label}
+                  onClick={() => {
+                    onMove(promotionMove.from, promotionMove.to, piece);
+                    onSelectSquare(null);
+                    setPromotionMove(null);
+                  }}
+                >
+                  <img
+                    src={`/pieces/${pieceSet}/${promotionMove.color}${piece.toUpperCase()}.svg`}
+                    alt={label}
+                    className="size-[90%] object-contain"
+                    draggable={false}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
