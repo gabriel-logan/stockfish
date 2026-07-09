@@ -1,5 +1,5 @@
-import PlayComputer from "./PlayComputer";
+import PlayBoard from "../components/PlayBoard";
 
 export default function FreePlay() {
-  return <PlayComputer freePlay />;
+  return <PlayBoard freePlay />;
 }
