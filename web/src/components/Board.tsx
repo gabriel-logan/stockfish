@@ -21,13 +21,17 @@ interface BoardProps {
 
 type PromotionPiece = "q" | "r" | "b" | "n";
 type BoardArrow = { from: Square; to: Square };
-type ManualArrowPoints = {
-  key?: string;
+type ArrowPoints = {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
   head: string;
+};
+type DisplayArrow = ArrowPoints & {
+  key: string;
+  color: string;
+  opacity: number;
 };
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -140,32 +144,10 @@ function getSquareFromPoint(
   return `${FILES[boardCol]}${RANKS[boardRow]}` as Square;
 }
 
-function getArrowLine(
+function getArrowPoints(
   from: { x: number; y: number },
   to: { x: number; y: number },
-) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const length = Math.hypot(dx, dy);
-
-  if (length === 0) {
-    return null;
-  }
-
-  const endOffset = Math.min(38, length * 0.22);
-
-  return {
-    x1: from.x,
-    y1: from.y,
-    x2: to.x - (dx / length) * endOffset,
-    y2: to.y - (dy / length) * endOffset,
-  };
-}
-
-function getManualArrowPoints(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-): ManualArrowPoints | null {
+): ArrowPoints | null {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.hypot(dx, dy);
@@ -239,61 +221,69 @@ export default function Board({
 
   const displayFiles = getDisplayFiles(orientation);
 
-  const suggestedMovePoints = useMemo(() => {
-    if (!suggestedMove) {
-      return null;
+  const displayArrows = useMemo(() => {
+    const arrows: DisplayArrow[] = [];
+
+    if (suggestedMove) {
+      const from = getSquareCenter(suggestedMove.from, orientation);
+      const to = getSquareCenter(suggestedMove.to, orientation);
+
+      if (from && to) {
+        const points = getArrowPoints(from, to);
+
+        if (points) {
+          arrows.push({
+            key: "suggested-move",
+            color: "#bce66b",
+            opacity: 0.72,
+            ...points,
+          });
+        }
+      }
     }
 
-    const from = getSquareCenter(suggestedMove.from, orientation);
-    const to = getSquareCenter(suggestedMove.to, orientation);
+    for (const arrow of manualArrows) {
+      const from = getSquareCenter(arrow.from, orientation);
+      const to = getSquareCenter(arrow.to, orientation);
 
-    if (!from || !to) {
-      return null;
-    }
+      if (!from || !to) {
+        continue;
+      }
 
-    return getArrowLine(from, to);
-  }, [orientation, suggestedMove]);
+      const points = getArrowPoints(from, to);
 
-  const manualArrowPoints = useMemo(() => {
-    return manualArrows
-      .map((arrow) => {
-        const from = getSquareCenter(arrow.from, orientation);
-        const to = getSquareCenter(arrow.to, orientation);
+      if (!points) {
+        continue;
+      }
 
-        if (!from || !to) {
-          return null;
-        }
-
-        const points = getManualArrowPoints(from, to);
-
-        if (!points) {
-          return null;
-        }
-
-        return {
-          key: `${arrow.from}-${arrow.to}`,
-          ...points,
-        };
-      })
-      .filter((arrow): arrow is ManualArrowPoints & { key: string } => {
-        return arrow !== null;
+      arrows.push({
+        key: `manual-${arrow.from}-${arrow.to}`,
+        color: "#f59e0b",
+        opacity: 0.72,
+        ...points,
       });
-  }, [manualArrows, orientation]);
-
-  const rightDragArrowPoints = useMemo(() => {
-    if (!rightDrag || rightDrag.from === rightDrag.to) {
-      return null;
     }
 
-    const from = getSquareCenter(rightDrag.from, orientation);
-    const to = getSquareCenter(rightDrag.to, orientation);
+    if (rightDrag && rightDrag.from !== rightDrag.to) {
+      const from = getSquareCenter(rightDrag.from, orientation);
+      const to = getSquareCenter(rightDrag.to, orientation);
 
-    if (!from || !to) {
-      return null;
+      if (from && to) {
+        const points = getArrowPoints(from, to);
+
+        if (points) {
+          arrows.push({
+            key: "right-drag",
+            color: "#f59e0b",
+            opacity: 0.55,
+            ...points,
+          });
+        }
+      }
     }
 
-    return getManualArrowPoints(from, to);
-  }, [orientation, rightDrag]);
+    return arrows;
+  }, [manualArrows, orientation, rightDrag, suggestedMove]);
 
   const legalTargets = useMemo(() => {
     if (!selectedSquare) {
@@ -539,9 +529,7 @@ export default function Board({
         setRightDrag(null);
       }}
     >
-      {(suggestedMovePoints ||
-        manualArrowPoints.length > 0 ||
-        rightDragArrowPoints) && (
+      {displayArrows.length > 0 && (
         <svg
           className="pointer-events-none absolute inset-0 z-10 size-full"
           viewBox={`0 0 ${BOARD_VIEWBOX_SIZE} ${BOARD_VIEWBOX_SIZE}`}
@@ -563,66 +551,27 @@ export default function Board({
                 floodOpacity="0.45"
               />
             </filter>
-            <marker
-              id="suggested-move-arrowhead"
-              markerWidth="2.6"
-              markerHeight="2.6"
-              refX="2.25"
-              refY="1.3"
-              orient="auto"
-              markerUnits="strokeWidth"
-            >
-              <path d="M 0 0 L 2.6 1.3 L 0 2.6 z" fill="#bce66b" />
-            </marker>
           </defs>
-          {suggestedMovePoints && (
-            <line
-              x1={suggestedMovePoints.x1}
-              y1={suggestedMovePoints.y1}
-              x2={suggestedMovePoints.x2}
-              y2={suggestedMovePoints.y2}
-              stroke="#bce66b"
-              strokeWidth="20"
-              strokeLinecap="round"
-              markerEnd="url(#suggested-move-arrowhead)"
-              filter="url(#suggested-move-shadow)"
-              opacity="0.72"
-            />
-          )}
-          {manualArrowPoints.map((arrow) => {
+          {displayArrows.map((arrow) => {
             return (
               <g
                 key={arrow.key}
                 filter="url(#suggested-move-shadow)"
-                opacity="0.72"
+                opacity={arrow.opacity}
               >
                 <line
                   x1={arrow.x1}
                   y1={arrow.y1}
                   x2={arrow.x2}
                   y2={arrow.y2}
-                  stroke="#f59e0b"
+                  stroke={arrow.color}
                   strokeWidth="20"
                   strokeLinecap="round"
                 />
-                <polygon points={arrow.head} fill="#f59e0b" />
+                <polygon points={arrow.head} fill={arrow.color} />
               </g>
             );
           })}
-          {rightDragArrowPoints && (
-            <g filter="url(#suggested-move-shadow)" opacity="0.55">
-              <line
-                x1={rightDragArrowPoints.x1}
-                y1={rightDragArrowPoints.y1}
-                x2={rightDragArrowPoints.x2}
-                y2={rightDragArrowPoints.y2}
-                stroke="#f59e0b"
-                strokeWidth="20"
-                strokeLinecap="round"
-              />
-              <polygon points={rightDragArrowPoints.head} fill="#f59e0b" />
-            </g>
-          )}
         </svg>
       )}
 
