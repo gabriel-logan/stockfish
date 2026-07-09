@@ -38,7 +38,7 @@ docker compose up --build -d
 > To access from other devices on the same network, set `HOST_IP` before running:
 > ```bash
 > export HOST_IP=192.168.100.3
-> docker compose up -d --build web
+> docker compose up -d --build
 > ```
 > Or inline:
 > ```bash

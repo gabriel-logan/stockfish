@@ -22,6 +22,16 @@ go build -o /dev/null ./...
 
 The Go build command is only for compilation validation and debugging. Do not generate or keep a binary artifact.
 
+For the Rust monorepo, always run:
+
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo build --workspace --all-features
+
+Use cargo check --workspace --all-targets --all-features for fast validation while iterating, but do not use it as a replacement for the full validation commands above.
+
+Do not commit generated Rust build artifacts. Keep target/ out of version control.
+
 ## Code Style
 
 ### Prefer Simple and Clean Code
