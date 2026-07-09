@@ -24,6 +24,8 @@ type PromotionPiece = "q" | "r" | "b" | "n";
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 const PROMOTION_PIECES: PromotionPiece[] = ["q", "r", "b", "n"];
+const BOARD_VIEWBOX_SIZE = 800;
+const BOARD_SQUARE_SIZE = BOARD_VIEWBOX_SIZE / 8;
 
 const SQUARE_SIZE_CLASS =
   "[width:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)] [height:clamp(2.5rem,min(6.2vw,10.2vh),8.25rem)]";
@@ -102,8 +104,30 @@ function getSquareCenter(square: Square, orientation: "w" | "b") {
   const row = orientation === "w" ? rankIndex : 7 - rankIndex;
 
   return {
-    x: (col + 0.5) * 12.5,
-    y: (row + 0.5) * 12.5,
+    x: (col + 0.5) * BOARD_SQUARE_SIZE,
+    y: (row + 0.5) * BOARD_SQUARE_SIZE,
+  };
+}
+
+function getArrowLine(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+
+  if (length === 0) {
+    return null;
+  }
+
+  const endOffset = Math.min(38, length * 0.22);
+
+  return {
+    x1: from.x,
+    y1: from.y,
+    x2: to.x - (dx / length) * endOffset,
+    y2: to.y - (dy / length) * endOffset,
   };
 }
 
@@ -154,7 +178,7 @@ export default function Board({
       return null;
     }
 
-    return { from, to };
+    return getArrowLine(from, to);
   }, [orientation, suggestedMove]);
 
   const legalTargets = useMemo(() => {
@@ -270,33 +294,48 @@ export default function Board({
       {suggestedMovePoints && (
         <svg
           className="pointer-events-none absolute inset-0 z-10 size-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
+          viewBox={`0 0 ${BOARD_VIEWBOX_SIZE} ${BOARD_VIEWBOX_SIZE}`}
           aria-hidden="true"
         >
           <defs>
+            <filter
+              id="suggested-move-shadow"
+              x="-20%"
+              y="-20%"
+              width="140%"
+              height="140%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="3"
+                stdDeviation="3"
+                floodColor="#11160d"
+                floodOpacity="0.45"
+              />
+            </filter>
             <marker
               id="suggested-move-arrowhead"
-              markerWidth="8"
-              markerHeight="8"
-              refX="6"
-              refY="4"
+              markerWidth="2.6"
+              markerHeight="2.6"
+              refX="2.25"
+              refY="1.3"
               orient="auto"
               markerUnits="strokeWidth"
             >
-              <path d="M 0 0 L 8 4 L 0 8 z" fill="#a8d45f" />
+              <path d="M 0 0 L 2.6 1.3 L 0 2.6 z" fill="#bce66b" />
             </marker>
           </defs>
           <line
-            x1={suggestedMovePoints.from.x}
-            y1={suggestedMovePoints.from.y}
-            x2={suggestedMovePoints.to.x}
-            y2={suggestedMovePoints.to.y}
-            stroke="#a8d45f"
-            strokeWidth="2.4"
+            x1={suggestedMovePoints.x1}
+            y1={suggestedMovePoints.y1}
+            x2={suggestedMovePoints.x2}
+            y2={suggestedMovePoints.y2}
+            stroke="#bce66b"
+            strokeWidth="20"
             strokeLinecap="round"
             markerEnd="url(#suggested-move-arrowhead)"
-            opacity="0.82"
+            filter="url(#suggested-move-shadow)"
+            opacity="0.72"
           />
         </svg>
       )}

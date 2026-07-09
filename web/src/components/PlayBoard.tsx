@@ -102,6 +102,26 @@ function getCapturedValue(pieces: CapturedPiece[]) {
   }, 0);
 }
 
+function getGameResult(game: Chess) {
+  if (game.isCheckmate()) {
+    return game.turn() === "w" ? "0-1" : "1-0";
+  }
+
+  if (game.isDraw()) {
+    return "1/2-1/2";
+  }
+
+  return "*";
+}
+
+function formatPgnDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}.${month}.${day}`;
+}
+
 export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const { t } = useTranslation();
   const [game, setGame] = useState(() => {
@@ -731,15 +751,56 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     }
   }, [freePlay, syncMoves, clearPendingBotMove]);
 
+  const createPgnWithHeaders = useCallback(() => {
+    const result = getGameResult(gameRef.current);
+    const gameDate = new Date();
+    const pgnGame = new Chess();
+    const rawPgn = gameRef.current.pgn();
+
+    if (rawPgn.trim()) {
+      pgnGame.loadPgn(rawPgn);
+    }
+
+    const player = activeUser?.name ?? "GLFish Player";
+    const stockfish = `Stockfish ${botEloRef.current}`;
+    const white = freePlay || playerColor === "w" ? player : stockfish;
+    const black = freePlay
+      ? t("freePlay.selfOpponent")
+      : playerColor === "w"
+        ? stockfish
+        : player;
+
+    pgnGame.setHeader("Event", freePlay ? "GLFish Free Play" : "GLFish Game");
+    pgnGame.setHeader("Site", "GLFish");
+    pgnGame.setHeader("Date", formatPgnDate(gameDate));
+    pgnGame.setHeader("Round", "-");
+    pgnGame.setHeader("White", white);
+    pgnGame.setHeader("Black", black);
+    pgnGame.setHeader("Result", result);
+    pgnGame.setHeader("Annotator", "GLFish");
+
+    if (!freePlay) {
+      const eloHeader = playerColor === "w" ? "BlackElo" : "WhiteElo";
+      pgnGame.setHeader(eloHeader, String(botEloRef.current));
+    }
+
+    if (openingName) {
+      pgnGame.setHeader("Opening", openingName);
+    }
+
+    return pgnGame.pgn();
+  }, [activeUser?.name, freePlay, openingName, playerColor, t]);
+
   const copyPgn = useCallback(() => {
-    const pgn = gameRef.current.pgn();
+    const pgn = createPgnWithHeaders();
+
     navigator.clipboard
       .writeText(pgn)
       .then(() => {
         toast.success(t("success.pgnCopied"));
       })
       .catch(() => {});
-  }, [t]);
+  }, [createPgnWithHeaders, t]);
 
   const toggleBoard = useCallback(() => {
     setBoardFlipped((prev) => !prev);
@@ -750,14 +811,8 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       return;
     }
 
-    const pgn = gameRef.current.pgn();
-    const result = gameRef.current.isCheckmate()
-      ? gameRef.current.turn() === "w"
-        ? "0-1"
-        : "1-0"
-      : gameRef.current.isDraw()
-        ? "1/2-1/2"
-        : "*";
+    const pgn = createPgnWithHeaders();
+    const result = getGameResult(gameRef.current);
 
     const savedGame: SavedGame = {
       id: createId(),
@@ -779,6 +834,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   }, [
     activeUserId,
     freePlay,
+    createPgnWithHeaders,
     savedGameId,
     openingName,
     playerColor,
