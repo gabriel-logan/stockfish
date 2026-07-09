@@ -1,0 +1,28 @@
+services:
+  api:
+    build: ./api
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - STOCKFISH_PATH=/usr/local/bin/stockfish
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    volumes:
+      - ./web:/app
+    ports:
+      - "5173:5173"
+    command: >
+      bash -c "
+        corepack enable &&
+        pnpm install --frozen-lockfile &&
+        pnpm build &&
+        pnpm preview --host --port 5173
+      "
+    environment:
+      - VITE_BASE_URL_API=http://api:3000
+      - VITE_BASE_URL_WS=ws://api:3000/ws
+    depends_on:
+      - api
