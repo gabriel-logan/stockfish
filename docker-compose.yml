@@ -19,10 +19,11 @@ services:
         corepack enable &&
         pnpm install --frozen-lockfile &&
         pnpm build &&
-        pnpm preview --host --port 5173
+        pnpm preview --host 0.0.0.0 --port 5173
       "
     environment:
-      - VITE_BASE_URL_API=http://api:3000
-      - VITE_BASE_URL_WS=ws://api:3000/ws
+      - CI=true
+      - VITE_BASE_URL_API=http://localhost:3000
+      - VITE_BASE_URL_WS=ws://localhost:3000/ws
     depends_on:
       - api
