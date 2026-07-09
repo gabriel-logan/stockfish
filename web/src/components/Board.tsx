@@ -1,4 +1,4 @@
-import { type MouseEvent, useCallback, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chess, type Square } from "chess.js";
 
@@ -20,6 +20,15 @@ interface BoardProps {
 }
 
 type PromotionPiece = "q" | "r" | "b" | "n";
+type BoardArrow = { from: Square; to: Square };
+type ManualArrowPoints = {
+  key?: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  head: string;
+};
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
@@ -109,6 +118,28 @@ function getSquareCenter(square: Square, orientation: "w" | "b") {
   };
 }
 
+function getSquareFromPoint(
+  x: number,
+  y: number,
+  boardElement: HTMLDivElement,
+  orientation: "w" | "b",
+): Square | null {
+  const rect = boardElement.getBoundingClientRect();
+  const localX = x - rect.left;
+  const localY = y - rect.top;
+
+  if (localX < 0 || localY < 0 || localX > rect.width || localY > rect.height) {
+    return null;
+  }
+
+  const displayCol = Math.min(7, Math.floor((localX / rect.width) * 8));
+  const displayRow = Math.min(7, Math.floor((localY / rect.height) * 8));
+  const boardCol = getBoardCol(displayCol, orientation);
+  const boardRow = getBoardRow(displayRow, orientation);
+
+  return `${FILES[boardCol]}${RANKS[boardRow]}` as Square;
+}
+
 function getArrowLine(
   from: { x: number; y: number },
   to: { x: number; y: number },
@@ -131,6 +162,42 @@ function getArrowLine(
   };
 }
 
+function getManualArrowPoints(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): ManualArrowPoints | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+
+  if (length === 0) {
+    return null;
+  }
+
+  const unitX = dx / length;
+  const unitY = dy / length;
+  const perpX = -unitY;
+  const perpY = unitX;
+  const headLength = Math.min(54, length * 0.42);
+  const headWidth = Math.min(62, length * 0.5);
+  const baseX = to.x - unitX * headLength;
+  const baseY = to.y - unitY * headLength;
+  const halfWidth = headWidth / 2;
+
+  const leftX = baseX + perpX * halfWidth;
+  const leftY = baseY + perpY * halfWidth;
+  const rightX = baseX - perpX * halfWidth;
+  const rightY = baseY - perpY * halfWidth;
+
+  return {
+    x1: from.x,
+    y1: from.y,
+    x2: baseX,
+    y2: baseY,
+    head: `${to.x},${to.y} ${leftX},${leftY} ${rightX},${rightY}`,
+  };
+}
+
 export default function Board({
   game,
   onMove = () => {},
@@ -145,6 +212,7 @@ export default function Board({
   pieceSet = "maestro",
 }: BoardProps) {
   const { t } = useTranslation();
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const [promotionMove, setPromotionMove] = useState<{
     from: Square;
     to: Square;
@@ -153,6 +221,8 @@ export default function Board({
   const [markedSquares, setMarkedSquares] = useState<Set<Square>>(() => {
     return new Set();
   });
+  const [manualArrows, setManualArrows] = useState<BoardArrow[]>([]);
+  const [rightDrag, setRightDrag] = useState<BoardArrow | null>(null);
 
   const pieceTypeName = {
     p: "Pawn",
@@ -184,6 +254,47 @@ export default function Board({
     return getArrowLine(from, to);
   }, [orientation, suggestedMove]);
 
+  const manualArrowPoints = useMemo(() => {
+    return manualArrows
+      .map((arrow) => {
+        const from = getSquareCenter(arrow.from, orientation);
+        const to = getSquareCenter(arrow.to, orientation);
+
+        if (!from || !to) {
+          return null;
+        }
+
+        const points = getManualArrowPoints(from, to);
+
+        if (!points) {
+          return null;
+        }
+
+        return {
+          key: `${arrow.from}-${arrow.to}`,
+          ...points,
+        };
+      })
+      .filter((arrow): arrow is ManualArrowPoints & { key: string } => {
+        return arrow !== null;
+      });
+  }, [manualArrows, orientation]);
+
+  const rightDragArrowPoints = useMemo(() => {
+    if (!rightDrag || rightDrag.from === rightDrag.to) {
+      return null;
+    }
+
+    const from = getSquareCenter(rightDrag.from, orientation);
+    const to = getSquareCenter(rightDrag.to, orientation);
+
+    if (!from || !to) {
+      return null;
+    }
+
+    return getManualArrowPoints(from, to);
+  }, [orientation, rightDrag]);
+
   const legalTargets = useMemo(() => {
     if (!selectedSquare) {
       return new Set<string>();
@@ -206,29 +317,109 @@ export default function Board({
     event.preventDefault();
   }, []);
 
-  const handleMouseDown = useCallback((event: MouseEvent) => {
-    if (event.button === 2) {
-      event.preventDefault();
-    }
+  const toggleMarkedSquare = useCallback((square: Square) => {
+    setMarkedSquares((currentSquares) => {
+      const nextSquares = new Set(currentSquares);
+
+      if (nextSquares.has(square)) {
+        nextSquares.delete(square);
+      } else {
+        nextSquares.add(square);
+      }
+
+      return nextSquares;
+    });
   }, []);
 
-  const handleSquareContextMenu = useCallback(
-    (event: MouseEvent, square: Square) => {
+  const handleMouseDown = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 2 || !boardRef.current) {
+        return;
+      }
+
       event.preventDefault();
+      const square = getSquareFromPoint(
+        event.clientX,
+        event.clientY,
+        boardRef.current,
+        orientation,
+      );
 
-      setMarkedSquares((currentSquares) => {
-        const nextSquares = new Set(currentSquares);
+      if (!square) {
+        return;
+      }
 
-        if (nextSquares.has(square)) {
-          nextSquares.delete(square);
-        } else {
-          nextSquares.add(square);
-        }
+      setRightDrag({ from: square, to: square });
+    },
+    [orientation],
+  );
 
-        return nextSquares;
+  const handleMouseMove = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!rightDrag || !boardRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const square = getSquareFromPoint(
+        event.clientX,
+        event.clientY,
+        boardRef.current,
+        orientation,
+      );
+
+      if (!square || square === rightDrag.to) {
+        return;
+      }
+
+      setRightDrag({
+        from: rightDrag.from,
+        to: square,
       });
     },
-    [],
+    [orientation, rightDrag],
+  );
+
+  const handleMouseUp = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (event.button !== 2 || !rightDrag || !boardRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const square =
+        getSquareFromPoint(
+          event.clientX,
+          event.clientY,
+          boardRef.current,
+          orientation,
+        ) ?? rightDrag.to;
+
+      if (square === rightDrag.from) {
+        toggleMarkedSquare(square);
+        setRightDrag(null);
+        return;
+      }
+
+      const nextArrow = { from: rightDrag.from, to: square };
+
+      setManualArrows((currentArrows) => {
+        const existingArrow = currentArrows.find((arrow) => {
+          return arrow.from === nextArrow.from && arrow.to === nextArrow.to;
+        });
+
+        if (existingArrow) {
+          return currentArrows.filter((arrow) => {
+            return arrow.from !== nextArrow.from || arrow.to !== nextArrow.to;
+          });
+        }
+
+        return [...currentArrows, nextArrow];
+      });
+
+      setRightDrag(null);
+    },
+    [orientation, rightDrag, toggleMarkedSquare],
   );
 
   const handleClick = useCallback(
@@ -239,6 +430,13 @@ export default function Board({
         }
 
         return new Set();
+      });
+      setManualArrows((currentArrows) => {
+        if (currentArrows.length === 0) {
+          return currentArrows;
+        }
+
+        return [];
       });
 
       if (!interactive) {
@@ -331,11 +529,19 @@ export default function Board({
 
   return (
     <div
+      ref={boardRef}
       className="relative inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none"
       onContextMenu={preventRightClick}
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={() => {
+        setRightDrag(null);
+      }}
     >
-      {suggestedMovePoints && (
+      {(suggestedMovePoints ||
+        manualArrowPoints.length > 0 ||
+        rightDragArrowPoints) && (
         <svg
           className="pointer-events-none absolute inset-0 z-10 size-full"
           viewBox={`0 0 ${BOARD_VIEWBOX_SIZE} ${BOARD_VIEWBOX_SIZE}`}
@@ -369,18 +575,54 @@ export default function Board({
               <path d="M 0 0 L 2.6 1.3 L 0 2.6 z" fill="#bce66b" />
             </marker>
           </defs>
-          <line
-            x1={suggestedMovePoints.x1}
-            y1={suggestedMovePoints.y1}
-            x2={suggestedMovePoints.x2}
-            y2={suggestedMovePoints.y2}
-            stroke="#bce66b"
-            strokeWidth="20"
-            strokeLinecap="round"
-            markerEnd="url(#suggested-move-arrowhead)"
-            filter="url(#suggested-move-shadow)"
-            opacity="0.72"
-          />
+          {suggestedMovePoints && (
+            <line
+              x1={suggestedMovePoints.x1}
+              y1={suggestedMovePoints.y1}
+              x2={suggestedMovePoints.x2}
+              y2={suggestedMovePoints.y2}
+              stroke="#bce66b"
+              strokeWidth="20"
+              strokeLinecap="round"
+              markerEnd="url(#suggested-move-arrowhead)"
+              filter="url(#suggested-move-shadow)"
+              opacity="0.72"
+            />
+          )}
+          {manualArrowPoints.map((arrow) => {
+            return (
+              <g
+                key={arrow.key}
+                filter="url(#suggested-move-shadow)"
+                opacity="0.72"
+              >
+                <line
+                  x1={arrow.x1}
+                  y1={arrow.y1}
+                  x2={arrow.x2}
+                  y2={arrow.y2}
+                  stroke="#f59e0b"
+                  strokeWidth="20"
+                  strokeLinecap="round"
+                />
+                <polygon points={arrow.head} fill="#f59e0b" />
+              </g>
+            );
+          })}
+          {rightDragArrowPoints && (
+            <g filter="url(#suggested-move-shadow)" opacity="0.55">
+              <line
+                x1={rightDragArrowPoints.x1}
+                y1={rightDragArrowPoints.y1}
+                x2={rightDragArrowPoints.x2}
+                y2={rightDragArrowPoints.y2}
+                stroke="#f59e0b"
+                strokeWidth="20"
+                strokeLinecap="round"
+              />
+              <polygon points={rightDragArrowPoints.head} fill="#f59e0b" />
+            </g>
+          )}
         </svg>
       )}
 
@@ -408,9 +650,6 @@ export default function Board({
                   className={getSquareClass(row, col, square)}
                   onClick={() => {
                     handleClick(square);
-                  }}
-                  onContextMenu={(event) => {
-                    handleSquareContextMenu(event, square);
                   }}
                 >
                   {isMarked && (
