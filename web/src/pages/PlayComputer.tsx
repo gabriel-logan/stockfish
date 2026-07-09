@@ -8,6 +8,7 @@ import {
   FaSave,
   FaUndo,
   FaUser,
+  FaUsers,
   FaVolumeOff,
   FaVolumeUp,
 } from "react-icons/fa";
@@ -65,6 +66,10 @@ const CAPTURED_PIECE_ALT_KEYS = {
 type CapturedPiece = (typeof CAPTURED_PIECE_ORDER)[number];
 type PromotionPiece = "q" | "r" | "b" | "n";
 
+interface PlayComputerProps {
+  freePlay?: boolean;
+}
+
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
 }
@@ -97,7 +102,7 @@ function getCapturedValue(pieces: CapturedPiece[]) {
   }, 0);
 }
 
-export default function PlayComputer() {
+export default function PlayComputer({ freePlay = false }: PlayComputerProps) {
   const { t } = useTranslation();
   const [game, setGame] = useState(() => {
     return new Chess();
@@ -127,7 +132,7 @@ export default function PlayComputer() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [boardFlipped, setBoardFlipped] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [gameStarted, setGameStarted] = useState(freePlay);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
 
   const activeUserId = useUserStore((s) => s.activeUserId);
@@ -159,7 +164,7 @@ export default function PlayComputer() {
   const playerColorRef = useRef(playerColor);
   const botEloRef = useRef(botElo);
   const soundEnabledRef = useRef(soundEnabled);
-  const gameStartedRef = useRef(gameStarted);
+  const gameStartedRef = useRef(freePlay);
 
   useEffect(() => {
     computerColorRef.current = computerColor;
@@ -289,6 +294,10 @@ export default function PlayComputer() {
     evalEngineRef.current = evalEngine;
 
     playEngine.onReady = () => {
+      if (freePlay) {
+        return;
+      }
+
       if (
         gameStartedRef.current &&
         gameRef.current.turn() === computerColorRef.current &&
@@ -313,6 +322,10 @@ export default function PlayComputer() {
     };
 
     playEngine.onBestMove = (data) => {
+      if (freePlay) {
+        return;
+      }
+
       if (!gameStartedRef.current || !isEngineRunning.current) {
         return;
       }
@@ -467,7 +480,7 @@ export default function PlayComputer() {
       playEngineRef.current = null;
       evalEngineRef.current = null;
     };
-  }, [classifyLastMove, clearPendingBotMove, syncMoves, t]);
+  }, [classifyLastMove, clearPendingBotMove, freePlay, syncMoves, t]);
 
   /*
     Keep a dedicated connection for playing moves and a separate full-strength
@@ -486,11 +499,11 @@ export default function PlayComputer() {
 
   const handlePlayerMove = useCallback(
     (from: Square, to: Square, promotion: PromotionPiece = "q") => {
-      if (gameRef.current.turn() !== playerColor) {
+      if (!freePlay && gameRef.current.turn() !== playerColor) {
         return;
       }
 
-      if (isEngineRunning.current) {
+      if (!freePlay && isEngineRunning.current) {
         return;
       }
 
@@ -548,7 +561,12 @@ export default function PlayComputer() {
           return;
         }
 
+        if (freePlay) {
+          return;
+        }
+
         const engine = playEngineRef.current;
+
         if (engine?.connected) {
           engine.setElo(botElo);
           engine.startAnalysis(gameRef.current.fen(), 14, 1);
@@ -559,15 +577,19 @@ export default function PlayComputer() {
         // Invalid move
       }
     },
-    [playerColor, botElo, syncMoves, classifyLastMove],
+    [freePlay, playerColor, botElo, syncMoves, classifyLastMove],
   );
 
   const effectiveOrientation = useMemo(() => {
+    if (freePlay) {
+      return boardFlipped ? "b" : "w";
+    }
+
     if (boardFlipped) {
       return playerColor === "w" ? "b" : "w";
     }
     return playerColor;
-  }, [boardFlipped, playerColor]);
+  }, [boardFlipped, freePlay, playerColor]);
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, ClassificationValue> = {};
@@ -597,10 +619,16 @@ export default function PlayComputer() {
     return null;
   }, [currentFen, moves]);
 
-  const playerLabel =
-    playerColor === "w" ? t("common.white") : t("common.black");
-  const botLabel =
-    computerColor === "w" ? t("common.white") : t("common.black");
+  const playerLabel = freePlay
+    ? t("common.white")
+    : playerColor === "w"
+      ? t("common.white")
+      : t("common.black");
+  const botLabel = freePlay
+    ? t("common.black")
+    : computerColor === "w"
+      ? t("common.white")
+      : t("common.black");
   const capturedPieces = useMemo(() => {
     const pieces = getCapturedPieces(moves);
     const whiteValue = getCapturedValue(pieces.w);
@@ -638,7 +666,7 @@ export default function PlayComputer() {
   }
 
   const undoLastMove = useCallback(() => {
-    if (gameRef.current.isGameOver()) {
+    if (!freePlay && gameRef.current.isGameOver()) {
       return;
     }
 
@@ -664,7 +692,7 @@ export default function PlayComputer() {
       return;
     }
 
-    const undoCount = currentMoves.length >= 2 ? 2 : 1;
+    const undoCount = freePlay ? 1 : currentMoves.length >= 2 ? 2 : 1;
 
     for (let i = 0; i < undoCount; i++) {
       gameRef.current.undo();
@@ -701,7 +729,7 @@ export default function PlayComputer() {
       evalEngine.setFullStrength();
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     }
-  }, [syncMoves, clearPendingBotMove]);
+  }, [freePlay, syncMoves, clearPendingBotMove]);
 
   const copyPgn = useCallback(() => {
     const pgn = gameRef.current.pgn();
@@ -736,17 +764,27 @@ export default function PlayComputer() {
       pgn,
       date: new Date().toISOString(),
       result,
-      opponent: `Stockfish (${botEloRef.current} ${t("common.elo")})`,
+      opponent: freePlay
+        ? t("freePlay.selfOpponent")
+        : `Stockfish (${botEloRef.current} ${t("common.elo")})`,
       opening: openingName ?? undefined,
-      playerColor,
-      botElo: botEloRef.current,
+      playerColor: freePlay ? "w" : playerColor,
+      botElo: freePlay ? undefined : botEloRef.current,
       moves: movesRef.current.length,
     };
 
     saveGameToStore(savedGame);
     setSavedGameId(savedGame.id);
     toast.success(t("success.gameSaved"));
-  }, [activeUserId, savedGameId, openingName, playerColor, saveGameToStore, t]);
+  }, [
+    activeUserId,
+    freePlay,
+    savedGameId,
+    openingName,
+    playerColor,
+    saveGameToStore,
+    t,
+  ]);
 
   const resign = useCallback(() => {
     if (isGameOver || moves.length === 0) {
@@ -791,7 +829,7 @@ export default function PlayComputer() {
     analysisVersionRef.current += 1;
     clearPendingBotMove();
     isEngineRunning.current = false;
-    gameStartedRef.current = false;
+    gameStartedRef.current = freePlay;
     evalQueueRef.current = Promise.resolve();
 
     const playEngine = playEngineRef.current;
@@ -816,7 +854,7 @@ export default function PlayComputer() {
     setLastMove(null);
     setEvaluation(null);
     setMate(null);
-    setGameStarted(false);
+    setGameStarted(freePlay);
     setIsGameOver(false);
     setIsThinking(false);
     setError(null);
@@ -826,7 +864,7 @@ export default function PlayComputer() {
       evalEngine.setFullStrength();
       evalEngine.startAnalysis(newChess.fen(), 14, 1);
     }
-  }, [syncMoves, clearPendingBotMove]);
+  }, [freePlay, syncMoves, clearPendingBotMove]);
 
   const iconActionButtonClass =
     "inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] p-0 text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
@@ -884,10 +922,14 @@ export default function PlayComputer() {
         <div className="flex w-[min(100%,50rem)] items-center justify-between gap-3 text-sm font-extrabold text-[#f5f3ed]">
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-white">
-              <FaRobot aria-hidden="true" />
+              {freePlay ? (
+                <FaUsers aria-hidden="true" />
+              ) : (
+                <FaRobot aria-hidden="true" />
+              )}
             </span>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-              {t("playComputer.title")}
+              {freePlay ? t("freePlay.title") : t("playComputer.title")}
             </span>
           </div>
 
@@ -940,7 +982,9 @@ export default function PlayComputer() {
 
       <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
         <div className="flex min-h-13 items-center justify-between border-b border-[#accc821a] bg-linear-to-br from-[#1f241f] to-[#20211e] px-4 text-base font-extrabold text-white">
-          <span>{t("playComputer.gameConsole")}</span>
+          <span>
+            {freePlay ? t("freePlay.title") : t("playComputer.gameConsole")}
+          </span>
           <button
             type="button"
             className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
@@ -964,7 +1008,11 @@ export default function PlayComputer() {
         {!gameStarted && moves.length === 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
             <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
-              <FaRobot aria-hidden="true" />
+              {freePlay ? (
+                <FaUsers aria-hidden="true" />
+              ) : (
+                <FaRobot aria-hidden="true" />
+              )}
             </div>
 
             <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
@@ -981,14 +1029,26 @@ export default function PlayComputer() {
         ) : (
           <div className="grid grid-cols-[auto_1fr] items-center gap-3 border-b border-[#accc821a] bg-[#252820] bg-linear-to-br from-[#628d3f2b] to-transparent p-4 max-[44rem]:grid-cols-1">
             <div className="grid size-12 place-items-center rounded-md border border-white/10 bg-[#3e684e] text-xl text-[#eaf7db]">
-              <FaRobot aria-hidden="true" />
+              {freePlay ? (
+                <FaUsers aria-hidden="true" />
+              ) : (
+                <FaRobot aria-hidden="true" />
+              )}
             </div>
 
             <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
               <strong className="text-base text-[#f4f3ea]">
-                {t("playComputer.readyForMove")}
+                {freePlay
+                  ? game.turn() === "w"
+                    ? t("freePlay.whiteToMove")
+                    : t("freePlay.blackToMove")
+                  : t("playComputer.readyForMove")}
               </strong>
-              <span>{t("playComputer.stockfishWillRespond")}</span>
+              <span>
+                {freePlay
+                  ? t("freePlay.selfPlayStatus")
+                  : t("playComputer.stockfishWillRespond")}
+              </span>
             </div>
           </div>
         )}
@@ -1003,7 +1063,7 @@ export default function PlayComputer() {
             </strong>
           </div>
 
-          {!gameStarted && moves.length === 0 && (
+          {!freePlay && !gameStarted && moves.length === 0 && (
             <>
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
                 {t("playComputer.gameSetup")}
@@ -1183,7 +1243,7 @@ export default function PlayComputer() {
             type="button"
             className={iconActionButtonClass}
             onClick={undoLastMove}
-            disabled={moves.length === 0 || isGameOver}
+            disabled={moves.length === 0 || (!freePlay && isGameOver)}
             title={t("playComputer.undoLastMove")}
           >
             <FaUndo aria-hidden="true" />
@@ -1212,7 +1272,7 @@ export default function PlayComputer() {
             type="button"
             className={iconActionButtonClass}
             onClick={resign}
-            disabled={moves.length === 0 || isGameOver}
+            disabled={freePlay || moves.length === 0 || isGameOver}
             title={t("playComputer.resign")}
           >
             <FaFlag aria-hidden="true" />

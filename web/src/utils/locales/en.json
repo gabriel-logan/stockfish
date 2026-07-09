@@ -4,6 +4,7 @@
     "pageTitles": {
       "home": "GLFish - Play Stockfish and analyze your games",
       "play": "Play Stockfish - GLFish",
+      "freePlay": "Free Play - GLFish",
       "pgn": "Analyze PGN - GLFish",
       "history": "Saved Games - GLFish"
     }
@@ -30,6 +31,8 @@
     "noUser": "No user",
     "users": "Users",
     "versusEngine": "Versus Engine",
+    "freePlay": "Free Play",
+    "free": "Free",
     "analyzePgn": "Analyze PGN",
     "play": "Play",
     "pgn": "PGN",
@@ -85,6 +88,13 @@
     "material": "Material",
     "materialEven": "Even",
     "materialAdvantage": "{{color}} {{score}}"
+  },
+  "freePlay": {
+    "title": "Free Play",
+    "whiteToMove": "White to move",
+    "blackToMove": "Black to move",
+    "selfPlayStatus": "Create your own line, review it, and save it.",
+    "selfOpponent": "Free play"
   },
   "pgnViewer": {
     "gameReview": "Game Review",
