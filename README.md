@@ -35,6 +35,16 @@ docker compose up --build -d
 - **API** → `http://localhost:3000` (REST + WebSocket)
 - **Web** → `http://localhost:5173`
 
+> To access from other devices on the same network, edit `docker-compose.yml`:
+> ```yaml
+> - VITE_BASE_URL_API=http://YOUR_IP:3000
+> - VITE_BASE_URL_WS=ws://YOUR_IP:3000/ws
+> ```
+> Replace `YOUR_IP` with the host machine's local IP (e.g. `192.168.1.10`). Then rebuild:
+> ```bash
+> docker compose down && docker compose up -d --build
+> ```
+
 ```bash
 # Stop containers (keeps images)
 docker compose down
@@ -52,12 +62,12 @@ docker compose up -d --build web
 docker compose restart
 ```
 
-| Command | O que faz |
-|---------|-----------|
-| `up -d` | Sobe os containers em background |
-| `up` | Sobe os containers preso ao terminal (logs ao vivo) |
-| `up --build` | Reconstrói as imagens e sobe |
-| `down` | Para e remove containers e rede |
-| `down --rmi all -v` | Remove containers, imagens e volumes |
-| `logs -f` | Segue os logs de todos os serviços |
-| `restart` | Reinicia os containers sem rebuildar |
+| Command | What it does |
+|---------|--------------|
+| `up -d` | Start containers in background |
+| `up` | Start containers attached to terminal (live logs) |
+| `up --build` | Rebuild images then start |
+| `down` | Stop and remove containers and network |
+| `down --rmi all -v` | Remove containers, images, and volumes |
+| `logs -f` | Follow logs from all services |
+| `restart` | Restart containers without rebuild |
