@@ -1,4 +1,64 @@
 services:
+  api-db:
+    image: postgres:17-bookworm
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=stockfish
+      - POSTGRES_PASSWORD=stockfish
+      - POSTGRES_DB=stockfish_api
+    volumes:
+      - api-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockfish -d stockfish_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api-dev-db:
+    image: postgres:17-bookworm
+    environment:
+      - POSTGRES_USER=stockfish
+      - POSTGRES_PASSWORD=stockfish
+      - POSTGRES_DB=stockfish_api_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockfish -d stockfish_api_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    profiles:
+      - tools
+
+  atlas:
+    image: arigaio/atlas:latest
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    environment:
+      - DATABASE_URL=postgres://stockfish:stockfish@api-db:5432/stockfish_api?sslmode=disable
+      - DEV_DATABASE_URL=postgres://stockfish:stockfish@api-dev-db:5432/stockfish_api_dev?sslmode=disable
+    depends_on:
+      api-db:
+        condition: service_healthy
+      api-dev-db:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  api:
+    build: ./api
+    ports:
+      - "6090:6090"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=6090
+      - DATABASE_URL=postgres://stockfish:stockfish@api-db:5432/stockfish_api?sslmode=disable
+      - JWT_SECRET=${API_JWT_SECRET:-change-me-in-production}
+      - CORS_ALLOWED_ORIGIN=${API_CORS_ALLOWED_ORIGIN:-*}
+    depends_on:
+      api-db:
+        condition: service_healthy
+
   engine:
     build: ./engine
     ports:
@@ -27,3 +87,6 @@ services:
       - VITE_ENGINE_BASE_URL_WS=ws://${HOST_IP:-localhost}:3000/ws
     depends_on:
       - engine
+
+volumes:
+  api-db-data:

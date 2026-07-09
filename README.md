@@ -8,6 +8,7 @@ A complete platform that exposes Stockfish's power through a Go engine server an
 
 | Package | Description |
 |---------|-------------|
+| [api](api/README.md) | Rust multiplayer chess API, WebSocket games, PostgreSQL, Atlas |
 | [engine](engine/README.md) | Go HTTP server, REST + WebSocket, Docker |
 | [web](web/README.md) | React + TypeScript frontend |
 
@@ -33,6 +34,7 @@ docker compose up --build -d
 ```
 
 - **Engine** → `http://localhost:3000` (REST + WebSocket)
+- **API** → `http://localhost:6090` (Rust multiplayer server)
 - **Web** → `http://localhost:5173`
 
 > To access from other devices on the same network, set `HOST_IP` before running:
