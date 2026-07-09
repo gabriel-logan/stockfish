@@ -154,6 +154,32 @@ export default function PgnViewer() {
     return evals;
   }, [positions, currentIdx, activePracticeMoves]);
 
+  const suggestedMove = useMemo(() => {
+    if (activePracticeMoves.length > 0) {
+      return null;
+    }
+
+    const position = positions[currentIdx];
+    const previousPosition = positions[currentIdx - 1];
+
+    if (!position?.uci || !previousPosition?.bestmove) {
+      return null;
+    }
+
+    if (position.uci === previousPosition.bestmove) {
+      return null;
+    }
+
+    if (!/^[a-h][1-8][a-h][1-8]/.test(previousPosition.bestmove)) {
+      return null;
+    }
+
+    return {
+      from: previousPosition.bestmove.slice(0, 2) as Square,
+      to: previousPosition.bestmove.slice(2, 4) as Square,
+    };
+  }, [activePracticeMoves.length, currentIdx, positions]);
+
   const openingName = useMemo(() => {
     const fens = positions
       .slice(0, currentIdx + 1)
@@ -630,6 +656,7 @@ export default function PgnViewer() {
               selectedSquare={selectedSquare}
               onSelectSquare={setSelectedSquare}
               lastMove={lastMove}
+              suggestedMove={suggestedMove}
               interactive={!isAnalyzing}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}

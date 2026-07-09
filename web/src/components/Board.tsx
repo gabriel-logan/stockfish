@@ -11,6 +11,7 @@ interface BoardProps {
   selectedSquare?: Square | null;
   onSelectSquare?: (square: Square | null) => void;
   lastMove?: { from: Square; to: Square } | null;
+  suggestedMove?: { from: Square; to: Square } | null;
   orientation?: "w" | "b";
   interactive?: boolean;
   squareEvaluations?: Record<string, ClassificationValue>;
@@ -89,12 +90,30 @@ function isPromotionMove(game: Chess, from: Square, to: Square): boolean {
   });
 }
 
+function getSquareCenter(square: Square, orientation: "w" | "b") {
+  const fileIndex = FILES.indexOf(square[0]);
+  const rankIndex = RANKS.indexOf(square[1]);
+
+  if (fileIndex === -1 || rankIndex === -1) {
+    return null;
+  }
+
+  const col = orientation === "w" ? fileIndex : 7 - fileIndex;
+  const row = orientation === "w" ? rankIndex : 7 - rankIndex;
+
+  return {
+    x: (col + 0.5) * 12.5,
+    y: (row + 0.5) * 12.5,
+  };
+}
+
 export default function Board({
   game,
   onMove = () => {},
   selectedSquare = null,
   onSelectSquare = () => {},
   lastMove = null,
+  suggestedMove = null,
   orientation = "w",
   interactive = true,
   squareEvaluations = {},
@@ -122,6 +141,21 @@ export default function Board({
   const displayRanks = getDisplayRanks(orientation);
 
   const displayFiles = getDisplayFiles(orientation);
+
+  const suggestedMovePoints = useMemo(() => {
+    if (!suggestedMove) {
+      return null;
+    }
+
+    const from = getSquareCenter(suggestedMove.from, orientation);
+    const to = getSquareCenter(suggestedMove.to, orientation);
+
+    if (!from || !to) {
+      return null;
+    }
+
+    return { from, to };
+  }, [orientation, suggestedMove]);
 
   const legalTargets = useMemo(() => {
     if (!selectedSquare) {
@@ -233,6 +267,40 @@ export default function Board({
 
   return (
     <div className="relative inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
+      {suggestedMovePoints && (
+        <svg
+          className="pointer-events-none absolute inset-0 z-10 size-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker
+              id="suggested-move-arrowhead"
+              markerWidth="8"
+              markerHeight="8"
+              refX="6"
+              refY="4"
+              orient="auto"
+              markerUnits="strokeWidth"
+            >
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="#a8d45f" />
+            </marker>
+          </defs>
+          <line
+            x1={suggestedMovePoints.from.x}
+            y1={suggestedMovePoints.from.y}
+            x2={suggestedMovePoints.to.x}
+            y2={suggestedMovePoints.to.y}
+            stroke="#a8d45f"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            markerEnd="url(#suggested-move-arrowhead)"
+            opacity="0.82"
+          />
+        </svg>
+      )}
+
       {displayRanks.map((rank, row) => {
         return (
           <div key={rank} className="flex">
