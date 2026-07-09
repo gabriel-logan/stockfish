@@ -23,7 +23,7 @@ services:
       "
     environment:
       - CI=true
-      - VITE_BASE_URL_API=http://localhost:3000
-      - VITE_BASE_URL_WS=ws://localhost:3000/ws
+      - VITE_BASE_URL_API=http://${HOST_IP:-localhost}:3000
+      - VITE_BASE_URL_WS=ws://${HOST_IP:-localhost}:3000/ws
     depends_on:
       - api

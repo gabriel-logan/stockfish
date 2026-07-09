@@ -35,15 +35,16 @@ docker compose up --build -d
 - **API** → `http://localhost:3000` (REST + WebSocket)
 - **Web** → `http://localhost:5173`
 
-> To access from other devices on the same network, edit `docker-compose.yml`:
-> ```yaml
-> - VITE_BASE_URL_API=http://YOUR_IP:3000
-> - VITE_BASE_URL_WS=ws://YOUR_IP:3000/ws
-> ```
-> Replace `YOUR_IP` with the host machine's local IP (e.g. `192.168.1.10`). Then rebuild:
+> To access from other devices on the same network, set `HOST_IP` before running:
 > ```bash
-> docker compose down && docker compose up -d --build
+> export HOST_IP=192.168.100.3
+> docker compose up -d --build web
 > ```
+> Or inline:
+> ```bash
+> HOST_IP=192.168.100.3 docker compose up -d --build
+> ```
+> Defaults to `localhost` when `HOST_IP` is not set.
 
 ```bash
 # Stop containers (keeps images)
