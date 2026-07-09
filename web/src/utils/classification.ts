@@ -328,6 +328,10 @@ export function classifyMove(
   isOpening: boolean = false,
   context: MoveClassificationContext = {},
 ): ClassificationValue {
+  if (mateAfter === 0) {
+    return MoveClassification.Best;
+  }
+
   if (isOpening) {
     return MoveClassification.Opening;
   }

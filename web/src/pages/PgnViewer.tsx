@@ -64,6 +64,10 @@ function getMoveParams(move: MoveEntry) {
 
 function getFormattedScore(score: number | null, mate: number | null) {
   if (mate !== null) {
+    if (Object.is(mate, -0) || mate === 0) {
+      return "M0";
+    }
+
     const prefix = mate > 0 ? "+" : "-";
 
     return `M${prefix}${Math.abs(mate)}`;
