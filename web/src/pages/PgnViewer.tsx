@@ -38,6 +38,18 @@ function getMoveUci(move: { from: string; to: string; promotion?: string }) {
 
 type PromotionPiece = "q" | "r" | "b" | "n";
 
+function getMoveParams(move: MoveEntry) {
+  if (!move.from || !move.to) {
+    return null;
+  }
+
+  return {
+    from: move.from as Square,
+    to: move.to as Square,
+    promotion: move.uci?.slice(4, 5) || undefined,
+  };
+}
+
 interface PositionData {
   fen: string;
   san?: string;
@@ -72,6 +84,7 @@ export default function PgnViewer() {
   );
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [practiceMoves, setPracticeMoves] = useState<MoveEntry[]>([]);
+  const [practiceCursor, setPracticeCursor] = useState(0);
 
   const abortRef = useRef(false);
   const {
@@ -100,11 +113,15 @@ export default function PgnViewer() {
       };
     });
 
+  const activePracticeMoves = practiceMoves.slice(0, practiceCursor);
   const moves =
     positions.length > 0
-      ? mainLineMoves.slice(0, Math.max(0, currentIdx)).concat(practiceMoves)
-      : practiceMoves;
-  const latestPracticeMove = practiceMoves[practiceMoves.length - 1];
+      ? mainLineMoves
+          .slice(0, Math.max(0, currentIdx))
+          .concat(activePracticeMoves)
+      : activePracticeMoves;
+  const latestPracticeMove =
+    activePracticeMoves[activePracticeMoves.length - 1];
   const currentEval =
     latestPracticeMove?.evaluation ?? positions[currentIdx]?.evaluation ?? null;
   const currentMate =
@@ -112,7 +129,7 @@ export default function PgnViewer() {
   const currentFen =
     latestPracticeMove?.fen ?? positions[currentIdx]?.fen ?? gameAtIdx.fen();
   const reviewPositionLabel =
-    practiceMoves.length > 0
+    activePracticeMoves.length > 0
       ? `${t("common.moves")} ${moves.length}`
       : positions.length > 0
         ? `${currentIdx}/${positions.length - 1}`
@@ -120,7 +137,7 @@ export default function PgnViewer() {
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, ClassificationValue> = {};
-    const practiceMove = practiceMoves[practiceMoves.length - 1];
+    const practiceMove = activePracticeMoves[activePracticeMoves.length - 1];
 
     if (practiceMove?.to && practiceMove.classification) {
       evals[practiceMove.to] = practiceMove.classification;
@@ -135,14 +152,14 @@ export default function PgnViewer() {
     }
 
     return evals;
-  }, [positions, currentIdx, practiceMoves]);
+  }, [positions, currentIdx, activePracticeMoves]);
 
   const openingName = useMemo(() => {
     const fens = positions
       .slice(0, currentIdx + 1)
       .map((position) => position.fen);
 
-    for (const move of practiceMoves) {
+    for (const move of activePracticeMoves) {
       fens.push(move.fen);
     }
 
@@ -159,7 +176,7 @@ export default function PgnViewer() {
     }
 
     return null;
-  }, [currentFen, positions, currentIdx, practiceMoves]);
+  }, [currentFen, positions, currentIdx, activePracticeMoves]);
 
   const getGameAtMove = useCallback(
     (posIdx: number): Chess => {
@@ -192,6 +209,53 @@ export default function PgnViewer() {
     [positions],
   );
 
+  const getGameWithPractice = useCallback(
+    (cursor: number): Chess => {
+      const g = positions.length > 0 ? getGameAtMove(currentIdx) : new Chess();
+
+      for (let i = 0; i < cursor; i++) {
+        const params = getMoveParams(practiceMoves[i]);
+
+        if (!params) {
+          continue;
+        }
+
+        try {
+          g.move(params);
+        } catch {
+          break;
+        }
+      }
+
+      return g;
+    },
+    [currentIdx, getGameAtMove, positions.length, practiceMoves],
+  );
+
+  const showGame = useCallback((nextGame: Chess) => {
+    setGameAtIdx(nextGame);
+
+    const history = nextGame.history({ verbose: true });
+
+    if (history.length > 0) {
+      const last = history[history.length - 1];
+      setLastMove({ from: last.from as Square, to: last.to as Square });
+    } else {
+      setLastMove(null);
+    }
+  }, []);
+
+  const goToPracticeCursor = useCallback(
+    (cursor: number) => {
+      const nextCursor = Math.max(0, Math.min(cursor, practiceMoves.length));
+
+      setPracticeCursor(nextCursor);
+      setSelectedSquare(null);
+      showGame(getGameWithPractice(nextCursor));
+    },
+    [getGameWithPractice, practiceMoves.length, showGame],
+  );
+
   const goToPosition = useCallback(
     (idx: number) => {
       if (idx < 0 || idx >= positions.length) {
@@ -199,21 +263,14 @@ export default function PgnViewer() {
       }
 
       setPracticeMoves([]);
+      setPracticeCursor(0);
       setSelectedSquare(null);
       setCurrentIdx(idx);
 
       const g = getGameAtMove(idx);
-      setGameAtIdx(g);
-
-      const hist = g.history({ verbose: true });
-      if (hist.length > 0) {
-        const last = hist[hist.length - 1];
-        setLastMove({ from: last.from as Square, to: last.to as Square });
-      } else {
-        setLastMove(null);
-      }
+      showGame(g);
     },
-    [positions, getGameAtMove],
+    [positions, getGameAtMove, showGame],
   );
 
   const handleLoadPgn = async () => {
@@ -229,6 +286,7 @@ export default function PgnViewer() {
     setCurrentIdx(-1);
     setPositions([]);
     setPracticeMoves([]);
+    setPracticeCursor(0);
     setSelectedSquare(null);
     abortRef.current = false;
 
@@ -324,6 +382,7 @@ export default function PgnViewer() {
       setGameAtIdx(initialGame);
       setLastMove(null);
       setPracticeMoves([]);
+      setPracticeCursor(0);
       setSelectedSquare(null);
 
       toast.success(t("success.analysisComplete"));
@@ -357,14 +416,16 @@ export default function PgnViewer() {
           to: move.to,
           uci: getMoveUci(move),
           captured: move.captured as MoveEntry["captured"],
+          isManual: true,
         };
 
         setGameAtIdx(boardGame);
         setLastMove({ from: move.from as Square, to: move.to as Square });
         setSelectedSquare(null);
         setPracticeMoves((currentMoves) => {
-          return [...currentMoves, entry];
+          return currentMoves.slice(0, practiceCursor).concat(entry);
         });
+        setPracticeCursor(practiceCursor + 1);
 
         if (soundEnabled) {
           if (boardGame.isGameOver()) {
@@ -385,11 +446,12 @@ export default function PgnViewer() {
           const alternativeLine = before.lines.find((line) => {
             return line.pv[0] !== entry.uci;
           });
-          const previousPracticeMove = practiceMoves[practiceMoves.length - 1];
+          const previousPracticeMove =
+            activePracticeMoves[activePracticeMoves.length - 1];
           const previousMainMove =
             positions.length > 0 ? positions[currentIdx]?.uci : null;
           const fenTwoMovesAgo =
-            practiceMoves[practiceMoves.length - 2]?.fen ??
+            activePracticeMoves[activePracticeMoves.length - 2]?.fen ??
             positions[currentIdx - 1]?.fen ??
             null;
           const classification = classifyMove(
@@ -414,13 +476,9 @@ export default function PgnViewer() {
 
           setPracticeMoves((currentMoves) => {
             const nextMoves = [...currentMoves];
-            const moveIndex = nextMoves.findIndex((currentMove) => {
-              return (
-                currentMove.uci === entry.uci && currentMove.fen === entry.fen
-              );
-            });
+            const moveIndex = practiceCursor;
 
-            if (moveIndex < 0) {
+            if (!nextMoves[moveIndex]) {
               return currentMoves;
             }
 
@@ -442,13 +500,62 @@ export default function PgnViewer() {
     },
     [
       currentIdx,
+      activePracticeMoves,
       gameAtIdx,
       isAnalyzing,
       positions,
-      practiceMoves,
+      practiceCursor,
       soundEnabled,
     ],
   );
+
+  const goToPreviousMove = useCallback(() => {
+    if (practiceCursor > 0) {
+      goToPracticeCursor(practiceCursor - 1);
+      return;
+    }
+
+    goToPosition(currentIdx - 1);
+  }, [currentIdx, goToPosition, goToPracticeCursor, practiceCursor]);
+
+  const goToNextMove = useCallback(() => {
+    if (practiceCursor < practiceMoves.length) {
+      goToPracticeCursor(practiceCursor + 1);
+      return;
+    }
+
+    goToPosition(currentIdx + 1);
+  }, [
+    currentIdx,
+    goToPosition,
+    goToPracticeCursor,
+    practiceCursor,
+    practiceMoves.length,
+  ]);
+
+  const goToFirstMove = useCallback(() => {
+    if (practiceCursor > 0) {
+      goToPracticeCursor(0);
+      return;
+    }
+
+    goToPosition(0);
+  }, [goToPosition, goToPracticeCursor, practiceCursor]);
+
+  const goToLastMove = useCallback(() => {
+    if (practiceCursor < practiceMoves.length) {
+      goToPracticeCursor(practiceMoves.length);
+      return;
+    }
+
+    goToPosition(positions.length - 1);
+  }, [
+    goToPosition,
+    goToPracticeCursor,
+    positions.length,
+    practiceCursor,
+    practiceMoves.length,
+  ]);
 
   function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
     const good = new Set([
@@ -535,10 +642,12 @@ export default function PgnViewer() {
           <button
             type="button"
             className={iconActionButtonClass}
-            onClick={() => {
-              goToPosition(0);
-            }}
-            disabled={currentIdx <= 0}
+            onClick={goToFirstMove}
+            disabled={
+              positions.length > 0
+                ? currentIdx <= 0 && practiceCursor === 0
+                : practiceCursor === 0
+            }
             title={t("pgnViewer.firstMove")}
           >
             <FaFastBackward aria-hidden="true" />
@@ -547,10 +656,12 @@ export default function PgnViewer() {
           <button
             type="button"
             className={iconActionButtonClass}
-            onClick={() => {
-              goToPosition(currentIdx - 1);
-            }}
-            disabled={currentIdx <= 0}
+            onClick={goToPreviousMove}
+            disabled={
+              positions.length > 0
+                ? currentIdx <= 0 && practiceCursor === 0
+                : practiceCursor === 0
+            }
             title={t("pgnViewer.previousMove")}
           >
             <FaStepBackward aria-hidden="true" />
@@ -559,10 +670,12 @@ export default function PgnViewer() {
           <button
             type="button"
             className={iconActionButtonClass}
-            onClick={() => {
-              goToPosition(currentIdx + 1);
-            }}
-            disabled={currentIdx >= positions.length - 1}
+            onClick={goToNextMove}
+            disabled={
+              practiceCursor < practiceMoves.length
+                ? false
+                : currentIdx >= positions.length - 1
+            }
             title={t("pgnViewer.nextMove")}
           >
             <FaStepForward aria-hidden="true" />
@@ -571,23 +684,23 @@ export default function PgnViewer() {
           <button
             type="button"
             className={iconActionButtonClass}
-            onClick={() => {
-              goToPosition(positions.length - 1);
-            }}
-            disabled={currentIdx >= positions.length - 1}
+            onClick={goToLastMove}
+            disabled={
+              practiceCursor < practiceMoves.length
+                ? false
+                : currentIdx >= positions.length - 1
+            }
             title={t("pgnViewer.lastMove")}
           >
             <FaFastForward aria-hidden="true" />
           </button>
         </div>
 
-        {positions.length === 0 &&
-          practiceMoves.length === 0 &&
-          !isAnalyzing && (
-            <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
-              {t("pgnViewer.emptyState")}
-            </div>
-          )}
+        {positions.length === 0 && moves.length === 0 && !isAnalyzing && (
+          <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
+            {t("pgnViewer.emptyState")}
+          </div>
+        )}
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
           {t("common.opening")}
@@ -710,6 +823,16 @@ export default function PgnViewer() {
                 onGoToMove={(idx) => {
                   if (positions.length > 0 && idx < currentIdx) {
                     goToPosition(idx + 1);
+                    return;
+                  }
+
+                  const practiceIndex = idx - Math.max(0, currentIdx);
+
+                  if (
+                    practiceIndex >= 0 &&
+                    practiceIndex < practiceMoves.length
+                  ) {
+                    goToPracticeCursor(practiceIndex + 1);
                   }
                 }}
                 showEvaluation={showMoveEvaluation}

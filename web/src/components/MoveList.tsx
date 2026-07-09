@@ -12,6 +12,7 @@ export interface MoveEntry {
   to?: string;
   uci?: string;
   captured?: "p" | "n" | "b" | "r" | "q";
+  isManual?: boolean;
   classification?: ClassificationValue;
   evaluation?: number;
   mate?: number;
@@ -67,12 +68,20 @@ export default function MoveList({
     });
   }
 
-  function getMoveButtonClass(isActive: boolean) {
+  function getMoveButtonClass(isActive: boolean, isManual: boolean) {
     let className =
       "inline-flex min-h-7 min-w-0 items-center justify-start gap-1 rounded px-2 text-[#dcd8cf] transition-colors hover:bg-white/7 hover:text-white";
 
+    if (isManual) {
+      className = `${className} bg-white/14 text-white ring-1 ring-white/14`;
+    }
+
     if (isActive) {
-      className = `${className} bg-[#315da8] text-white`;
+      if (isManual) {
+        className = `${className} bg-white/22 ring-white/35`;
+      } else {
+        className = `${className} bg-[#315da8] text-white`;
+      }
     }
 
     return className;
@@ -106,7 +115,10 @@ export default function MoveList({
             <button
               ref={isWhiteActive ? activeRef : undefined}
               type="button"
-              className={getMoveButtonClass(isWhiteActive)}
+              className={getMoveButtonClass(
+                isWhiteActive,
+                !!pair.white.isManual,
+              )}
               onClick={() => {
                 onGoToMove(whiteIndex);
               }}
@@ -126,7 +138,10 @@ export default function MoveList({
               <button
                 ref={isBlackActive ? activeRef : undefined}
                 type="button"
-                className={getMoveButtonClass(isBlackActive)}
+                className={getMoveButtonClass(
+                  isBlackActive,
+                  !!pair.black.isManual,
+                )}
                 onClick={() => {
                   onGoToMove(blackIndex);
                 }}
