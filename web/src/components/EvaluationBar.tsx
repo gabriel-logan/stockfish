@@ -14,11 +14,11 @@ function getWhitePercentage(evaluation: number | null, mate: number | null) {
     }
 
     if (mate > 0) {
-      return 100;
+      return 98;
     }
 
     if (mate < 0) {
-      return 0;
+      return 2;
     }
   }
 
