@@ -26,10 +26,17 @@ import type { ClassificationValue } from "../types/chess-types";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
+import {
+  playCaptureSound,
+  playGameOverSound,
+  playMoveSound,
+} from "../utils/sounds";
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
 }
+
+type PromotionPiece = "q" | "r" | "b" | "n";
 
 interface PositionData {
   fen: string;
@@ -63,12 +70,19 @@ export default function PgnViewer() {
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(
     null,
   );
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [practiceMoves, setPracticeMoves] = useState<MoveEntry[]>([]);
 
   const abortRef = useRef(false);
-  const { showEvaluationBar, showMoveEvaluation, pieceSet, setPieceSet } =
-    useSettingsStore();
+  const {
+    showEvaluationBar,
+    showMoveEvaluation,
+    soundEnabled,
+    pieceSet,
+    setPieceSet,
+  } = useSettingsStore();
 
-  const moves: MoveEntry[] = positions
+  const mainLineMoves: MoveEntry[] = positions
     .filter((p): p is PositionData & { san: string; color: "w" | "b" } => {
       return !!p.san && !!p.color;
     })
@@ -86,16 +100,34 @@ export default function PgnViewer() {
       };
     });
 
-  const currentEval = positions[currentIdx]?.evaluation ?? null;
-  const currentMate = positions[currentIdx]?.mate ?? null;
-  const currentFen = positions[currentIdx]?.fen ?? gameAtIdx.fen();
-  const reviewPositionLabel =
+  const moves =
     positions.length > 0
-      ? `${currentIdx}/${positions.length - 1}`
-      : t("pgnViewer.ready");
+      ? mainLineMoves.slice(0, Math.max(0, currentIdx)).concat(practiceMoves)
+      : practiceMoves;
+  const latestPracticeMove = practiceMoves[practiceMoves.length - 1];
+  const currentEval =
+    latestPracticeMove?.evaluation ?? positions[currentIdx]?.evaluation ?? null;
+  const currentMate =
+    latestPracticeMove?.mate ?? positions[currentIdx]?.mate ?? null;
+  const currentFen =
+    latestPracticeMove?.fen ?? positions[currentIdx]?.fen ?? gameAtIdx.fen();
+  const reviewPositionLabel =
+    practiceMoves.length > 0
+      ? `${t("common.moves")} ${moves.length}`
+      : positions.length > 0
+        ? `${currentIdx}/${positions.length - 1}`
+        : t("pgnViewer.ready");
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, ClassificationValue> = {};
+    const practiceMove = practiceMoves[practiceMoves.length - 1];
+
+    if (practiceMove?.to && practiceMove.classification) {
+      evals[practiceMove.to] = practiceMove.classification;
+
+      return evals;
+    }
+
     const position = positions[currentIdx];
 
     if (position?.to && position.classification) {
@@ -103,12 +135,16 @@ export default function PgnViewer() {
     }
 
     return evals;
-  }, [positions, currentIdx]);
+  }, [positions, currentIdx, practiceMoves]);
 
   const openingName = useMemo(() => {
     const fens = positions
       .slice(0, currentIdx + 1)
       .map((position) => position.fen);
+
+    for (const move of practiceMoves) {
+      fens.push(move.fen);
+    }
 
     if (fens.length === 0) {
       fens.push(currentFen);
@@ -123,7 +159,7 @@ export default function PgnViewer() {
     }
 
     return null;
-  }, [currentFen, positions, currentIdx]);
+  }, [currentFen, positions, currentIdx, practiceMoves]);
 
   const getGameAtMove = useCallback(
     (posIdx: number): Chess => {
@@ -161,6 +197,9 @@ export default function PgnViewer() {
       if (idx < 0 || idx >= positions.length) {
         return;
       }
+
+      setPracticeMoves([]);
+      setSelectedSquare(null);
       setCurrentIdx(idx);
 
       const g = getGameAtMove(idx);
@@ -189,6 +228,8 @@ export default function PgnViewer() {
     setProgress(0);
     setCurrentIdx(-1);
     setPositions([]);
+    setPracticeMoves([]);
+    setSelectedSquare(null);
     abortRef.current = false;
 
     try {
@@ -282,6 +323,8 @@ export default function PgnViewer() {
       setCurrentIdx(0);
       setGameAtIdx(initialGame);
       setLastMove(null);
+      setPracticeMoves([]);
+      setSelectedSquare(null);
 
       toast.success(t("success.analysisComplete"));
     } catch {
@@ -290,6 +333,122 @@ export default function PgnViewer() {
       setIsAnalyzing(false);
     }
   };
+
+  const handleBoardMove = useCallback(
+    async (from: Square, to: Square, promotion: PromotionPiece = "q") => {
+      if (isAnalyzing) {
+        return;
+      }
+
+      try {
+        const boardGame = new Chess(gameAtIdx.fen());
+        const fenBefore = boardGame.fen();
+        const move = boardGame.move({ from, to, promotion });
+
+        if (!move) {
+          return;
+        }
+
+        const entry: MoveEntry = {
+          san: move.san,
+          fen: boardGame.fen(),
+          color: move.color as "w" | "b",
+          from: move.from,
+          to: move.to,
+          uci: getMoveUci(move),
+          captured: move.captured as MoveEntry["captured"],
+        };
+
+        setGameAtIdx(boardGame);
+        setLastMove({ from: move.from as Square, to: move.to as Square });
+        setSelectedSquare(null);
+        setPracticeMoves((currentMoves) => {
+          return [...currentMoves, entry];
+        });
+
+        if (soundEnabled) {
+          if (boardGame.isGameOver()) {
+            playGameOverSound();
+          } else if (move.captured) {
+            playCaptureSound();
+          } else {
+            playMoveSound();
+          }
+        }
+
+        const engine = new AnalysisEngine();
+        await engine.connect();
+
+        try {
+          const before = await engine.analyzePosition(fenBefore, 14, 3);
+          const after = await engine.analyzePosition(entry.fen, 14);
+          const alternativeLine = before.lines.find((line) => {
+            return line.pv[0] !== entry.uci;
+          });
+          const previousPracticeMove = practiceMoves[practiceMoves.length - 1];
+          const previousMainMove =
+            positions.length > 0 ? positions[currentIdx]?.uci : null;
+          const fenTwoMovesAgo =
+            practiceMoves[practiceMoves.length - 2]?.fen ??
+            positions[currentIdx - 1]?.fen ??
+            null;
+          const classification = classifyMove(
+            before.score,
+            after.score,
+            entry.color,
+            before.mate,
+            after.mate,
+            before.bestmove === entry.uci,
+            before.lines.length === 1,
+            getOpeningName(entry.fen) !== null,
+            {
+              fenBefore,
+              playedMove: entry.uci,
+              bestLinePvAfter: after.lines[0]?.pv,
+              alternativeEvalBefore: alternativeLine?.score,
+              alternativeMateBefore: alternativeLine?.mate,
+              fenTwoMovesAgo,
+              previousMove: previousPracticeMove?.uci ?? previousMainMove,
+            },
+          );
+
+          setPracticeMoves((currentMoves) => {
+            const nextMoves = [...currentMoves];
+            const moveIndex = nextMoves.findIndex((currentMove) => {
+              return (
+                currentMove.uci === entry.uci && currentMove.fen === entry.fen
+              );
+            });
+
+            if (moveIndex < 0) {
+              return currentMoves;
+            }
+
+            nextMoves[moveIndex] = {
+              ...nextMoves[moveIndex],
+              classification,
+              evaluation: after.score ?? undefined,
+              mate: after.mate ?? undefined,
+            };
+
+            return nextMoves;
+          });
+        } finally {
+          engine.disconnect();
+        }
+      } catch {
+        // Invalid move or analysis failure
+      }
+    },
+    [
+      currentIdx,
+      gameAtIdx,
+      isAnalyzing,
+      positions,
+      practiceMoves,
+      soundEnabled,
+    ],
+  );
 
   function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
     const good = new Set([
@@ -360,10 +519,11 @@ export default function PgnViewer() {
 
             <Board
               game={gameAtIdx}
-              onMove={() => {}}
-              selectedSquare={null}
-              onSelectSquare={() => {}}
+              onMove={handleBoardMove}
+              selectedSquare={selectedSquare}
+              onSelectSquare={setSelectedSquare}
               lastMove={lastMove}
+              interactive={!isAnalyzing}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
               pieceSet={pieceSet}
@@ -421,11 +581,13 @@ export default function PgnViewer() {
           </button>
         </div>
 
-        {positions.length === 0 && !isAnalyzing && (
-          <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
-            {t("pgnViewer.emptyState")}
-          </div>
-        )}
+        {positions.length === 0 &&
+          practiceMoves.length === 0 &&
+          !isAnalyzing && (
+            <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
+              {t("pgnViewer.emptyState")}
+            </div>
+          )}
 
         <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
           {t("common.opening")}
@@ -535,7 +697,7 @@ export default function PgnViewer() {
           </div>
         )}
 
-        {positions.length > 0 && !isAnalyzing && (
+        {moves.length > 0 && !isAnalyzing && (
           <>
             <div className="min-h-48 flex-1 overflow-hidden border-b border-white/6 p-4">
               <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
@@ -544,9 +706,11 @@ export default function PgnViewer() {
 
               <MoveList
                 moves={moves}
-                currentMoveIndex={currentIdx - 1}
+                currentMoveIndex={moves.length - 1}
                 onGoToMove={(idx) => {
-                  goToPosition(idx + 1);
+                  if (positions.length > 0 && idx < currentIdx) {
+                    goToPosition(idx + 1);
+                  }
                 }}
                 showEvaluation={showMoveEvaluation}
               />

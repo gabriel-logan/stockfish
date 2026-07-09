@@ -4,7 +4,6 @@
     "pageTitles": {
       "home": "GLFish - Play Stockfish and analyze your games",
       "play": "Play Stockfish - GLFish",
-      "freePlay": "Free Play - GLFish",
       "pgn": "Analyze PGN - GLFish",
       "history": "Saved Games - GLFish"
     }
@@ -31,8 +30,6 @@
     "noUser": "No user",
     "users": "Users",
     "versusEngine": "Versus Engine",
-    "freePlay": "Free Play",
-    "free": "Free",
     "analyzePgn": "Analyze PGN",
     "play": "Play",
     "pgn": "PGN",
@@ -89,20 +86,13 @@
     "materialEven": "Even",
     "materialAdvantage": "{{color}} {{score}}"
   },
-  "freePlay": {
-    "title": "Free Play",
-    "whiteToMove": "White to move",
-    "blackToMove": "Black to move",
-    "selfPlayStatus": "Move both sides with full analysis.",
-    "selfOpponent": "Free play"
-  },
   "pgnViewer": {
     "gameReview": "Game Review",
     "ready": "Ready",
     "pgnAnalysis": "PGN Analysis",
     "pastePgn": "Paste PGN",
     "pastePlaceholder": "e.g. 1. e4 e5 2. Nf3 Nc6 ...",
-    "emptyState": "Paste a PGN and click Analyze to review the game.",
+    "emptyState": "Paste a PGN and click Analyze, or move pieces on the board to play freely.",
     "firstMove": "First move",
     "previousMove": "Previous move",
     "nextMove": "Next move",

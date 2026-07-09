@@ -4,7 +4,6 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { Bounce, ToastContainer } from "react-toastify";
 
 import Layout from "./components/Layout";
-import FreePlay from "./pages/FreePlay";
 import GameHistory from "./pages/GameHistory";
 import NotFound from "./pages/NotFound";
 import PgnViewer from "./pages/PgnViewer";
@@ -18,7 +17,6 @@ function DocumentTitle() {
     const pageTitles: Record<string, string> = {
       "/": t("app.pageTitles.home"),
       "/play": t("app.pageTitles.play"),
-      "/free-play": t("app.pageTitles.freePlay"),
       "/pgn": t("app.pageTitles.pgn"),
       "/history": t("app.pageTitles.history"),
     };
@@ -38,7 +36,6 @@ function App() {
         <Routes>
           <Route path="/" element={<PlayComputer />} />
           <Route path="/play" element={<PlayComputer />} />
-          <Route path="/free-play" element={<FreePlay />} />
           <Route path="/pgn" element={<PgnViewer />} />
           <Route path="/history" element={<GameHistory />} />
           <Route path="*" element={<NotFound />} />

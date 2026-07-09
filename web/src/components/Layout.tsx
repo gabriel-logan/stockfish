@@ -11,7 +11,6 @@ import {
   FaTrash,
   FaUser,
   FaUserPlus,
-  FaUsers,
 } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "react-toastify";
@@ -93,17 +92,6 @@ export default function Layout({ children }: Props) {
                 aria-hidden="true"
               />
               {t("common.analyzePgn")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/free-play")}
-              onClick={() => {
-                navigate("/free-play");
-              }}
-            >
-              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.freePlay")}
             </button>
           </nav>
 
@@ -269,20 +257,6 @@ export default function Layout({ children }: Props) {
               >
                 <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
                 {t("common.play")}
-              </button>
-
-              <button
-                type="button"
-                className={`${getNavButtonClass("/free-play")} min-h-9 w-auto max-[44rem]:flex-1 max-[44rem]:justify-center`}
-                onClick={() => {
-                  navigate("/free-play");
-                }}
-              >
-                <FaUsers
-                  className="text-xl text-[#a9d86f]"
-                  aria-hidden="true"
-                />
-                {t("common.free")}
               </button>
 
               <button
