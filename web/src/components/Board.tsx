@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Chess, type Square } from "chess.js";
 
@@ -150,6 +150,9 @@ export default function Board({
     to: Square;
     color: "w" | "b";
   } | null>(null);
+  const [markedSquares, setMarkedSquares] = useState<Set<Square>>(() => {
+    return new Set();
+  });
 
   const pieceTypeName = {
     p: "Pawn",
@@ -199,8 +202,45 @@ export default function Board({
     }
   }, [game, selectedSquare]);
 
+  const preventRightClick = useCallback((event: MouseEvent) => {
+    event.preventDefault();
+  }, []);
+
+  const handleMouseDown = useCallback((event: MouseEvent) => {
+    if (event.button === 2) {
+      event.preventDefault();
+    }
+  }, []);
+
+  const handleSquareContextMenu = useCallback(
+    (event: MouseEvent, square: Square) => {
+      event.preventDefault();
+
+      setMarkedSquares((currentSquares) => {
+        const nextSquares = new Set(currentSquares);
+
+        if (nextSquares.has(square)) {
+          nextSquares.delete(square);
+        } else {
+          nextSquares.add(square);
+        }
+
+        return nextSquares;
+      });
+    },
+    [],
+  );
+
   const handleClick = useCallback(
     (square: Square) => {
+      setMarkedSquares((currentSquares) => {
+        if (currentSquares.size === 0) {
+          return currentSquares;
+        }
+
+        return new Set();
+      });
+
       if (!interactive) {
         return;
       }
@@ -290,7 +330,11 @@ export default function Board({
   }
 
   return (
-    <div className="relative inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none">
+    <div
+      className="relative inline-block overflow-hidden rounded-[0.2rem] border-[0.2rem] border-[#2a2925] shadow-[0_0.75rem_1.8rem_rgb(0_0_0_/_24%)] select-none"
+      onContextMenu={preventRightClick}
+      onMouseDown={handleMouseDown}
+    >
       {suggestedMovePoints && (
         <svg
           className="pointer-events-none absolute inset-0 z-10 size-full"
@@ -354,6 +398,8 @@ export default function Board({
 
               const isLegalTarget = legalTargets.has(square);
 
+              const isMarked = markedSquares.has(square);
+
               const coordinateColorClass = getCoordinateColorClass(row, col);
 
               return (
@@ -363,7 +409,14 @@ export default function Board({
                   onClick={() => {
                     handleClick(square);
                   }}
+                  onContextMenu={(event) => {
+                    handleSquareContextMenu(event, square);
+                  }}
                 >
+                  {isMarked && (
+                    <div className="pointer-events-none absolute inset-0 bg-[#ef4444]/42" />
+                  )}
+
                   {col === 0 && (
                     <span
                       className={`pointer-events-none absolute top-0.5 left-1 z-10 text-[0.65rem] leading-none font-black select-none ${coordinateColorClass}`}
