@@ -5,12 +5,20 @@ interface Props {
 
 function getWhitePercentage(evaluation: number | null, mate: number | null) {
   if (mate !== null) {
+    if (Object.is(mate, -0)) {
+      return 100;
+    }
+
+    if (mate === 0) {
+      return 0;
+    }
+
     if (mate > 0) {
-      return 98;
+      return 100;
     }
 
     if (mate < 0) {
-      return 2;
+      return 0;
     }
   }
 
@@ -31,7 +39,9 @@ export default function EvaluationBar({ evaluation, mate }: Props) {
   let pawnText = null;
 
   if (mate !== null) {
-    if (mate > 0) {
+    if (Object.is(mate, -0) || mate === 0) {
+      pawnText = "M0";
+    } else if (mate > 0) {
       pawnText = `M${mate}`;
     } else {
       pawnText = `-M${Math.abs(mate)}`;
