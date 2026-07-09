@@ -113,6 +113,7 @@ export default function PlayComputer() {
   const analysisVersionRef = useRef(0);
   const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
   const botMoveTimeoutRef = useRef<number | null>(null);
+  const isIntentionalDisconnectRef = useRef(false);
 
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(
@@ -283,6 +284,7 @@ export default function PlayComputer() {
     const playEngine = new AnalysisEngine();
     const evalEngine = new AnalysisEngine();
 
+    isIntentionalDisconnectRef.current = false;
     playEngineRef.current = playEngine;
     evalEngineRef.current = evalEngine;
 
@@ -428,12 +430,20 @@ export default function PlayComputer() {
     };
 
     playEngine.onDisconnect = () => {
+      if (isIntentionalDisconnectRef.current) {
+        return;
+      }
+
       setConnected(false);
       setError(t("errors.connectionLost"));
       toast.error(t("errors.playEngineDisconnected"));
     };
 
     evalEngine.onDisconnect = () => {
+      if (isIntentionalDisconnectRef.current) {
+        return;
+      }
+
       setConnected(false);
       setError(t("errors.evaluationConnectionLost"));
       toast.error(t("errors.evalEngineDisconnected"));
@@ -451,6 +461,7 @@ export default function PlayComputer() {
 
     return () => {
       clearPendingBotMove();
+      isIntentionalDisconnectRef.current = true;
       playEngine.disconnect();
       evalEngine.disconnect();
       playEngineRef.current = null;
