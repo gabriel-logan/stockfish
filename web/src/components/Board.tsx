@@ -160,10 +160,13 @@ function getArrowPoints(
   const unitY = dy / length;
   const perpX = -unitY;
   const perpY = unitX;
-  const headLength = Math.min(54, length * 0.42);
-  const headWidth = Math.min(62, length * 0.5);
-  const baseX = to.x - unitX * headLength;
-  const baseY = to.y - unitY * headLength;
+  const tipOffset = Math.max(0, Math.min(38, length * 0.22) - 7);
+  const headLength = Math.min(52, length * 0.52);
+  const headWidth = Math.min(52, length * 0.52);
+  const tipX = to.x - unitX * tipOffset;
+  const tipY = to.y - unitY * tipOffset;
+  const baseX = tipX - unitX * headLength;
+  const baseY = tipY - unitY * headLength;
   const halfWidth = headWidth / 2;
 
   const leftX = baseX + perpX * halfWidth;
@@ -174,9 +177,9 @@ function getArrowPoints(
   return {
     x1: from.x,
     y1: from.y,
-    x2: baseX,
-    y2: baseY,
-    head: `${to.x},${to.y} ${leftX},${leftY} ${rightX},${rightY}`,
+    x2: tipX,
+    y2: tipY,
+    head: `${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`,
   };
 }
 
