@@ -56,7 +56,7 @@ pub async fn websocket(
                 }
                 Message::Close(reason) => {
                     if let Some(game_id) = current_game_id {
-                        let msg = ServerMessage::PlayerDisconnected { user_id };
+                        let msg = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
                         state_for_task.hub.broadcast_game(game_id, &msg);
                     }
                     let _ = session.close(reason).await;
@@ -67,7 +67,7 @@ pub async fn websocket(
         }
 
         if let Some(game_id) = current_game_id {
-            let msg = ServerMessage::PlayerDisconnected { user_id };
+            let msg = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
             state_for_task.hub.broadcast_game(game_id, &msg);
         }
 
@@ -89,9 +89,13 @@ async fn handle_text(
     let result = match parsed {
         Ok(ClientMessage::JoinRoom { room_id }) => join_room_channel(state, session, room_id).await,
         Ok(ClientMessage::JoinGame { game_id }) => {
-            join_game_channel(state, user_id, session, game_id).await?;
-            *current_game_id = Some(game_id);
-            Ok(())
+            match join_game_channel(state, user_id, session, game_id).await {
+                Ok(()) => {
+                    *current_game_id = Some(game_id);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
         }
         Ok(ClientMessage::Move { game_id, uci }) => {
             play_move(state, user_id, session, game_id, &uci).await
