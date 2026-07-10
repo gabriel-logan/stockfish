@@ -4,7 +4,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.toml
 COPY crates crates
 
-RUN cargo build --release --workspace
+RUN cargo build --release --workspace --all-features
 
 FROM debian:bookworm-slim
 
