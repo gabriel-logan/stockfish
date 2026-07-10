@@ -48,13 +48,20 @@ async fn main() -> std::io::Result<()> {
     tracing::info!(%bind_addr, "starting api-server");
 
     HttpServer::new(move || {
-        let cors = if config.cors_allowed_origin == "*" {
+        let cors = if config
+            .cors_allowed_origins
+            .iter()
+            .any(|origin| origin == "*")
+        {
             Cors::permissive()
         } else {
-            Cors::default()
-                .allowed_origin(&config.cors_allowed_origin)
-                .allow_any_method()
-                .allow_any_header()
+            let mut cors = Cors::default().allow_any_method().allow_any_header();
+
+            for origin in &config.cors_allowed_origins {
+                cors = cors.allowed_origin(origin);
+            }
+
+            cors
         };
 
         App::new()

@@ -41,7 +41,7 @@ Atlas uses `api-dev-db` as its clean development database while computing declar
 | `JWT_SECRET` | required | HS256 signing secret |
 | `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access token lifetime |
 | `REFRESH_TOKEN_TTL_SECONDS` | `2592000` | Refresh token lifetime |
-| `CORS_ALLOWED_ORIGIN` | `*` | Browser origin allowed by CORS |
+| `CORS_ALLOWED_ORIGINS` | `*` | Comma-separated browser origins allowed by CORS |
 
 ## HTTP API
 

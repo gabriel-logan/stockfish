@@ -7,7 +7,7 @@ pub struct Config {
     pub jwt_secret: String,
     pub access_token_ttl_seconds: i64,
     pub refresh_token_ttl_seconds: i64,
-    pub cors_allowed_origin: String,
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl Config {
@@ -26,11 +26,24 @@ impl Config {
             refresh_token_ttl_seconds: env_or("REFRESH_TOKEN_TTL_SECONDS", "2592000")
                 .parse()
                 .expect("REFRESH_TOKEN_TTL_SECONDS must be an i64"),
-            cors_allowed_origin: env_or("CORS_ALLOWED_ORIGIN", "*"),
+            cors_allowed_origins: env_list_or("CORS_ALLOWED_ORIGINS", &["*"]),
         }
     }
 }
 
 fn env_or(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_owned())
+}
+
+fn env_list_or(name: &str, default: &[&str]) -> Vec<String> {
+    std::env::var(name)
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_else(|_| default.iter().map(|value| (*value).to_owned()).collect())
 }
