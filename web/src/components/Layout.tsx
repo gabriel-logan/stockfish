@@ -8,6 +8,8 @@ import {
   FaGlobe,
   FaHistory,
   FaPlay,
+  FaSignInAlt,
+  FaSignOutAlt,
   FaTrash,
   FaUser,
   FaUserPlus,
@@ -16,7 +18,11 @@ import {
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "react-toastify";
 
+import { useApiHealthCheck } from "../hooks/useApiHealth";
 import { useEngineHealthCheck } from "../hooks/useEngineHealth";
+import { getApiErrorMessage } from "../lib/apiInstance";
+import { logoutUser } from "../services/authService";
+import { useAuthStore } from "../store/authStore";
 import { useUserStore } from "../store/userStore";
 import ConfirmModal from "./ConfirmModal";
 import CreateUserModal from "./CreateUserModal";
@@ -32,6 +38,10 @@ export default function Layout({ children }: Props) {
   const location = useLocation();
 
   const engineHealthStatus = useEngineHealthCheck();
+  const apiHealthStatus = useApiHealthCheck();
+  const authUser = useAuthStore((s) => s.user);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const clearSession = useAuthStore((s) => s.clearSession);
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeUser = users.find((u) => u.id === activeUserId);
@@ -44,6 +54,19 @@ export default function Layout({ children }: Props) {
   function handleCreateUser(name: string) {
     createUser(name);
     toast.success(t("success.userCreated", { name }));
+  }
+
+  async function handleLogout() {
+    try {
+      if (refreshToken) {
+        await logoutUser(refreshToken);
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      clearSession();
+      navigate("/login");
+    }
   }
 
   function getNavButtonClass(path: string) {
@@ -83,6 +106,17 @@ export default function Layout({ children }: Props) {
 
             <button
               type="button"
+              className={getNavButtonClass("/online")}
+              onClick={() => {
+                navigate("/online");
+              }}
+            >
+              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
+              {t("common.playOnline")}
+            </button>
+
+            <button
+              type="button"
               className={getNavButtonClass("/pgn")}
               onClick={() => {
                 navigate("/pgn");
@@ -106,6 +140,49 @@ export default function Layout({ children }: Props) {
               {t("common.freePlay")}
             </button>
           </nav>
+
+          <div className="mt-4 border-t border-white/6 pt-4">
+            {authUser ? (
+              <div className="rounded-md border border-white/8 bg-[#292d27] p-2">
+                <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
+                  <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
+                    {authUser.username.slice(0, 2).toUpperCase()}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
+                      {authUser.username}
+                    </div>
+                    <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
+                      {t("layout.onlineRating", { rating: authUser.rating })}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="flex min-h-9 w-full items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
+                  onClick={() => {
+                    void handleLogout();
+                  }}
+                >
+                  <FaSignOutAlt aria-hidden="true" />
+                  {t("common.logout")}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex min-h-10 w-full items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
+                onClick={() => {
+                  navigate("/login");
+                }}
+              >
+                <FaSignInAlt aria-hidden="true" />
+                {t("common.login")}
+              </button>
+            )}
+          </div>
 
           <div className="mt-4 border-t border-white/6 pt-4">
             <div className="mb-3 flex items-center justify-between gap-2 px-1">
@@ -225,6 +302,25 @@ export default function Layout({ children }: Props) {
             </div>
 
             <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
+              <FaCircle
+                size={10}
+                color={
+                  apiHealthStatus === "connected"
+                    ? "#8ab84f"
+                    : apiHealthStatus === "checking"
+                      ? "#f2be1f"
+                      : "#df5353"
+                }
+                aria-hidden="true"
+              />
+              {apiHealthStatus === "connected"
+                ? t("common.apiConnected")
+                : apiHealthStatus === "checking"
+                  ? t("common.apiChecking")
+                  : t("common.apiDisconnected")}
+            </div>
+
+            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
               <FaGlobe className="shrink-0 text-[#97c45d]" aria-hidden="true" />
               <LanguageSwitcher />
             </div>
@@ -269,6 +365,20 @@ export default function Layout({ children }: Props) {
               >
                 <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
                 {t("common.play")}
+              </button>
+
+              <button
+                type="button"
+                className={`${getNavButtonClass("/online")} min-h-9 w-auto max-[44rem]:flex-1 max-[44rem]:justify-center`}
+                onClick={() => {
+                  navigate("/online");
+                }}
+              >
+                <FaUsers
+                  className="text-xl text-[#a9d86f]"
+                  aria-hidden="true"
+                />
+                {t("common.online")}
               </button>
 
               <button

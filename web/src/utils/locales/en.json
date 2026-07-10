@@ -4,14 +4,18 @@
     "pageTitles": {
       "home": "GLFish - Play Stockfish and analyze your games",
       "play": "Play Stockfish - GLFish",
+      "online": "Play Online - GLFish",
       "freePlay": "Free Play - GLFish",
       "pgn": "Analyze PGN - GLFish",
-      "history": "Saved Games - GLFish"
+      "history": "Saved Games - GLFish",
+      "login": "Login - GLFish",
+      "register": "Register - GLFish"
     }
   },
   "common": {
     "white": "White",
     "black": "Black",
+    "color": "Color",
     "cancel": "Cancel",
     "delete": "Delete",
     "create": "Create",
@@ -29,8 +33,16 @@
     "appearance": "Appearance",
     "pieceSet": "Piece set",
     "noUser": "No user",
+    "user": "User",
+    "username": "Username",
     "users": "Users",
+    "email": "Email",
+    "password": "Password",
+    "login": "Login",
+    "logout": "Logout",
+    "online": "Online",
     "versusEngine": "Versus Engine",
+    "playOnline": "Play Online",
     "freePlay": "Free Play",
     "free": "Free",
     "analyzePgn": "Analyze PGN",
@@ -40,6 +52,9 @@
     "engineConnected": "Engine Connected",
     "engineChecking": "Checking Engine...",
     "engineDisconnected": "Engine Disconnected",
+    "apiConnected": "API Connected",
+    "apiChecking": "Checking API...",
+    "apiDisconnected": "API Disconnected",
     "evaluationBar": "Evaluation bar",
     "moveEvaluation": "Move evaluation",
     "elo": "Elo"
@@ -62,6 +77,48 @@
     "gameSaved": "Game saved",
     "userCreated": "User \"{{name}}\" created",
     "userDeleted": "User deleted"
+  },
+  "auth": {
+    "loginTitle": "Login",
+    "loginSubtitle": "Sign in to play online games.",
+    "registerTitle": "Create account",
+    "registerSubtitle": "Create your user to play online.",
+    "loggingIn": "Logging in...",
+    "creatingAccount": "Creating...",
+    "createAccount": "Create account",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "online": {
+    "title": "Play Online",
+    "rooms": "Rooms",
+    "publicRooms": "Public rooms",
+    "noRooms": "No rooms waiting.",
+    "leaveQueue": "Leave queue",
+    "resign": "Resign",
+    "rated": "rated",
+    "casual": "casual",
+    "matchmakingJoined": "You joined the queue. Waiting for an opponent.",
+    "connectionStatus": {
+      "idle": "Idle",
+      "matching": "Matching",
+      "playing": "Playing",
+      "finished": "Finished"
+    },
+    "roomStatus": {
+      "waiting": "waiting",
+      "playing": "playing",
+      "finished": "finished",
+      "cancelled": "cancelled"
+    },
+    "status": {
+      "ready": "Join the queue to start a game.",
+      "draw": "Game finished: draw.",
+      "win": "Game finished: win.",
+      "loss": "Game finished: loss.",
+      "yourTurn": "Your turn.",
+      "waitingOpponent": "Waiting for opponent."
+    }
   },
   "notFound": {
     "title": "404",
@@ -126,6 +183,7 @@
   },
   "layout": {
     "userSection": "Users",
+    "onlineRating": "Online rating {{rating}}",
     "createUser": "Create a user to save games",
     "savedGamesCount": "{{count}} saved games",
     "deleteUser": "Delete user",
