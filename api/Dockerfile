@@ -1,7 +1,7 @@
 FROM rust:1.95-bookworm AS builder
 
 WORKDIR /app
-COPY Cargo.toml Cargo.toml
+COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 
 RUN cargo build --release --workspace --all-features

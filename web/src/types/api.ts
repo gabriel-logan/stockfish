@@ -47,13 +47,13 @@ export interface Game {
 
 export interface MoveRecord {
   id: string;
-  game_id: string;
-  move_number: number;
-  user_id: string;
+  gameId: string;
+  moveNumber: number;
+  userId: string;
   uci: string;
   san: string;
-  fen_after: string;
-  created_at: string;
+  fenAfter: string;
+  createdAt: string;
 }
 
 export interface JoinMatchmakingResponse {
@@ -73,7 +73,7 @@ export interface GameResponse {
 }
 
 export type ServerMessage =
-  | { type: "ready"; userId: string }
+  | { type: "ready"; user_id: string }
   | { type: "room_updated"; room: Room }
   | { type: "game_started"; game: Game }
   | { type: "game_state"; game: Game; moves: MoveRecord[] }

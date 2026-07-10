@@ -46,7 +46,7 @@ function getMoveEntries(moves: MoveRecord[]): MoveEntry[] {
   return moves.map((move, index) => {
     return {
       san: move.san,
-      fen: move.fen_after,
+      fen: move.fenAfter,
       color: index % 2 === 0 ? "w" : "b",
       from: move.uci.slice(0, 2),
       to: move.uci.slice(2, 4),
@@ -152,6 +152,14 @@ export default function PlayOnline() {
     return getMoveEntries(moves);
   }, [moves]);
 
+  const availableRooms = useMemo(() => {
+    if (!user) {
+      return rooms;
+    }
+
+    return rooms.filter((room) => room.ownerId !== user.id);
+  }, [rooms, user]);
+
   const refreshRooms = useCallback(async () => {
     setLoadingRooms(true);
 
@@ -177,7 +185,7 @@ export default function PlayOnline() {
       setGame(message.game);
       setStatus("playing");
       socketRef.current?.send(
-        JSON.stringify({ type: "join_game", gameId: message.game.id }),
+        JSON.stringify({ type: "join_game", game_id: message.game.id }),
       );
       return;
     }
@@ -232,7 +240,7 @@ export default function PlayOnline() {
       );
 
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "join_room", roomId }));
+        socket.send(JSON.stringify({ type: "join_room", room_id: roomId }));
       };
 
       socket.onmessage = handleSocketMessage;
@@ -259,7 +267,7 @@ export default function PlayOnline() {
       );
 
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "join_game", gameId }));
+        socket.send(JSON.stringify({ type: "join_game", game_id: gameId }));
       };
 
       socket.onmessage = handleSocketMessage;
@@ -359,7 +367,7 @@ export default function PlayOnline() {
     socketRef.current.send(
       JSON.stringify({
         type: "move",
-        gameId: game.id,
+        game_id: game.id,
         uci,
       }),
     );
@@ -501,13 +509,13 @@ export default function PlayOnline() {
           </div>
 
           <div className="max-h-44 overflow-y-auto">
-            {rooms.length === 0 && (
+            {availableRooms.length === 0 && (
               <p className="p-4 text-sm font-bold text-[#8f8b84]">
                 {t("online.noRooms")}
               </p>
             )}
 
-            {rooms.map((room) => {
+            {availableRooms.map((room) => {
               return (
                 <button
                   key={room.id}

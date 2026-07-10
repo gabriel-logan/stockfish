@@ -23,9 +23,7 @@ pub async fn create_room(
     )
     .await?;
 
-    state
-        .hub
-        .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+    state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
 
     Ok(web::Json(room))
 }
@@ -64,17 +62,11 @@ pub async fn join_room(
     let room = join_room_record(&state, user.id, *room_id).await?;
     let game = games::start_game_if_ready(&state, &room).await?;
 
-    state
-        .hub
-        .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+    state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
 
     if let Some(game) = game {
-        state
-            .hub
-            .broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
-        state
-            .hub
-            .broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
+        state.hub.broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
+        state.hub.broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
 
         return Ok(HttpResponse::Ok().json(serde_json::json!({
             "room": room,
@@ -106,17 +98,11 @@ pub async fn join_matchmaking(
         let room = join_room_record(&state, user.id, room.id).await?;
         let game = games::start_game_if_ready(&state, &room).await?;
 
-        state
-            .hub
-            .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+        state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
 
         if let Some(game) = game {
-            state
-                .hub
-                .broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
-            state
-                .hub
-                .broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
+            state.hub.broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
+            state.hub.broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
 
             return Ok(HttpResponse::Ok().json(serde_json::json!({
                 "matched": true,

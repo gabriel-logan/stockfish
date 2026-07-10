@@ -140,7 +140,7 @@ async fn join_game_channel(
 async fn play_move(
     state: &AppState,
     user_id: Uuid,
-    session: &mut actix_ws::Session,
+    _session: &mut actix_ws::Session,
     game_id: Uuid,
     uci: &str,
 ) -> ApiResult<()> {
@@ -151,7 +151,6 @@ async fn play_move(
     };
 
     state.hub.broadcast_game(game.id, &message);
-    send_json(session, &message).await;
 
     Ok(())
 }
