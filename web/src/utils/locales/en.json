@@ -75,6 +75,7 @@
     "pgnPasted": "PGN pasted from clipboard",
     "enginesConnected": "Engines connected",
     "gameSaved": "Game saved",
+    "gameRenamed": "Game name updated",
     "userCreated": "User \"{{name}}\" created",
     "userDeleted": "User deleted"
   },
@@ -179,6 +180,8 @@
     "deleteGame": "Delete game",
     "deleteConfirmTitle": "Delete game",
     "deleteConfirmMessage": "Are you sure you want to delete this game? This cannot be undone.",
+    "editGame": "Edit game name",
+    "namePlaceholder": "Game name...",
     "vsOpponent": "vs {{opponent}}",
     "movesCount": "{{count}} moves"
   },

@@ -1,7 +1,8 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FaTrash } from "react-icons/fa";
+import { FaCheck, FaPen, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router";
+import { toast } from "react-toastify";
 
 import ConfirmModal from "../components/ConfirmModal";
 import { useUserStore } from "../store/userStore";
@@ -12,10 +13,31 @@ export default function GameHistory() {
   const users = useUserStore((s) => s.users);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const deleteGame = useUserStore((s) => s.deleteGame);
+  const editGameName = useUserStore((s) => s.editGameName);
 
   const [gameToDelete, setGameToDelete] = useState<string | null>(null);
+  const [editingGameId, setEditingGameId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const activeUser = users.find((u) => u.id === activeUserId);
+
+  function startEditing(gameId: string, currentName: string) {
+    setEditingGameId(gameId);
+    setEditValue(currentName);
+
+    setTimeout(() => {
+      editInputRef.current?.focus();
+    }, 0);
+  }
+
+  function saveEditName(gameId: string) {
+    const trimmed = editValue.trim();
+
+    editGameName(gameId, trimmed);
+    setEditingGameId(null);
+    toast.success(t("success.gameRenamed"));
+  }
 
   if (!activeUser) {
     return (
@@ -60,9 +82,35 @@ export default function GameHistory() {
                   >
                     <div className="flex items-center gap-3 text-sm">
                       <span className="font-extrabold text-white">
-                        {t("gameHistory.vsOpponent", {
-                          opponent: game.opponent,
-                        })}
+                        {editingGameId === game.id ? (
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            className="rounded border border-white/20 bg-white/10 px-2 py-0.5 text-sm font-extrabold text-white outline-none focus:border-[#628d3f]"
+                            value={editValue}
+                            onChange={(e) => {
+                              setEditValue(e.target.value);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                saveEditName(game.id);
+                              }
+
+                              if (e.key === "Escape") {
+                                setEditingGameId(null);
+                              }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            placeholder={t("gameHistory.namePlaceholder")}
+                          />
+                        ) : (
+                          game.name ||
+                          t("gameHistory.vsOpponent", {
+                            opponent: game.opponent,
+                          })
+                        )}
                       </span>
                       <span
                         className={`text-xs font-bold ${
@@ -100,16 +148,42 @@ export default function GameHistory() {
                     </div>
                   </button>
 
-                  <button
-                    type="button"
-                    className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                    title={t("gameHistory.deleteGame")}
-                    onClick={() => {
-                      setGameToDelete(game.id);
-                    }}
-                  >
-                    <FaTrash aria-hidden="true" />
-                  </button>
+                  <div className="flex shrink-0 gap-2">
+                    {editingGameId === game.id ? (
+                      <button
+                        type="button"
+                        className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#628d3f] text-xs font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
+                        title={t("common.save")}
+                        onClick={() => {
+                          saveEditName(game.id);
+                        }}
+                      >
+                        <FaCheck aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#628d3f] hover:text-white"
+                        title={t("gameHistory.editGame")}
+                        onClick={() => {
+                          startEditing(game.id, game.name ?? game.opponent);
+                        }}
+                      >
+                        <FaPen aria-hidden="true" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#3c3935] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
+                      title={t("gameHistory.deleteGame")}
+                      onClick={() => {
+                        setGameToDelete(game.id);
+                      }}
+                    >
+                      <FaTrash aria-hidden="true" />
+                    </button>
+                  </div>
                 </article>
               );
             })}

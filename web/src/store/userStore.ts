@@ -7,6 +7,7 @@ import { createId } from "../utils/createId";
 
 export interface SavedGame {
   id: string;
+  name?: string;
   pgn: string;
   date: string;
   result: string;
@@ -34,6 +35,7 @@ interface UserState {
   setLocale: (locale: Locale) => void;
   saveGame: (game: SavedGame) => void;
   deleteGame: (gameId: string) => void;
+  editGameName: (gameId: string, name: string) => void;
 }
 
 export const useUserStore = create<UserState>()(
@@ -97,6 +99,21 @@ export const useUserStore = create<UserState>()(
           users: state.users.map((u) =>
             u.id === state.activeUserId
               ? { ...u, games: u.games.filter((g) => g.id !== gameId) }
+              : u,
+          ),
+        }));
+      },
+
+      editGameName: (gameId: string, name: string) => {
+        set((state) => ({
+          users: state.users.map((u) =>
+            u.id === state.activeUserId
+              ? {
+                  ...u,
+                  games: u.games.map((g) =>
+                    g.id === gameId ? { ...g, name } : g,
+                  ),
+                }
               : u,
           ),
         }));

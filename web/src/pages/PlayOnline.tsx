@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  FaCheck,
   FaCircle,
+  FaClipboard,
   FaDoorOpen,
   FaFlag,
   FaPlay,
+  FaSave,
   FaSyncAlt,
   FaWifi,
 } from "react-icons/fa";
@@ -24,6 +27,7 @@ import {
 } from "../services/roomService";
 import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { type SavedGame, useUserStore } from "../store/userStore";
 import type {
   Game,
   MoveRecord,
@@ -31,6 +35,7 @@ import type {
   Room,
   ServerMessage,
 } from "../types/api";
+import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
 
 type OnlineStatus = "idle" | "matching" | "playing" | "finished";
@@ -114,11 +119,20 @@ function getRoomStatusKey(status: string) {
   return "online.roomStatus.waiting";
 }
 
+function formatPgnDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}.${month}.${day}`;
+}
+
 export default function PlayOnline() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const pieceSet = useSettingsStore((s) => s.pieceSet);
+  const saveGameToStore = useUserStore((s) => s.saveGame);
   const socketRef = useRef<WebSocket | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [game, setGame] = useState<Game | null>(null);
@@ -129,6 +143,7 @@ export default function PlayOnline() {
   const [sendingMove, setSendingMove] = useState(false);
   const [whitePlayer, setWhitePlayer] = useState<PlayerInfo | null>(null);
   const [blackPlayer, setBlackPlayer] = useState<PlayerInfo | null>(null);
+  const [savedGameId, setSavedGameId] = useState<string | null>(null);
 
   const currentFen = game?.fen;
 
@@ -211,6 +226,7 @@ export default function PlayOnline() {
       if (message.type === "game_started") {
         setGame(message.game);
         setStatus("playing");
+        setSavedGameId(null);
         socketRef.current?.send(
           JSON.stringify({ type: "join_game", game_id: message.game.id }),
         );
@@ -425,6 +441,105 @@ export default function PlayOnline() {
     }
   }
 
+  const createPgnWithHeaders = useCallback(() => {
+    if (!game) {
+      return "";
+    }
+
+    const pgnGame = new Chess();
+
+    for (const move of moves) {
+      pgnGame.move(move.uci);
+    }
+
+    const result =
+      game.result === "white_win"
+        ? "1-0"
+        : game.result === "black_win"
+          ? "0-1"
+          : game.result === "draw"
+            ? "1/2-1/2"
+            : "*";
+
+    const white = whitePlayer?.username ?? "White";
+    const black = blackPlayer?.username ?? "Black";
+
+    pgnGame.setHeader("Event", "GLFish Online");
+    pgnGame.setHeader("Site", "GLFish");
+    pgnGame.setHeader("Date", formatPgnDate(new Date()));
+    pgnGame.setHeader("Round", "-");
+    pgnGame.setHeader("White", white);
+    pgnGame.setHeader("Black", black);
+    pgnGame.setHeader("Result", result);
+    pgnGame.setHeader("Annotator", "GLFish");
+
+    if (whitePlayer?.rating) {
+      pgnGame.setHeader("WhiteElo", String(whitePlayer.rating));
+    }
+
+    if (blackPlayer?.rating) {
+      pgnGame.setHeader("BlackElo", String(blackPlayer.rating));
+    }
+
+    if (openingName) {
+      pgnGame.setHeader("Opening", openingName);
+    }
+
+    return pgnGame.pgn();
+  }, [game, moves, whitePlayer, blackPlayer, openingName]);
+
+  function handleCopyPgn() {
+    const pgn = createPgnWithHeaders();
+
+    navigator.clipboard
+      .writeText(pgn)
+      .then(() => {
+        toast.success(t("success.pgnCopied"));
+      })
+      .catch(() => {});
+  }
+
+  function handleSaveGame() {
+    if (savedGameId || !user) {
+      return;
+    }
+
+    const pgn = createPgnWithHeaders();
+    const result =
+      game?.result === "white_win"
+        ? "1-0"
+        : game?.result === "black_win"
+          ? "0-1"
+          : game?.result === "draw"
+            ? "1/2-1/2"
+            : "*";
+
+    const opponent =
+      game && user
+        ? game.whiteUserId === user.id
+          ? (blackPlayer?.username ?? "Opponent")
+          : (whitePlayer?.username ?? "Opponent")
+        : "Opponent";
+
+    const playerColor =
+      game && user ? (game.whiteUserId === user.id ? "w" : "b") : "w";
+
+    const savedGame: SavedGame = {
+      id: createId(),
+      pgn,
+      date: new Date().toISOString(),
+      result,
+      opponent,
+      opening: openingName ?? undefined,
+      playerColor,
+      moves: moves.length,
+    };
+
+    saveGameToStore(savedGame);
+    setSavedGameId(savedGame.id);
+    toast.success(t("success.gameSaved"));
+  }
+
   return (
     <div className="grid w-full max-w-7xl grid-cols-[minmax(0,1fr)_22rem] gap-4 max-[66rem]:grid-cols-1">
       <section className="flex min-w-0 justify-center rounded-md border border-white/8 bg-[#20241f] p-4 shadow-2xl shadow-black/20">
@@ -554,6 +669,39 @@ export default function PlayOnline() {
                 <FaFlag aria-hidden="true" />
                 {t("online.resign")}
               </button>
+            )}
+
+            {status === "finished" && (
+              <>
+                <button
+                  type="button"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-sm font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e]"
+                  onClick={handleCopyPgn}
+                >
+                  <FaClipboard aria-hidden="true" />
+                  {t("playComputer.copyPgn")}
+                </button>
+
+                {user && (
+                  <button
+                    type="button"
+                    className={
+                      savedGameId
+                        ? "flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white opacity-60"
+                        : "flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
+                    }
+                    onClick={handleSaveGame}
+                    disabled={!!savedGameId}
+                  >
+                    {savedGameId ? (
+                      <FaCheck aria-hidden="true" />
+                    ) : (
+                      <FaSave aria-hidden="true" />
+                    )}
+                    {savedGameId ? t("common.saved") : t("common.save")}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </section>
