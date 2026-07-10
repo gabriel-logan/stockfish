@@ -154,10 +154,12 @@ export default function PlayOnline() {
 
   const availableRooms = useMemo(() => {
     if (!user) {
-      return rooms;
+      return rooms.filter((room) => room.status === "waiting");
     }
 
-    return rooms.filter((room) => room.ownerId !== user.id);
+    return rooms.filter(
+      (room) => room.status === "waiting" && room.ownerId !== user.id,
+    );
   }, [rooms, user]);
 
   const refreshRooms = useCallback(async () => {

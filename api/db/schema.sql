@@ -8,7 +8,7 @@ CREATE TABLE users (
     username text NOT NULL UNIQUE,
     email text NOT NULL UNIQUE,
     password_hash text NOT NULL,
-    rating integer NOT NULL DEFAULT 1200,
+    rating integer NOT NULL DEFAULT 400,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
