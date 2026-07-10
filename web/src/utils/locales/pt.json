@@ -4,8 +4,12 @@
     "pageTitles": {
       "home": "GLFish - Jogue contra o Stockfish e analise suas partidas",
       "play": "Jogar contra Stockfish - GLFish",
+      "online": "Jogar Online - GLFish",
+      "freePlay": "Jogo Livre - GLFish",
       "pgn": "Analisar PGN - GLFish",
-      "history": "Partidas Salvas - GLFish"
+      "history": "Partidas Salvas - GLFish",
+      "login": "Login - GLFish",
+      "register": "Cadastro - GLFish"
     }
   },
   "common": {
@@ -39,7 +43,21 @@
     "engineDisconnected": "Engine Desconectado",
     "evaluationBar": "Barra de avaliação",
     "moveEvaluation": "Avaliação de lances",
-    "elo": "Elo"
+    "elo": "Elo",
+    "color": "Cor",
+    "email": "E-mail",
+    "free": "Grátis",
+    "freePlay": "Jogo Livre",
+    "login": "Entrar",
+    "logout": "Sair",
+    "online": "Online",
+    "password": "Senha",
+    "playOnline": "Jogar Online",
+    "user": "Usuário",
+    "username": "Nome de usuário",
+    "apiChecking": "Verificando API...",
+    "apiConnected": "API Conectada",
+    "apiDisconnected": "API Desconectada"
   },
   "errors": {
     "pasteValidPgn": "Cole um PGN válido",
@@ -57,13 +75,57 @@
     "pgnPasted": "PGN colado da área de transferência",
     "enginesConnected": "Motores conectados",
     "gameSaved": "Partida salva",
+    "gameRenamed": "Nome da partida atualizado",
     "userCreated": "Usuário \"{{name}}\" criado",
     "userDeleted": "Usuário excluído"
+  },
+  "auth": {
+    "loginTitle": "Entrar",
+    "loginSubtitle": "Faça login para jogar partidas online.",
+    "registerTitle": "Criar conta",
+    "registerSubtitle": "Crie seu usuário para jogar online.",
+    "loggingIn": "Entrando...",
+    "creatingAccount": "Criando...",
+    "createAccount": "Criar conta",
+    "noAccount": "Não tem uma conta?",
+    "hasAccount": "Já tem uma conta?"
   },
   "notFound": {
     "title": "404",
     "message": "Página não encontrada — esta posição está fora do tabuleiro.",
     "backToGame": "Voltar ao Jogo"
+  },
+  "online": {
+    "title": "Jogar Online",
+    "rooms": "Salas",
+    "publicRooms": "Salas públicas",
+    "noRooms": "Nenhuma sala esperando.",
+    "leaveQueue": "Sair da fila",
+    "resign": "Abandonar",
+    "rated": "ranqueada",
+    "casual": "casual",
+    "matchmakingJoined": "Você entrou na fila. Aguardando um oponente.",
+    "opponentDisconnected": "Oponente desconectou.",
+    "connectionStatus": {
+      "idle": "Ocioso",
+      "matching": "Procurando",
+      "playing": "Jogando",
+      "finished": "Finalizado"
+    },
+    "roomStatus": {
+      "waiting": "esperando",
+      "playing": "jogando",
+      "finished": "finalizado",
+      "cancelled": "cancelado"
+    },
+    "status": {
+      "ready": "Entre na fila para iniciar uma partida.",
+      "draw": "Partida finalizada: empate.",
+      "win": "Partida finalizada: vitória.",
+      "loss": "Partida finalizada: derrota.",
+      "yourTurn": "Sua vez.",
+      "waitingOpponent": "Aguardando oponente."
+    }
   },
   "playComputer": {
     "title": "Motor Stockfish",
@@ -87,6 +149,13 @@
     "materialEven": "Igual",
     "materialAdvantage": "{{color}} {{score}}"
   },
+  "freePlay": {
+    "title": "Jogo Livre",
+    "whiteToMove": "Brancas a jogar",
+    "blackToMove": "Pretas a jogar",
+    "selfPlayStatus": "Crie sua própria linha, revise e salve.",
+    "selfOpponent": "Jogo livre"
+  },
   "pgnViewer": {
     "gameReview": "Revisão da Partida",
     "ready": "Pronto",
@@ -100,7 +169,9 @@
     "lastMove": "Último lance",
     "sound": "Som",
     "openingNotDetected": "ainda não detectada",
-    "noBookMatch": "Nenhuma abertura encontrada para esta posição ainda"
+    "noBookMatch": "Nenhuma abertura encontrada para esta posição ainda",
+    "engineLines": "Linhas do motor",
+    "noLine": "Sem linha"
   },
   "gameHistory": {
     "title": "Histórico de Partidas",
@@ -110,11 +181,14 @@
     "deleteGame": "Excluir partida",
     "deleteConfirmTitle": "Excluir partida",
     "deleteConfirmMessage": "Tem certeza que deseja excluir esta partida? Esta ação não pode ser desfeita.",
+    "editGame": "Editar nome da partida",
+    "namePlaceholder": "Nome da partida...",
     "vsOpponent": "vs {{opponent}}",
     "movesCount": "{{count}} lances"
   },
   "layout": {
     "userSection": "Usuários",
+    "onlineRating": "Rating online {{rating}}",
     "createUser": "Crie um usuário para salvar partidas",
     "savedGamesCount": "{{count}} partidas salvas",
     "deleteUser": "Excluir usuário",
