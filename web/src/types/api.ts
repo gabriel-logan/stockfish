@@ -72,11 +72,24 @@ export interface GameResponse {
   moves: MoveRecord[];
 }
 
+export interface PlayerInfo {
+  id: string;
+  username: string;
+  rating: number;
+}
+
 export type ServerMessage =
   | { type: "ready"; user_id: string }
   | { type: "room_updated"; room: Room }
   | { type: "game_started"; game: Game }
-  | { type: "game_state"; game: Game; moves: MoveRecord[] }
+  | {
+      type: "game_state";
+      game: Game;
+      moves: MoveRecord[];
+      white_player: PlayerInfo | null;
+      black_player: PlayerInfo | null;
+    }
   | { type: "move_accepted"; game: Game; move_record: MoveRecord }
+  | { type: "player_disconnected"; user_id: string }
   | { type: "error"; message: string }
   | { type: "pong" };

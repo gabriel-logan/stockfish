@@ -99,6 +99,7 @@
     "rated": "rated",
     "casual": "casual",
     "matchmakingJoined": "You joined the queue. Waiting for an opponent.",
+    "opponentDisconnected": "Opponent disconnected.",
     "connectionStatus": {
       "idle": "Idle",
       "matching": "Matching",

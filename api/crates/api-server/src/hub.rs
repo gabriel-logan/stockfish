@@ -5,6 +5,8 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use crate::models::PlayerInfo;
+
 #[derive(Clone, Default)]
 pub struct Hub {
     inner: Arc<Mutex<HubInner>>,
@@ -31,10 +33,15 @@ pub enum ServerMessage<T: Serialize> {
     GameState {
         game: T,
         moves: serde_json::Value,
+        white_player: Option<PlayerInfo>,
+        black_player: Option<PlayerInfo>,
     },
     MoveAccepted {
         game: T,
         move_record: serde_json::Value,
+    },
+    PlayerDisconnected {
+        user_id: Uuid,
     },
     Error {
         message: String,

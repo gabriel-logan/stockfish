@@ -37,20 +37,38 @@ pub async fn websocket(
         let ready = ServerMessage::<serde_json::Value>::Ready { user_id };
         send_json(&mut session, &ready).await;
 
+        let mut current_game_id: Option<Uuid> = None;
+
         while let Some(Ok(message)) = stream.recv().await {
             match message {
                 Message::Text(text) => {
-                    handle_text(&state_for_task, user_id, &mut session, &text).await;
+                    handle_text(
+                        &state_for_task,
+                        user_id,
+                        &mut session,
+                        &text,
+                        &mut current_game_id,
+                    )
+                    .await;
                 }
                 Message::Ping(bytes) if session.pong(&bytes).await.is_err() => {
                     return;
                 }
                 Message::Close(reason) => {
+                    if let Some(game_id) = current_game_id {
+                        let msg = ServerMessage::PlayerDisconnected { user_id };
+                        state_for_task.hub.broadcast_game(game_id, &msg);
+                    }
                     let _ = session.close(reason).await;
                     return;
                 }
                 _ => {}
             }
+        }
+
+        if let Some(game_id) = current_game_id {
+            let msg = ServerMessage::PlayerDisconnected { user_id };
+            state_for_task.hub.broadcast_game(game_id, &msg);
         }
 
         let _ = session.close(None).await;
@@ -59,13 +77,21 @@ pub async fn websocket(
     Ok(response)
 }
 
-async fn handle_text(state: &AppState, user_id: Uuid, session: &mut actix_ws::Session, text: &str) {
+async fn handle_text(
+    state: &AppState,
+    user_id: Uuid,
+    session: &mut actix_ws::Session,
+    text: &str,
+    current_game_id: &mut Option<Uuid>,
+) {
     let parsed = serde_json::from_str::<ClientMessage>(text);
 
     let result = match parsed {
         Ok(ClientMessage::JoinRoom { room_id }) => join_room_channel(state, session, room_id).await,
         Ok(ClientMessage::JoinGame { game_id }) => {
-            join_game_channel(state, user_id, session, game_id).await
+            join_game_channel(state, user_id, session, game_id).await?;
+            *current_game_id = Some(game_id);
+            Ok(())
         }
         Ok(ClientMessage::Move { game_id, uci }) => {
             play_move(state, user_id, session, game_id, &uci).await
@@ -114,6 +140,9 @@ async fn join_game_channel(
     games::ensure_player(&game, user_id)?;
 
     let moves = games::list_moves(state, game_id).await?;
+    let white_player = games::fetch_player_info(state, game.white_user_id).await.ok();
+    let black_player = games::fetch_player_info(state, game.black_user_id).await.ok();
+
     let mut rx = state.hub.subscribe_game(game_id);
     let mut outbound = session.clone();
 
@@ -130,6 +159,8 @@ async fn join_game_channel(
         &ServerMessage::GameState {
             game,
             moves: serde_json::json!(moves),
+            white_player,
+            black_player,
         },
     )
     .await;

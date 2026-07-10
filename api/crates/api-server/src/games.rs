@@ -10,7 +10,7 @@ use crate::AppState;
 use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::ServerMessage;
-use crate::models::{Game, MoveRecord, Room};
+use crate::models::{Game, MoveRecord, PlayerInfo, Room};
 
 const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -49,11 +49,16 @@ pub async fn resign_game(
 
     let game = finish_game(&state, game.id, result, "resignation").await?;
 
+    let white_player = fetch_player_info(&state, game.white_user_id).await.ok();
+    let black_player = fetch_player_info(&state, game.black_user_id).await.ok();
+
     state.hub.broadcast_game(
         game.id,
         &ServerMessage::GameState {
             game: game.clone(),
             moves: serde_json::json!([]),
+            white_player,
+            black_player,
         },
     );
 
@@ -274,6 +279,22 @@ pub fn ensure_player(game: &Game, user_id: Uuid) -> ApiResult<()> {
     }
 
     Ok(())
+}
+
+pub async fn fetch_player_info(state: &AppState, user_id: Uuid) -> ApiResult<PlayerInfo> {
+    let user = sqlx::query_as::<_, crate::models::User>(
+        "SELECT id, username, email, rating, created_at FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("user not found".to_owned()))?;
+
+    Ok(PlayerInfo {
+        id: user.id,
+        username: user.username,
+        rating: user.rating,
+    })
 }
 
 async fn finish_game(

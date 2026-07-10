@@ -105,3 +105,11 @@ pub struct MatchmakingRequest {
 pub struct TokenQuery {
     pub token: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerInfo {
+    pub id: Uuid,
+    pub username: String,
+    pub rating: i32,
+}

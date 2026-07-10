@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FaDoorOpen, FaFlag, FaPlay, FaSyncAlt, FaWifi } from "react-icons/fa";
+import {
+  FaCircle,
+  FaDoorOpen,
+  FaFlag,
+  FaPlay,
+  FaSyncAlt,
+  FaWifi,
+} from "react-icons/fa";
 import { toast } from "react-toastify";
 import { Chess, type Square } from "chess.js";
 
@@ -17,7 +24,14 @@ import {
 } from "../services/roomService";
 import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { Game, MoveRecord, Room, ServerMessage } from "../types/api";
+import type {
+  Game,
+  MoveRecord,
+  PlayerInfo,
+  Room,
+  ServerMessage,
+} from "../types/api";
+import { getOpeningName } from "../utils/openingNames";
 
 type OnlineStatus = "idle" | "matching" | "playing" | "finished";
 type PromotionPiece = "q" | "r" | "b" | "n";
@@ -113,6 +127,8 @@ export default function PlayOnline() {
   const [status, setStatus] = useState<OnlineStatus>("idle");
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [sendingMove, setSendingMove] = useState(false);
+  const [whitePlayer, setWhitePlayer] = useState<PlayerInfo | null>(null);
+  const [blackPlayer, setBlackPlayer] = useState<PlayerInfo | null>(null);
 
   const currentFen = game?.fen;
 
@@ -152,6 +168,14 @@ export default function PlayOnline() {
     return getMoveEntries(moves);
   }, [moves]);
 
+  const openingName = useMemo(() => {
+    if (!game) {
+      return null;
+    }
+
+    return getOpeningName(game.fen);
+  }, [game]);
+
   const availableRooms = useMemo(() => {
     if (!user) {
       return rooms.filter((room) => room.status === "waiting");
@@ -180,54 +204,65 @@ export default function PlayOnline() {
     socketRef.current = null;
   }, []);
 
-  const handleSocketMessage = useCallback((event: MessageEvent<string>) => {
-    const message = JSON.parse(event.data) as ServerMessage;
+  const handleSocketMessage = useCallback(
+    (event: MessageEvent<string>) => {
+      const message = JSON.parse(event.data) as ServerMessage;
 
-    if (message.type === "game_started") {
-      setGame(message.game);
-      setStatus("playing");
-      socketRef.current?.send(
-        JSON.stringify({ type: "join_game", game_id: message.game.id }),
-      );
-      return;
-    }
+      if (message.type === "game_started") {
+        setGame(message.game);
+        setStatus("playing");
+        socketRef.current?.send(
+          JSON.stringify({ type: "join_game", game_id: message.game.id }),
+        );
+        return;
+      }
 
-    if (message.type === "game_state") {
-      setGame(message.game);
-      setMoves((currentMoves) => {
-        if (message.moves.length > 0 || message.game.moveCount === 0) {
-          return message.moves;
-        }
+      if (message.type === "game_state") {
+        setGame(message.game);
+        setMoves((currentMoves) => {
+          if (message.moves.length > 0 || message.game.moveCount === 0) {
+            return message.moves;
+          }
 
-        return currentMoves;
-      });
-      setStatus(message.game.status === "finished" ? "finished" : "playing");
-      return;
-    }
-
-    if (message.type === "move_accepted") {
-      setGame(message.game);
-      setMoves((currentMoves) => {
-        const exists = currentMoves.some((move) => {
-          return move.id === message.move_record.id;
-        });
-
-        if (exists) {
           return currentMoves;
-        }
+        });
+        setWhitePlayer(message.white_player);
+        setBlackPlayer(message.black_player);
+        setStatus(message.game.status === "finished" ? "finished" : "playing");
+        return;
+      }
 
-        return [...currentMoves, message.move_record];
-      });
-      setSendingMove(false);
-      setStatus(message.game.status === "finished" ? "finished" : "playing");
-      return;
-    }
+      if (message.type === "move_accepted") {
+        setGame(message.game);
+        setMoves((currentMoves) => {
+          const exists = currentMoves.some((move) => {
+            return move.id === message.move_record.id;
+          });
 
-    if (message.type === "error") {
-      setSendingMove(false);
-      toast.error(message.message);
-    }
-  }, []);
+          if (exists) {
+            return currentMoves;
+          }
+
+          return [...currentMoves, message.move_record];
+        });
+        setSendingMove(false);
+        setStatus(message.game.status === "finished" ? "finished" : "playing");
+        return;
+      }
+
+      if (message.type === "player_disconnected") {
+        toast.error(t("online.opponentDisconnected"));
+        setStatus("finished");
+        return;
+      }
+
+      if (message.type === "error") {
+        setSendingMove(false);
+        toast.error(message.message);
+      }
+    },
+    [t],
+  );
 
   const connectRoomSocket = useCallback(
     (roomId: string) => {
@@ -423,23 +458,53 @@ export default function PlayOnline() {
             </span>
           </div>
 
-          <div className="grid gap-2 text-sm font-bold text-[#d9d5ca]">
-            <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
-              <span>{t("common.user")}</span>
-              <strong className="text-[#f3f1e9]">
-                {user?.username} ({user?.rating})
-              </strong>
-            </div>
+          {game && (whitePlayer || blackPlayer) && (
+            <div className="mb-4 grid gap-2 text-sm">
+              <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FaCircle size={10} color="#f3f1e9" aria-hidden="true" />
+                  <span className="font-bold text-[#f3f1e9]">
+                    {whitePlayer?.username ?? "..."}
+                  </span>
+                </div>
+                <span className="text-xs font-extrabold text-[#aaa7a0]">
+                  {whitePlayer?.rating}
+                </span>
+              </div>
 
-            {game && (
+              <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <FaCircle size={10} color="#555" aria-hidden="true" />
+                  <span className="font-bold text-[#f3f1e9]">
+                    {blackPlayer?.username ?? "..."}
+                  </span>
+                </div>
+                <span className="text-xs font-extrabold text-[#aaa7a0]">
+                  {blackPlayer?.rating}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {game && (
+            <div className="mb-4 grid gap-2 text-sm font-bold text-[#d9d5ca]">
               <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
                 <span>{t("common.color")}</span>
                 <strong className="text-[#f3f1e9]">
                   {orientation === "w" ? t("common.white") : t("common.black")}
                 </strong>
               </div>
-            )}
-          </div>
+
+              {openingName && (
+                <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
+                  <span>{t("common.opening")}</span>
+                  <strong className="text-right text-xs text-[#f3f1e9]">
+                    {openingName}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-4 grid grid-cols-2 gap-2">
             {status === "matching" ? (
