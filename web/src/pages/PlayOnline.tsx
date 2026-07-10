@@ -268,6 +268,7 @@ export default function PlayOnline() {
 
       if (message.type === "player_disconnected") {
         toast.error(t("online.opponentDisconnected"));
+        setGame((prev) => (prev ? { ...prev, status: "finished" } : prev));
         setStatus("finished");
         return;
       }
