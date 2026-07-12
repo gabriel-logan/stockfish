@@ -477,19 +477,12 @@ export default function Board({
         return;
       }
 
-      if (piece) {
-        onSelectSquare(square);
-        return;
-      }
+      const selectedPiece = game.get(selectedSquare);
+      const canMoveSelectedPiece =
+        interactive && selectedPiece?.color === game.turn();
 
-      if (!interactive) {
-        return;
-      }
-
-      if (legalTargets.has(square)) {
+      if (canMoveSelectedPiece && legalTargets.has(square)) {
         if (isPromotionMove(game, selectedSquare, square)) {
-          const selectedPiece = game.get(selectedSquare);
-
           if (selectedPiece) {
             setPromotionMove({
               from: selectedSquare,
@@ -503,6 +496,12 @@ export default function Board({
 
         onMove(selectedSquare, square);
         onSelectSquare(null);
+
+        return;
+      }
+
+      if (piece) {
+        onSelectSquare(square);
       }
     },
     [
