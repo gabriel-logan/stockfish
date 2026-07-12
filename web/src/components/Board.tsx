@@ -112,6 +112,31 @@ function isPromotionMove(game: Chess, from: Square, to: Square): boolean {
   });
 }
 
+function getLegalTargets(game: Chess, square: Square): Set<string> {
+  const piece = game.get(square);
+
+  if (!piece) {
+    return new Set();
+  }
+
+  let position = game;
+
+  if (piece.color !== game.turn()) {
+    const fenParts = game.fen().split(" ");
+    fenParts[1] = piece.color;
+    fenParts[3] = "-";
+    position = new Chess(fenParts.join(" "));
+  }
+
+  const moves = position.moves({ square, verbose: true });
+
+  return new Set(
+    moves.map((move) => {
+      return move.to;
+    }),
+  );
+}
+
 function getSquareCenter(square: Square, orientation: "w" | "b") {
   const fileIndex = FILES.indexOf(square[0]);
   const rankIndex = RANKS.indexOf(square[1]);
@@ -302,13 +327,7 @@ export default function Board({
     }
 
     try {
-      const moves = game.moves({ square: selectedSquare, verbose: true });
-
-      return new Set(
-        moves.map((m) => {
-          return m.to;
-        }),
-      );
+      return getLegalTargets(game, selectedSquare);
     } catch {
       return new Set<string>();
     }
@@ -509,10 +528,7 @@ export default function Board({
         return;
       }
 
-      const moves = game.moves({ square: draggedSquare, verbose: true });
-      const isLegalTarget = moves.some((move) => {
-        return move.to === to;
-      });
+      const isLegalTarget = getLegalTargets(game, draggedSquare).has(to);
 
       if (!isLegalTarget) {
         setDraggedSquare(null);
