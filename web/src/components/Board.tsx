@@ -1,4 +1,11 @@
-import { type MouseEvent, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type DragEvent,
+  type MouseEvent,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Chess, type Square } from "chess.js";
 
@@ -208,6 +215,7 @@ export default function Board({
   });
   const [manualArrows, setManualArrows] = useState<BoardArrow[]>([]);
   const [rightDrag, setRightDrag] = useState<BoardArrow | null>(null);
+  const [draggedSquare, setDraggedSquare] = useState<Square | null>(null);
 
   const pieceTypeName = {
     p: "Pawn",
@@ -489,6 +497,44 @@ export default function Board({
     ],
   );
 
+  const handleDrop = useCallback(
+    (to: Square) => {
+      if (!draggedSquare) {
+        return;
+      }
+
+      const moves = game.moves({ square: draggedSquare, verbose: true });
+      const isLegalTarget = moves.some((move) => {
+        return move.to === to;
+      });
+
+      if (!isLegalTarget) {
+        setDraggedSquare(null);
+        onSelectSquare(null);
+
+        return;
+      }
+
+      if (isPromotionMove(game, draggedSquare, to)) {
+        const draggedPiece = game.get(draggedSquare);
+
+        if (draggedPiece) {
+          setPromotionMove({
+            from: draggedSquare,
+            to,
+            color: draggedPiece.color,
+          });
+        }
+      } else {
+        onMove(draggedSquare, to);
+        onSelectSquare(null);
+      }
+
+      setDraggedSquare(null);
+    },
+    [draggedSquare, game, onMove, onSelectSquare],
+  );
+
   function getSquareClass(row: number, col: number, square: Square): string {
     const isLight = (row + col) % 2 === 0;
     const isSelected = square === selectedSquare;
@@ -600,6 +646,15 @@ export default function Board({
                 <div
                   key={square}
                   className={getSquareClass(row, col, square)}
+                  onDragOver={(event) => {
+                    if (draggedSquare) {
+                      event.preventDefault();
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    handleDrop(square);
+                  }}
                   onClick={() => {
                     handleClick(square);
                   }}
@@ -631,7 +686,29 @@ export default function Board({
                         `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
                       )}
                       className="size-[95%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
-                      draggable={false}
+                      draggable={
+                        interactive &&
+                        !promotionMove &&
+                        piece.color === game.turn()
+                      }
+                      onDragStart={(event: DragEvent<HTMLImageElement>) => {
+                        if (
+                          !interactive ||
+                          promotionMove ||
+                          piece.color !== game.turn()
+                        ) {
+                          event.preventDefault();
+
+                          return;
+                        }
+
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggedSquare(square);
+                        onSelectSquare(square);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedSquare(null);
+                      }}
                     />
                   )}
                   {isLegalTarget && (
