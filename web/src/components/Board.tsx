@@ -440,10 +440,6 @@ export default function Board({
         return [];
       });
 
-      if (!interactive) {
-        return;
-      }
-
       if (promotionMove) {
         return;
       }
@@ -451,7 +447,7 @@ export default function Board({
       const piece = game.get(square);
 
       if (!selectedSquare) {
-        if (piece && piece.color === game.turn()) {
+        if (piece) {
           onSelectSquare(square);
         }
         return;
@@ -462,8 +458,12 @@ export default function Board({
         return;
       }
 
-      if (piece && piece.color === game.turn()) {
+      if (piece) {
         onSelectSquare(square);
+        return;
+      }
+
+      if (!interactive) {
         return;
       }
 
@@ -503,6 +503,12 @@ export default function Board({
         return;
       }
 
+      if (!interactive) {
+        setDraggedSquare(null);
+
+        return;
+      }
+
       const moves = game.moves({ square: draggedSquare, verbose: true });
       const isLegalTarget = moves.some((move) => {
         return move.to === to;
@@ -510,7 +516,6 @@ export default function Board({
 
       if (!isLegalTarget) {
         setDraggedSquare(null);
-        onSelectSquare(null);
 
         return;
       }
@@ -532,7 +537,7 @@ export default function Board({
 
       setDraggedSquare(null);
     },
-    [draggedSquare, game, onMove, onSelectSquare],
+    [draggedSquare, game, interactive, onMove, onSelectSquare],
   );
 
   function getSquareClass(row: number, col: number, square: Square): string {
@@ -686,17 +691,9 @@ export default function Board({
                         `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
                       )}
                       className="size-[95%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
-                      draggable={
-                        interactive &&
-                        !promotionMove &&
-                        piece.color === game.turn()
-                      }
+                      draggable={!promotionMove}
                       onDragStart={(event: DragEvent<HTMLImageElement>) => {
-                        if (
-                          !interactive ||
-                          promotionMove ||
-                          piece.color !== game.turn()
-                        ) {
+                        if (promotionMove) {
                           event.preventDefault();
 
                           return;
