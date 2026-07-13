@@ -10,6 +10,17 @@
       "history": "Saved Games - GLFish",
       "login": "Login - GLFish",
       "register": "Register - GLFish"
+    },
+    "pageDescriptions": {
+      "home": "Play Stockfish, analyze PGNs, review move classifications, study openings, practice custom positions, and play chess online.",
+      "play": "Challenge Stockfish at your chosen strength, review every move with engine analysis, and save the games you want to study.",
+      "online": "Play live multiplayer chess online with matchmaking, game rooms, saved games, and PGN export.",
+      "freePlay": "Set up any legal chess position, play either side, explore variations, and save your analysis in free play.",
+      "pgn": "Analyze chess PGNs with Stockfish evaluations, move classifications, principal variations, opening recognition, and board review.",
+      "history": "Review and manage your saved GLFish chess games.",
+      "login": "Sign in to GLFish to play chess online and access your account.",
+      "register": "Create a GLFish account to play live multiplayer chess online.",
+      "notFound": "The requested GLFish page was not found."
     }
   },
   "common": {

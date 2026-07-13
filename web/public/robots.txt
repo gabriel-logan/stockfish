@@ -1,2 +1,7 @@
 User-agent: *
 Allow: /
+
+# Let search engines use rich previews when the deployed site provides them.
+Max-image-preview: large
+Max-snippet: -1
+Max-video-preview: -1
