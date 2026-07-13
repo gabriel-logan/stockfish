@@ -11,6 +11,7 @@ import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 
 import type { PieceSet } from "../store/settingsStore";
 import type { ClassificationValue } from "../types/chess-types";
+import { playClickSound, playIllegalMoveSound } from "../utils/sounds";
 
 interface BoardProps {
   game: Chess;
@@ -23,6 +24,7 @@ interface BoardProps {
   interactive?: boolean;
   squareEvaluations?: Record<string, ClassificationValue>;
   showEvaluationIcons?: boolean;
+  soundEnabled?: boolean;
   pieceSet?: PieceSet;
   editMode?: boolean;
   editPiece?: { type: PieceSymbol; color: Color } | "remove" | null;
@@ -230,6 +232,7 @@ export default function Board({
   interactive = true,
   squareEvaluations = {},
   showEvaluationIcons = false,
+  soundEnabled = false,
   pieceSet = "maestro",
   editMode = false,
   editPiece = null,
@@ -503,12 +506,20 @@ export default function Board({
 
       if (!selectedSquare) {
         if (piece) {
+          if (soundEnabled) {
+            playClickSound();
+          }
+
           onSelectSquare(square);
         }
         return;
       }
 
       if (square === selectedSquare) {
+        if (soundEnabled) {
+          playClickSound();
+        }
+
         onSelectSquare(null);
         return;
       }
@@ -537,7 +548,19 @@ export default function Board({
       }
 
       if (piece) {
+        if (soundEnabled) {
+          playClickSound();
+        }
+
         onSelectSquare(square);
+
+        return;
+      }
+
+      if (canMoveSelectedPiece) {
+        if (soundEnabled) {
+          playIllegalMoveSound();
+        }
       }
     },
     [
@@ -552,6 +575,7 @@ export default function Board({
       editPiece,
       onEditMove,
       onEditSquare,
+      soundEnabled,
     ],
   );
 
@@ -578,6 +602,10 @@ export default function Board({
       const isLegalTarget = getLegalTargets(game, draggedSquare).has(to);
 
       if (!isLegalTarget) {
+        if (soundEnabled) {
+          playIllegalMoveSound();
+        }
+
         setDraggedSquare(null);
 
         return;
@@ -608,6 +636,7 @@ export default function Board({
       onEditMove,
       onMove,
       onSelectSquare,
+      soundEnabled,
     ],
   );
 

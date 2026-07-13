@@ -35,11 +35,7 @@ import { classifyMove } from "../utils/classification";
 import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
-import {
-  playCaptureSound,
-  playGameOverSound,
-  playMoveSound,
-} from "../utils/sounds";
+import { playErrorSound, playMoveResultSound } from "../utils/sounds";
 import Board from "./Board";
 import EvaluationBar from "./EvaluationBar";
 import type { MoveEntry } from "./MoveList";
@@ -376,7 +372,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         setIsGameOver(true);
 
         if (soundEnabledRef.current) {
-          playGameOverSound();
+          playErrorSound();
         }
 
         return;
@@ -458,13 +454,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
           void classifyLastMove(moveIndex, fenBefore, version);
 
           if (soundEnabledRef.current) {
-            if (gameOver) {
-              playGameOverSound();
-            } else if (move.captured) {
-              playCaptureSound();
-            } else {
-              playMoveSound();
-            }
+            playMoveResultSound(move, gameRef.current);
           }
         } catch {
           // Invalid move from engine
@@ -584,19 +574,11 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         void classifyLastMove(moveIndex, fenBefore, version);
 
         if (soundEnabledRef.current) {
-          if (move.captured) {
-            playCaptureSound();
-          } else {
-            playMoveSound();
-          }
+          playMoveResultSound(move, gameRef.current);
         }
 
         if (gameRef.current.isGameOver()) {
           setIsGameOver(true);
-
-          if (soundEnabledRef.current) {
-            playGameOverSound();
-          }
 
           return;
         }
@@ -1166,6 +1148,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
               interactive={editMode || (!isThinking && !isGameOver)}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation && !editMode}
+              soundEnabled={soundEnabled}
               pieceSet={pieceSet}
               editMode={editMode}
               editPiece={editPiece}

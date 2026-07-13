@@ -7,6 +7,7 @@ import {
   FaFastForward,
   FaStepBackward,
   FaStepForward,
+  FaVolumeOff,
   FaVolumeUp,
 } from "react-icons/fa";
 import { useLocation } from "react-router";
@@ -26,11 +27,7 @@ import type { ClassificationValue } from "../types/chess-types";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
-import {
-  playCaptureSound,
-  playGameOverSound,
-  playMoveSound,
-} from "../utils/sounds";
+import { playMoveResultSound } from "../utils/sounds";
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
@@ -154,6 +151,7 @@ export default function PgnViewer() {
     soundEnabled,
     pieceSet,
     setPieceSet,
+    setSoundEnabled,
   } = useSettingsStore();
 
   const mainLineMoves: MoveEntry[] = positions
@@ -518,13 +516,7 @@ export default function PgnViewer() {
         setPracticeCursor(practiceCursor + 1);
 
         if (soundEnabled) {
-          if (boardGame.isGameOver()) {
-            playGameOverSound();
-          } else if (move.captured) {
-            playCaptureSound();
-          } else {
-            playMoveSound();
-          }
+          playMoveResultSound(move, boardGame);
         }
 
         const engine = new AnalysisEngine();
@@ -724,6 +716,7 @@ export default function PgnViewer() {
               interactive={!isAnalyzing}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
+              soundEnabled={soundEnabled}
               pieceSet={pieceSet}
             />
           </div>
@@ -810,8 +803,15 @@ export default function PgnViewer() {
             type="button"
             className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
             title={t("pgnViewer.sound")}
+            onClick={() => {
+              setSoundEnabled(!soundEnabled);
+            }}
           >
-            <FaVolumeUp aria-hidden="true" />
+            {soundEnabled ? (
+              <FaVolumeUp aria-hidden="true" />
+            ) : (
+              <FaVolumeOff aria-hidden="true" />
+            )}
           </button>
         </div>
 

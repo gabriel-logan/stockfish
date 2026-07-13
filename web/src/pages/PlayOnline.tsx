@@ -37,6 +37,11 @@ import type {
 } from "../types/api";
 import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
+import {
+  playErrorSound,
+  playMoveRecordSound,
+  playNotificationSound,
+} from "../utils/sounds";
 
 type OnlineStatus = "idle" | "matching" | "playing" | "finished";
 type PromotionPiece = "q" | "r" | "b" | "n";
@@ -132,6 +137,7 @@ export default function PlayOnline() {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const pieceSet = useSettingsStore((s) => s.pieceSet);
+  const soundEnabled = useSettingsStore((s) => s.soundEnabled);
   const saveGameToStore = useUserStore((s) => s.saveGame);
   const socketRef = useRef<WebSocket | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -224,6 +230,10 @@ export default function PlayOnline() {
       const message = JSON.parse(event.data) as ServerMessage;
 
       if (message.type === "game_started") {
+        if (soundEnabled) {
+          playNotificationSound();
+        }
+
         setGame(message.game);
         setStatus("playing");
         setSavedGameId(null);
@@ -249,6 +259,13 @@ export default function PlayOnline() {
       }
 
       if (message.type === "move_accepted") {
+        if (soundEnabled) {
+          playMoveRecordSound(
+            message.move_record.san,
+            message.game.status === "finished",
+          );
+        }
+
         setGame(message.game);
         setMoves((currentMoves) => {
           const exists = currentMoves.some((move) => {
@@ -274,11 +291,15 @@ export default function PlayOnline() {
       }
 
       if (message.type === "error") {
+        if (soundEnabled) {
+          playErrorSound();
+        }
+
         setSendingMove(false);
         toast.error(message.message);
       }
     },
-    [t],
+    [soundEnabled, t],
   );
 
   const connectRoomSocket = useCallback(
@@ -552,6 +573,7 @@ export default function PlayOnline() {
           lastMove={getLastMove(moves)}
           orientation={orientation}
           interactive={isPlayerTurn && !sendingMove}
+          soundEnabled={soundEnabled}
           pieceSet={pieceSet}
         />
       </section>
