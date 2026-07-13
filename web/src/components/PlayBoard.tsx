@@ -1482,8 +1482,18 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
                   </select>
                 </label>
               </div>
+            </>
+          )}
 
-              <div className="mt-3 flex flex-col gap-2">
+          {(freePlay || (!gameStarted && moves.length === 0)) && (
+            <>
+              {freePlay && (
+                <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
+                  {t("common.appearance")}
+                </h2>
+              )}
+
+              <div className={`${freePlay ? "" : "mt-3"} flex flex-col gap-2`}>
                 <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-[#d3d0c8]">
                   <span>{t("common.evaluationBar")}</span>
                   <input
