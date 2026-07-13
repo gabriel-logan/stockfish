@@ -10,6 +10,17 @@
       "history": "Partidas Salvas - GLFish",
       "login": "Login - GLFish",
       "register": "Cadastro - GLFish"
+    },
+    "pageDescriptions": {
+      "home": "Jogue Stockfish, analise PGNs, revise classificações de lances, estude aberturas, pratique posições personalizadas e jogue xadrez online.",
+      "play": "Desafie o Stockfish na força escolhida, revise cada lance com análise do motor e salve as partidas que quiser estudar.",
+      "online": "Jogue xadrez multiplayer online ao vivo com matchmaking, salas de jogo, partidas salvas e exportação de PGN.",
+      "freePlay": "Monte qualquer posição legal de xadrez, jogue ambos os lados, explore variações e salve sua análise no jogo livre.",
+      "pgn": "Analise PGNs de xadrez com avaliações do Stockfish, classificações de lances, variações principais, reconhecimento de aberturas e revisão do tabuleiro.",
+      "history": "Revise e gerencie suas partidas salvas no GLFish.",
+      "login": "Faça login no GLFish para jogar xadrez online e acessar sua conta.",
+      "register": "Crie uma conta no GLFish para jogar xadrez multiplayer online.",
+      "notFound": "A página solicitada do GLFish não foi encontrada."
     }
   },
   "common": {
@@ -154,7 +165,17 @@
     "whiteToMove": "Brancas a jogar",
     "blackToMove": "Pretas a jogar",
     "selfPlayStatus": "Crie sua própria linha, revise e salve.",
-    "selfOpponent": "Jogo livre"
+    "selfOpponent": "Jogo livre",
+    "editMode": "Editar posição",
+    "finishEditing": "Finalizar edição",
+    "editingPosition": "Editando posição",
+    "editingHelp": "Escolha uma peça e clique nos quadrados para adicionar cópias. Selecione a borracha para remover peças, ou arraste peças livremente.",
+    "removePiece": "Remover",
+    "turn": "Turno",
+    "clearBoard": "Limpar tabuleiro",
+    "standardBoard": "Tabuleiro padrão",
+    "invalidEditPosition": "Adicione exatamente um rei de cada cor e torne a posição legal antes de finalizar.",
+    "onlyOneKing": "Apenas um rei de cada cor pode ser colocado."
   },
   "pgnViewer": {
     "gameReview": "Revisão da Partida",
