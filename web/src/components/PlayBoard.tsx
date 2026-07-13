@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FaClipboard,
+  FaEdit,
+  FaEraser,
   FaFlag,
   FaRedo,
   FaRobot,
@@ -13,7 +15,13 @@ import {
   FaVolumeUp,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
-import { Chess, type Square } from "chess.js";
+import {
+  Chess,
+  type Color,
+  type PieceSymbol,
+  type Square,
+  validateFen,
+} from "chess.js";
 
 import {
   PIECE_SETS,
@@ -39,6 +47,15 @@ import MoveList from "./MoveList";
 
 const BOT_MOVE_DELAY_MS = 1200;
 const CAPTURED_PIECE_ORDER = ["q", "r", "b", "n", "p"] as const;
+const EDIT_PIECES: PieceSymbol[] = ["k", "q", "r", "b", "n", "p"];
+const PIECE_TYPE_NAMES = {
+  p: "Pawn",
+  n: "Knight",
+  b: "Bishop",
+  r: "Rook",
+  q: "Queen",
+  k: "King",
+} as const;
 const PIECE_VALUES = {
   p: 1,
   n: 3,
@@ -65,6 +82,7 @@ const CAPTURED_PIECE_ALT_KEYS = {
 
 type CapturedPiece = (typeof CAPTURED_PIECE_ORDER)[number];
 type PromotionPiece = "q" | "r" | "b" | "n";
+type EditPiece = { type: PieceSymbol; color: Color } | "remove" | null;
 
 interface PlayBoardProps {
   freePlay?: boolean;
@@ -154,6 +172,8 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const [boardFlipped, setBoardFlipped] = useState(false);
   const [gameStarted, setGameStarted] = useState(freePlay);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editPiece, setEditPiece] = useState<EditPiece>(null);
 
   const activeUserId = useUserStore((s) => s.activeUserId);
   const users = useUserStore((s) => s.users);
@@ -881,6 +901,142 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     }
   }, []);
 
+  const preparePositionEditing = useCallback(() => {
+    analysisVersionRef.current += 1;
+    clearPendingBotMove();
+    isEngineRunning.current = false;
+    evalQueueRef.current = Promise.resolve();
+
+    playEngineRef.current?.stopAnalysis();
+    evalEngineRef.current?.stopAnalysis();
+
+    const editableGame = new Chess(gameRef.current.fen(), {
+      skipValidation: true,
+    });
+
+    gameRef.current = editableGame;
+    setGame(editableGame);
+    syncMoves([]);
+    setSelectedSquare(null);
+    setLastMove(null);
+    setEvaluation(null);
+    setMate(null);
+    setIsGameOver(false);
+    setIsThinking(false);
+    setSavedGameId(null);
+  }, [clearPendingBotMove, syncMoves]);
+
+  const toggleEditMode = useCallback(() => {
+    if (!editMode) {
+      preparePositionEditing();
+      setEditPiece(null);
+      setEditMode(true);
+
+      return;
+    }
+
+    const validation = validateFen(gameRef.current.fen());
+
+    if (!validation.ok) {
+      toast.error(t("freePlay.invalidEditPosition"));
+
+      return;
+    }
+
+    setEditPiece(null);
+    setSelectedSquare(null);
+    setEditMode(false);
+    setIsGameOver(gameRef.current.isGameOver());
+
+    const evalEngine = evalEngineRef.current;
+
+    if (evalEngine?.connected) {
+      evalEngine.setFullStrength();
+      evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
+    }
+  }, [editMode, preparePositionEditing, t]);
+
+  const updateEditedGame = useCallback((editedGame: Chess) => {
+    gameRef.current = editedGame;
+    setGame(editedGame);
+    setSelectedSquare(null);
+    setLastMove(null);
+    setSavedGameId(null);
+  }, []);
+
+  const editSquare = useCallback(
+    (square: Square) => {
+      const editedGame = new Chess(gameRef.current.fen(), {
+        skipValidation: true,
+      });
+
+      editedGame.remove(square);
+
+      if (editPiece && editPiece !== "remove") {
+        const wasPlaced = editedGame.put(editPiece, square);
+
+        if (!wasPlaced) {
+          toast.error(t("freePlay.onlyOneKing"));
+
+          return;
+        }
+      }
+
+      updateEditedGame(editedGame);
+    },
+    [editPiece, t, updateEditedGame],
+  );
+
+  const moveEditedPiece = useCallback(
+    (from: Square, to: Square) => {
+      const editedGame = new Chess(gameRef.current.fen(), {
+        skipValidation: true,
+      });
+      const piece = editedGame.get(from);
+
+      if (!piece) {
+        return;
+      }
+
+      editedGame.remove(from);
+      editedGame.remove(to);
+      editedGame.put(piece, to);
+
+      updateEditedGame(editedGame);
+    },
+    [updateEditedGame],
+  );
+
+  const clearEditedBoard = useCallback(() => {
+    const editedGame = new Chess();
+
+    editedGame.clear();
+    editedGame.setTurn(gameRef.current.turn());
+
+    updateEditedGame(editedGame);
+  }, [updateEditedGame]);
+
+  const resetEditedBoard = useCallback(() => {
+    updateEditedGame(new Chess());
+  }, [updateEditedGame]);
+
+  const setEditedTurn = useCallback(
+    (color: Color) => {
+      const fenParts = gameRef.current.fen().split(" ");
+      fenParts[1] = color;
+      fenParts[3] = "-";
+      fenParts[4] = "0";
+      fenParts[5] = "1";
+
+      updateEditedGame(
+        new Chess(fenParts.join(" "), {
+          skipValidation: true,
+        }),
+      );
+    },
+    [updateEditedGame],
+  );
+
   const newGame = useCallback(() => {
     analysisVersionRef.current += 1;
     clearPendingBotMove();
@@ -915,6 +1071,8 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     setIsThinking(false);
     setError(null);
     setSavedGameId(null);
+    setEditMode(false);
+    setEditPiece(null);
 
     if (evalEngine?.connected) {
       evalEngine.setFullStrength();
@@ -994,7 +1152,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
         <div className="flex w-full min-w-0 justify-center">
           <div className="flex min-w-0 items-stretch justify-center gap-2 max-[44rem]:gap-1">
-            {showEvaluationBar && (
+            {showEvaluationBar && !editMode && (
               <EvaluationBar evaluation={evaluation} mate={mate} />
             )}
 
@@ -1005,10 +1163,14 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
               onSelectSquare={setSelectedSquare}
               lastMove={lastMove}
               orientation={effectiveOrientation}
-              interactive={!isThinking && !isGameOver}
+              interactive={editMode || (!isThinking && !isGameOver)}
               squareEvaluations={squareEvaluations}
-              showEvaluationIcons={showMoveEvaluation}
+              showEvaluationIcons={showMoveEvaluation && !editMode}
               pieceSet={pieceSet}
+              editMode={editMode}
+              editPiece={editPiece}
+              onEditMove={moveEditedPiece}
+              onEditSquare={editSquare}
             />
           </div>
         </div>
@@ -1041,24 +1203,45 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
           <span>
             {freePlay ? t("freePlay.title") : t("playComputer.gameConsole")}
           </span>
-          <button
-            type="button"
-            className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
-            title={
-              soundEnabled
-                ? t("playComputer.muteSounds")
-                : t("playComputer.enableSounds")
-            }
-            onClick={() => {
-              setSoundEnabled(!soundEnabled);
-            }}
-          >
-            {soundEnabled ? (
-              <FaVolumeUp aria-hidden="true" />
-            ) : (
-              <FaVolumeOff aria-hidden="true" />
+          <div className="flex items-center gap-1">
+            {freePlay && (
+              <button
+                type="button"
+                className={`grid size-9 place-items-center rounded transition-colors hover:text-white ${
+                  editMode
+                    ? "bg-[#6f9349] text-white"
+                    : "bg-transparent text-[#aaa7a0] hover:bg-white/7"
+                }`}
+                title={
+                  editMode
+                    ? t("freePlay.finishEditing")
+                    : t("freePlay.editMode")
+                }
+                onClick={toggleEditMode}
+              >
+                <FaEdit aria-hidden="true" />
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              className="grid size-9 place-items-center rounded bg-transparent text-[#aaa7a0] transition-colors hover:bg-white/7 hover:text-white"
+              title={
+                soundEnabled
+                  ? t("playComputer.muteSounds")
+                  : t("playComputer.enableSounds")
+              }
+              onClick={() => {
+                setSoundEnabled(!soundEnabled);
+              }}
+            >
+              {soundEnabled ? (
+                <FaVolumeUp aria-hidden="true" />
+              ) : (
+                <FaVolumeOff aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
         {!gameStarted && moves.length === 0 ? (
@@ -1095,17 +1278,139 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
             <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-[#c9d0bd]">
               <strong className="text-base text-[#f4f3ea]">
                 {freePlay
-                  ? game.turn() === "w"
-                    ? t("freePlay.whiteToMove")
-                    : t("freePlay.blackToMove")
+                  ? editMode
+                    ? t("freePlay.editingPosition")
+                    : game.turn() === "w"
+                      ? t("freePlay.whiteToMove")
+                      : t("freePlay.blackToMove")
                   : t("playComputer.readyForMove")}
               </strong>
               <span>
                 {freePlay
-                  ? t("freePlay.selfPlayStatus")
+                  ? editMode
+                    ? t("freePlay.editingHelp")
+                    : t("freePlay.selfPlayStatus")
                   : t("playComputer.stockfishWillRespond")}
               </span>
             </div>
+          </div>
+        )}
+
+        {freePlay && (
+          <div className="border-b border-white/6 p-4">
+            <button
+              type="button"
+              className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-extrabold transition ${
+                editMode
+                  ? "border-[#a9cd792e] bg-[#6f9349] text-white hover:bg-[#7da453]"
+                  : "border-white/8 bg-[#373530] text-[#ebe8df] hover:bg-[#44413b]"
+              }`}
+              onClick={toggleEditMode}
+            >
+              <FaEdit aria-hidden="true" />
+              {editMode ? t("freePlay.finishEditing") : t("freePlay.editMode")}
+            </button>
+
+            {editMode && (
+              <div className="mt-4 flex flex-col gap-4">
+                <p className="m-0 text-xs leading-relaxed text-[#aaa7a0]">
+                  {t("freePlay.editingHelp")}
+                </p>
+
+                {(["w", "b"] as const).map((color) => {
+                  return (
+                    <div key={color} className="grid grid-cols-6 gap-1.5">
+                      {EDIT_PIECES.map((piece) => {
+                        const selected =
+                          editPiece !== null &&
+                          editPiece !== "remove" &&
+                          editPiece.color === color &&
+                          editPiece.type === piece;
+                        const label = t(
+                          `board.${color === "w" ? "white" : "black"}${PIECE_TYPE_NAMES[piece]}`,
+                        );
+
+                        return (
+                          <button
+                            key={`${color}-${piece}`}
+                            type="button"
+                            className={`grid aspect-square place-items-center rounded border transition ${
+                              selected
+                                ? "border-[#bddd8d] bg-[#54743b]"
+                                : "border-white/8 bg-[#302e2a] hover:bg-[#403d36]"
+                            }`}
+                            title={label}
+                            onClick={() => {
+                              setSelectedSquare(null);
+                              setEditPiece(
+                                selected ? null : { color, type: piece },
+                              );
+                            }}
+                          >
+                            <img
+                              src={`/pieces/${pieceSet}/${color}${piece.toUpperCase()}.svg`}
+                              alt={label}
+                              className="size-[86%] object-contain"
+                              draggable={false}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className={`inline-flex min-h-10 items-center justify-center gap-2 rounded border px-3 text-xs font-extrabold transition ${
+                      editPiece === "remove"
+                        ? "border-red-200/25 bg-[#7c3d37] text-white"
+                        : "border-white/8 bg-[#373530] text-[#ebe8df] hover:bg-[#44413b]"
+                    }`}
+                    onClick={() => {
+                      setSelectedSquare(null);
+                      setEditPiece(editPiece === "remove" ? null : "remove");
+                    }}
+                  >
+                    <FaEraser aria-hidden="true" />
+                    {t("freePlay.removePiece")}
+                  </button>
+
+                  <label className="flex min-h-10 items-center gap-2 rounded border border-white/8 bg-[#373530] px-3 text-xs font-bold text-[#aaa7a0]">
+                    <span>{t("freePlay.turn")}</span>
+                    <select
+                      className="min-w-0 flex-1 bg-transparent text-[#ebe8df] outline-none"
+                      value={game.turn()}
+                      onChange={(event) => {
+                        setEditedTurn(event.target.value as Color);
+                      }}
+                    >
+                      <option value="w">{t("common.white")}</option>
+                      <option value="b">{t("common.black")}</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="min-h-10 rounded border border-red-200/15 bg-[#54332f] px-3 text-xs font-extrabold text-[#ffd8d4] transition hover:bg-[#653a35]"
+                    onClick={clearEditedBoard}
+                  >
+                    {t("freePlay.clearBoard")}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="min-h-10 rounded border border-white/8 bg-[#373530] px-3 text-xs font-extrabold text-[#ebe8df] transition hover:bg-[#44413b]"
+                    onClick={resetEditedBoard}
+                  >
+                    {t("freePlay.standardBoard")}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

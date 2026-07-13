@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Chess, type Square } from "chess.js";
+import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 
 import type { PieceSet } from "../store/settingsStore";
 import type { ClassificationValue } from "../types/chess-types";
@@ -24,6 +24,10 @@ interface BoardProps {
   squareEvaluations?: Record<string, ClassificationValue>;
   showEvaluationIcons?: boolean;
   pieceSet?: PieceSet;
+  editMode?: boolean;
+  editPiece?: { type: PieceSymbol; color: Color } | "remove" | null;
+  onEditMove?: (from: Square, to: Square) => void;
+  onEditSquare?: (square: Square) => void;
 }
 
 type PromotionPiece = "q" | "r" | "b" | "n";
@@ -227,6 +231,10 @@ export default function Board({
   squareEvaluations = {},
   showEvaluationIcons = false,
   pieceSet = "maestro",
+  editMode = false,
+  editPiece = null,
+  onEditMove = () => {},
+  onEditSquare = () => {},
 }: BoardProps) {
   const { t } = useTranslation();
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -322,7 +330,7 @@ export default function Board({
   }, [manualArrows, orientation, rightDrag, suggestedMove]);
 
   const legalTargets = useMemo(() => {
-    if (!selectedSquare) {
+    if (editMode || !selectedSquare) {
       return new Set<string>();
     }
 
@@ -331,7 +339,7 @@ export default function Board({
     } catch {
       return new Set<string>();
     }
-  }, [game, selectedSquare]);
+  }, [editMode, game, selectedSquare]);
 
   const preventRightClick = useCallback((event: MouseEvent) => {
     event.preventDefault();
@@ -465,6 +473,34 @@ export default function Board({
 
       const piece = game.get(square);
 
+      if (editMode) {
+        if (editPiece) {
+          onEditSquare(square);
+          onSelectSquare(null);
+
+          return;
+        }
+
+        if (!selectedSquare) {
+          if (piece) {
+            onSelectSquare(square);
+          }
+
+          return;
+        }
+
+        if (square === selectedSquare) {
+          onSelectSquare(null);
+
+          return;
+        }
+
+        onEditMove(selectedSquare, square);
+        onSelectSquare(null);
+
+        return;
+      }
+
       if (!selectedSquare) {
         if (piece) {
           onSelectSquare(square);
@@ -512,6 +548,10 @@ export default function Board({
       legalTargets,
       interactive,
       promotionMove,
+      editMode,
+      editPiece,
+      onEditMove,
+      onEditSquare,
     ],
   );
 
@@ -522,6 +562,14 @@ export default function Board({
       }
 
       if (!interactive) {
+        setDraggedSquare(null);
+
+        return;
+      }
+
+      if (editMode) {
+        onEditMove(draggedSquare, to);
+        onSelectSquare(null);
         setDraggedSquare(null);
 
         return;
@@ -552,7 +600,15 @@ export default function Board({
 
       setDraggedSquare(null);
     },
-    [draggedSquare, game, interactive, onMove, onSelectSquare],
+    [
+      draggedSquare,
+      editMode,
+      game,
+      interactive,
+      onEditMove,
+      onMove,
+      onSelectSquare,
+    ],
   );
 
   function getSquareClass(row: number, col: number, square: Square): string {

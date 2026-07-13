@@ -153,7 +153,17 @@
     "whiteToMove": "White to move",
     "blackToMove": "Black to move",
     "selfPlayStatus": "Create your own line, review it, and save it.",
-    "selfOpponent": "Free play"
+    "selfOpponent": "Free play",
+    "editMode": "Edit position",
+    "finishEditing": "Finish editing",
+    "editingPosition": "Editing position",
+    "editingHelp": "Choose a piece and click squares to add copies. Select the eraser to remove pieces, or drag pieces freely.",
+    "removePiece": "Remove",
+    "turn": "Turn",
+    "clearBoard": "Clear board",
+    "standardBoard": "Standard board",
+    "invalidEditPosition": "Add exactly one king of each color and make the position legal before finishing.",
+    "onlyOneKing": "Only one king of each color can be placed."
   },
   "pgnViewer": {
     "gameReview": "Game Review",
