@@ -5,6 +5,7 @@ import {
   FaClipboard,
   FaFastBackward,
   FaFastForward,
+  FaRedo,
   FaStepBackward,
   FaStepForward,
   FaVolumeOff,
@@ -141,6 +142,7 @@ export default function PgnViewer() {
     null,
   );
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [boardFlipped, setBoardFlipped] = useState(false);
   const [practiceMoves, setPracticeMoves] = useState<MoveEntry[]>([]);
   const [practiceCursor, setPracticeCursor] = useState(0);
 
@@ -196,6 +198,7 @@ export default function PgnViewer() {
       : positions.length > 0
         ? `${currentIdx}/${positions.length - 1}`
         : t("pgnViewer.ready");
+  const boardOrientation = boardFlipped ? "b" : "w";
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, ClassificationValue> = {};
@@ -713,6 +716,7 @@ export default function PgnViewer() {
               onSelectSquare={setSelectedSquare}
               lastMove={lastMove}
               suggestedMove={suggestedMove}
+              orientation={boardOrientation}
               interactive={!isAnalyzing}
               squareEvaluations={squareEvaluations}
               showEvaluationIcons={showMoveEvaluation}
@@ -763,6 +767,19 @@ export default function PgnViewer() {
             title={t("pgnViewer.nextMove")}
           >
             <FaStepForward aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={() => {
+              setBoardFlipped((current) => {
+                return !current;
+              });
+            }}
+            title={t("playComputer.flipBoard")}
+          >
+            <FaRedo aria-hidden="true" />
           </button>
 
           <button
