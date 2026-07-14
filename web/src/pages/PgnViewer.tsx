@@ -634,7 +634,7 @@ export default function PgnViewer() {
 
       for (let i = 0; i < posData.length; i++) {
         try {
-          const result = await engine.analyzePosition(posData[i].fen, 14, 3);
+          const result = await engine.analyzePosition(posData[i].fen, 10, 1);
 
           posData[i].evaluation = result.score;
           posData[i].mate = result.mate;
