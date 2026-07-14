@@ -49,4 +49,8 @@ describe("classifyMove", () => {
       MoveClassification.Blunder,
     );
   });
+
+  it("does not call a move a blunder when the position remains decisive", () => {
+    expect(classifyMove(8, 5, "w")).toBe(MoveClassification.Inaccuracy);
+  });
 });
