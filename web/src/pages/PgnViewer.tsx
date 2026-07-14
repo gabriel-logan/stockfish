@@ -301,6 +301,27 @@ function PgnPlayerCard({
   );
 }
 
+function shouldDeepenAnalysis(
+  evaluationBefore: number | null,
+  evaluationAfter: number | null,
+  mateBefore: number | null,
+  mateAfter: number | null,
+  color: "w" | "b",
+) {
+  if (mateBefore !== mateAfter && (mateBefore !== null || mateAfter !== null)) {
+    return true;
+  }
+
+  if (evaluationBefore === null || evaluationAfter === null) {
+    return false;
+  }
+
+  const colorMultiplier = color === "w" ? 1 : -1;
+  const scoreLoss = (evaluationBefore - evaluationAfter) * colorMultiplier;
+
+  return scoreLoss >= 0.5;
+}
+
 export default function PgnViewer() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -634,7 +655,38 @@ export default function PgnViewer() {
 
       for (let i = 0; i < posData.length; i++) {
         try {
-          const result = await engine.analyzePosition(posData[i].fen, 10, 1);
+          let result = await engine.analyzePosition(posData[i].fen, 10, 1);
+          let evaluationBefore = posData[i - 1]?.evaluation ?? null;
+          let mateBefore = posData[i - 1]?.mate ?? null;
+          let linesBefore = posData[i - 1]?.lines;
+          let bestMoveBefore = posData[i - 1]?.bestmove;
+          let deepened = false;
+          const color = posData[i].color;
+
+          if (
+            i > 0 &&
+            color &&
+            shouldDeepenAnalysis(
+              evaluationBefore,
+              result.score,
+              mateBefore,
+              result.mate,
+              color,
+            )
+          ) {
+            const before = await engine.analyzePosition(
+              posData[i - 1].fen,
+              14,
+              3,
+            );
+
+            result = await engine.analyzePosition(posData[i].fen, 14, 1);
+            evaluationBefore = before.score;
+            mateBefore = before.mate;
+            linesBefore = before.lines;
+            bestMoveBefore = before.bestmove;
+            deepened = true;
+          }
 
           posData[i].evaluation = result.score;
           posData[i].mate = result.mate;
@@ -642,21 +694,19 @@ export default function PgnViewer() {
           posData[i].lineCount = result.lines.length;
           posData[i].lines = result.lines;
 
-          const color = posData[i].color;
-
           if (i > 0 && color) {
-            const alternativeLine = posData[i - 1].lines?.find((line) => {
+            const alternativeLine = linesBefore?.find((line) => {
               return line.pv[0] !== posData[i].uci;
             });
 
             posData[i].classification = classifyMove(
-              posData[i - 1].evaluation,
+              evaluationBefore,
               result.score,
               color,
-              posData[i - 1].mate,
+              mateBefore,
               result.mate,
-              posData[i - 1].bestmove === posData[i].uci,
-              posData[i - 1].lineCount === 1,
+              bestMoveBefore === posData[i].uci,
+              deepened && linesBefore?.length === 1,
               getOpeningName(posData[i].fen) !== null,
               {
                 fenBefore: posData[i - 1].fen,
