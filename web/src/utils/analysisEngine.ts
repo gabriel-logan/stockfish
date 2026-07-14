@@ -138,7 +138,11 @@ export class AnalysisEngine {
     multiPv: number = 1,
     timeoutMs: number = 30000,
   ): Promise<
-    AnalysisData & { bestmove: string | null; lines: AnalysisLine[] }
+    AnalysisData & {
+      bestmove: string | null;
+      lines: AnalysisLine[];
+      completed: boolean;
+    }
   > {
     return new Promise((resolve) => {
       let lastScore: number | null = null;
@@ -159,6 +163,7 @@ export class AnalysisEngine {
           pv: [],
           bestmove: null,
           lines: this.getSortedLines(lines),
+          completed: false,
         });
       }, timeoutMs);
 
@@ -201,6 +206,7 @@ export class AnalysisEngine {
           pv: [],
           bestmove: data.bestmove,
           lines: this.getSortedLines(lines),
+          completed: true,
         });
       };
 

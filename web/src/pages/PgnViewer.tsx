@@ -226,6 +226,7 @@ interface PositionData {
   bestmove?: string | null;
   lineCount?: number;
   lines?: AnalysisLine[];
+  analysisComplete?: boolean;
   classification?: ClassificationValue;
 }
 
@@ -660,6 +661,8 @@ export default function PgnViewer() {
           let mateBefore = posData[i - 1]?.mate ?? null;
           let linesBefore = posData[i - 1]?.lines;
           let bestMoveBefore = posData[i - 1]?.bestmove;
+          let analysisCompleteBefore =
+            posData[i - 1]?.analysisComplete ?? false;
           let deepened = false;
           const color = posData[i].color;
 
@@ -685,6 +688,7 @@ export default function PgnViewer() {
             mateBefore = before.mate;
             linesBefore = before.lines;
             bestMoveBefore = before.bestmove;
+            analysisCompleteBefore = before.completed;
             deepened = true;
           }
 
@@ -693,8 +697,9 @@ export default function PgnViewer() {
           posData[i].bestmove = result.bestmove;
           posData[i].lineCount = result.lines.length;
           posData[i].lines = result.lines;
+          posData[i].analysisComplete = result.completed;
 
-          if (i > 0 && color) {
+          if (i > 0 && color && analysisCompleteBefore && result.completed) {
             const alternativeLine = linesBefore?.find((line) => {
               return line.pv[0] !== posData[i].uci;
             });
