@@ -36,6 +36,15 @@ type ExternalGame = {
   label: string;
   pgn: string;
 };
+type PgnMoveInfo = {
+  comment?: string;
+  clock?: string;
+  elapsed?: string;
+};
+type PgnGameInfo = {
+  headers: Record<string, string>;
+  moveInfo: PgnMoveInfo[];
+};
 
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
@@ -122,6 +131,188 @@ function getPgnHeader(pgn: string, header: string) {
   return match?.[1] ?? "";
 }
 
+function getKnownHeaderLabel(header: string) {
+  const labels: Record<string, string> = {
+    Event: "Event",
+    Site: "Site",
+    Date: "Date",
+    Round: "Round",
+    White: "White",
+    Black: "Black",
+    Result: "Result",
+    CurrentPosition: "Current position",
+    WhiteElo: "White Elo",
+    BlackElo: "Black Elo",
+    WhiteTitle: "White title",
+    BlackTitle: "Black title",
+    TimeControl: "Time control",
+    Termination: "Termination",
+    ECO: "ECO",
+    ECOUrl: "ECO URL",
+    Opening: "Opening",
+    Variant: "Variant",
+    UTCDate: "UTC date",
+    UTCTime: "UTC time",
+    Timezone: "Timezone",
+    StartTime: "Start time",
+    EndDate: "End date",
+    EndTime: "End time",
+    Link: "Link",
+  };
+
+  return labels[header] ?? header;
+}
+
+function getResultLabel(result: string) {
+  if (result === "1-0") {
+    return "White won";
+  }
+
+  if (result === "0-1") {
+    return "Black won";
+  }
+
+  if (result === "1/2-1/2") {
+    return "Draw";
+  }
+
+  return result || "-";
+}
+
+function getLatestClock(moves: MoveEntry[], color: "w" | "b") {
+  for (let index = moves.length - 1; index >= 0; index--) {
+    const move = moves[index];
+
+    if (move.color === color && move.clock) {
+      return move.clock;
+    }
+  }
+
+  return null;
+}
+
+function formatTimeControl(timeControl: string) {
+  if (!timeControl || timeControl === "-") {
+    return "-";
+  }
+
+  const [baseSeconds, incrementSeconds] = timeControl.split("+");
+  const base = Number(baseSeconds);
+
+  if (!Number.isFinite(base)) {
+    return timeControl;
+  }
+
+  const minutes = Math.floor(base / 60);
+  const seconds = base % 60;
+  const baseLabel =
+    seconds === 0
+      ? `${minutes} min`
+      : `${minutes}:${String(seconds).padStart(2, "0")}`;
+
+  if (!incrementSeconds) {
+    return baseLabel;
+  }
+
+  return `${baseLabel} + ${incrementSeconds}s`;
+}
+
+function parsePgnHeaders(pgn: string) {
+  const headers: Record<string, string> = {};
+  const headerRegex = /^\[([A-Za-z0-9_]+)\s+"((?:\\"|[^"])*)"\]$/gm;
+  let match = headerRegex.exec(pgn);
+
+  while (match) {
+    headers[match[1]] = match[2].replace(/\\"/g, '"');
+    match = headerRegex.exec(pgn);
+  }
+
+  return headers;
+}
+
+function stripPgnVariations(movetext: string) {
+  let depth = 0;
+  let result = "";
+
+  for (const char of movetext) {
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (depth === 0) {
+      result += char;
+    }
+  }
+
+  return result;
+}
+
+function cleanMoveComment(comment: string) {
+  return comment
+    .replace(/\[%clk\s+[^\]]+\]/g, "")
+    .replace(/\[%emt\s+[^\]]+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parsePgnMoveInfo(pgn: string): PgnMoveInfo[] {
+  const movetext = stripPgnVariations(pgn.replace(/^\[[^\n]+\]\s*$/gm, ""));
+  const tokens = movetext.match(/\{[^}]*\}|\S+/g) ?? [];
+  const moveInfo: PgnMoveInfo[] = [];
+  let currentMoveIndex = -1;
+
+  for (const token of tokens) {
+    if (
+      /^\d+\.(\.\.)?$/.test(token) ||
+      /^(1-0|0-1|1\/2-1\/2|\*)$/.test(token)
+    ) {
+      continue;
+    }
+
+    if (/^\$\d+$/.test(token)) {
+      continue;
+    }
+
+    if (token.startsWith("{") && token.endsWith("}")) {
+      if (currentMoveIndex < 0) {
+        continue;
+      }
+
+      const rawComment = token.slice(1, -1).trim();
+      const clock = rawComment.match(/\[%clk\s+([^\]]+)\]/)?.[1];
+      const elapsed = rawComment.match(/\[%emt\s+([^\]]+)\]/)?.[1];
+      const comment = cleanMoveComment(rawComment);
+      const current = moveInfo[currentMoveIndex] ?? {};
+
+      moveInfo[currentMoveIndex] = {
+        ...current,
+        clock: clock ?? current.clock,
+        elapsed: elapsed ?? current.elapsed,
+        comment: [current.comment, comment].filter(Boolean).join(" "),
+      };
+      continue;
+    }
+
+    currentMoveIndex += 1;
+    moveInfo[currentMoveIndex] = moveInfo[currentMoveIndex] ?? {};
+  }
+
+  return moveInfo;
+}
+
+function parsePgnGameInfo(pgn: string): PgnGameInfo {
+  return {
+    headers: parsePgnHeaders(pgn),
+    moveInfo: parsePgnMoveInfo(pgn),
+  };
+}
+
 function splitPgnList(pgnText: string) {
   return pgnText
     .split(/\n\s*\n(?=\[Event\s+")/g)
@@ -132,8 +323,8 @@ function splitPgnList(pgnText: string) {
 }
 
 function formatExternalGameLabel(pgn: string, fallback: string) {
-  const white = getPgnHeader(pgn, "White") || "Brancas";
-  const black = getPgnHeader(pgn, "Black") || "Pretas";
+  const white = getPgnHeader(pgn, "White") || "White";
+  const black = getPgnHeader(pgn, "Black") || "Black";
   const result = getPgnHeader(pgn, "Result") || "*";
   const date = getPgnHeader(pgn, "Date");
 
@@ -150,7 +341,7 @@ async function fetchChessComGames(username: string): Promise<ExternalGame[]> {
   );
 
   if (!archivesResponse.ok) {
-    throw new Error("Não foi possível encontrar esse usuário no Chess.com.");
+    throw new Error("Could not find that Chess.com user.");
   }
 
   const archivesData = (await archivesResponse.json()) as {
@@ -194,7 +385,7 @@ async function fetchChessComGames(username: string): Promise<ExternalGame[]> {
       const white = game.white?.username || getPgnHeader(pgn, "White");
       const black = game.black?.username || getPgnHeader(pgn, "Black");
       const result = getPgnHeader(pgn, "Result") || "*";
-      const fallback = date || `Partida ${index + 1}`;
+      const fallback = date || `Game ${index + 1}`;
 
       return {
         id: `${game.end_time ?? index}-${index}`,
@@ -213,7 +404,7 @@ async function fetchChessComGames(username: string): Promise<ExternalGame[]> {
 async function fetchLichessGames(username: string): Promise<ExternalGame[]> {
   const params = new URLSearchParams({
     max: "20",
-    clocks: "false",
+    clocks: "true",
     evals: "false",
     opening: "true",
   });
@@ -227,9 +418,7 @@ async function fetchLichessGames(username: string): Promise<ExternalGame[]> {
   );
 
   if (!response.ok) {
-    throw new Error(
-      "Não foi possível carregar partidas desse usuário no Lichess.",
-    );
+    throw new Error("Could not load games for that Lichess user.");
   }
 
   const pgnText = await response.text();
@@ -237,7 +426,7 @@ async function fetchLichessGames(username: string): Promise<ExternalGame[]> {
   return splitPgnList(pgnText).map((pgn, index) => {
     return {
       id: `${getPgnHeader(pgn, "Site") || "lichess"}-${index}`,
-      label: formatExternalGameLabel(pgn, `Partida ${index + 1}`),
+      label: formatExternalGameLabel(pgn, `Game ${index + 1}`),
       pgn,
     };
   });
@@ -250,6 +439,9 @@ interface PositionData {
   from?: string;
   to?: string;
   uci?: string;
+  clock?: string;
+  elapsed?: string;
+  comment?: string;
   evaluation: number | null;
   mate: number | null;
   bestmove?: string | null;
@@ -272,6 +464,9 @@ export default function PgnViewer() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [pgnGameInfo, setPgnGameInfo] = useState<PgnGameInfo | null>(
+    initialPgn ? parsePgnGameInfo(initialPgn) : null,
+  );
   const [positions, setPositions] = useState<PositionData[]>([]);
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [gameAtIdx, setGameAtIdx] = useState(() => {
@@ -307,13 +502,18 @@ export default function PgnViewer() {
         from: p.from,
         to: p.to,
         uci: p.uci,
+        clock: p.clock,
+        elapsed: p.elapsed,
+        comment: p.comment,
         classification: p.classification,
         evaluation: p.evaluation ?? undefined,
         mate: p.mate ?? undefined,
       };
     });
 
-  const activePracticeMoves = practiceMoves.slice(0, practiceCursor);
+  const activePracticeMoves = useMemo(() => {
+    return practiceMoves.slice(0, practiceCursor);
+  }, [practiceCursor, practiceMoves]);
   const moves =
     positions.length > 0
       ? mainLineMoves
@@ -331,13 +531,45 @@ export default function PgnViewer() {
   const currentAnalysisPosition =
     activePracticeMoves.length > 0 ? null : positions[currentIdx];
   const currentAnalysisLines = currentAnalysisPosition?.lines ?? [];
+  const currentMoveDetails =
+    latestPracticeMove ??
+    (currentIdx > 0 ? mainLineMoves[currentIdx - 1] : null);
+  const headers = pgnGameInfo?.headers ?? {};
+  const headerEntries = Object.entries(headers);
+  const whiteName = headers.White || "White";
+  const blackName = headers.Black || "Black";
+  const resultLabel = getResultLabel(headers.Result);
+  const timeControlLabel = formatTimeControl(headers.TimeControl);
+  const whiteClock = getLatestClock(moves, "w");
+  const blackClock = getLatestClock(moves, "b");
+  const sideToMove = gameAtIdx.turn() as "w" | "b";
+  const boardOrientation = boardFlipped ? "b" : "w";
+  const displayTopColor = boardOrientation === "w" ? "b" : "w";
+  const displayBottomColor = boardOrientation === "w" ? "w" : "b";
+  const playerDetails = {
+    w: {
+      color: "w" as const,
+      label: "White",
+      name: whiteName,
+      elo: headers.WhiteElo,
+      clock: whiteClock,
+    },
+    b: {
+      color: "b" as const,
+      label: "Black",
+      name: blackName,
+      elo: headers.BlackElo,
+      clock: blackClock,
+    },
+  };
+  const topPlayer = playerDetails[displayTopColor];
+  const bottomPlayer = playerDetails[displayBottomColor];
   const reviewPositionLabel =
     activePracticeMoves.length > 0
       ? `${t("common.moves")} ${moves.length}`
       : positions.length > 0
         ? `${currentIdx}/${positions.length - 1}`
         : t("pgnViewer.ready");
-  const boardOrientation = boardFlipped ? "b" : "w";
 
   const squareEvaluations = useMemo(() => {
     const evals: Record<string, ClassificationValue> = {};
@@ -518,9 +750,11 @@ export default function PgnViewer() {
     setPracticeMoves([]);
     setPracticeCursor(0);
     setSelectedSquare(null);
+    setPgnGameInfo(null);
     abortRef.current = false;
 
     try {
+      const parsedGameInfo = parsePgnGameInfo(pgnInput);
       const game = new Chess();
       game.loadPgn(pgnInput);
 
@@ -529,7 +763,9 @@ export default function PgnViewer() {
 
       if (history.length > 0) {
         posData.push({ fen: history[0].before, evaluation: null, mate: null });
-        for (const move of history) {
+        for (const [index, move] of history.entries()) {
+          const moveInfo = parsedGameInfo.moveInfo[index] ?? {};
+
           posData.push({
             fen: move.after,
             san: move.san,
@@ -537,6 +773,9 @@ export default function PgnViewer() {
             from: move.from,
             to: move.to,
             uci: getMoveUci(move),
+            clock: moveInfo.clock,
+            elapsed: moveInfo.elapsed,
+            comment: moveInfo.comment,
             evaluation: null,
             mate: null,
           });
@@ -546,6 +785,7 @@ export default function PgnViewer() {
       }
 
       setProgress(5);
+      setPgnGameInfo(parsedGameInfo);
       setPositions([...posData]);
 
       const engine = new AnalysisEngine();
@@ -810,6 +1050,7 @@ export default function PgnViewer() {
     try {
       const text = await navigator.clipboard.readText();
       setPgnInput(text);
+      setPgnGameInfo(parsePgnGameInfo(text));
       toast.success(t("success.pgnPasted"));
     } catch {
       setError(t("errors.cannotAccessClipboard"));
@@ -821,7 +1062,7 @@ export default function PgnViewer() {
     const username = externalUsername.trim();
 
     if (!username) {
-      setError("Digite o nome de usuário para carregar as partidas.");
+      setError("Enter a username to load games.");
       return;
     }
 
@@ -830,6 +1071,7 @@ export default function PgnViewer() {
     setExternalGames([]);
     setSelectedExternalGameId("");
     setPgnInput("");
+    setPgnGameInfo(null);
 
     try {
       const loadedGames =
@@ -838,18 +1080,17 @@ export default function PgnViewer() {
           : await fetchLichessGames(username);
 
       if (loadedGames.length === 0) {
-        setError("Nenhuma partida pública encontrada para esse usuário.");
+        setError("No public games found for that user.");
         return;
       }
 
       setExternalGames(loadedGames);
       setSelectedExternalGameId(loadedGames[0].id);
       setPgnInput(loadedGames[0].pgn);
+      setPgnGameInfo(parsePgnGameInfo(loadedGames[0].pgn));
     } catch (err) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Não foi possível carregar as partidas.";
+        err instanceof Error ? err.message : "Could not load games.";
 
       setError(message);
       toast.error(message);
@@ -883,8 +1124,46 @@ export default function PgnViewer() {
           <span>{reviewPositionLabel}</span>
         </div>
 
-        <div className="flex w-full min-w-0 justify-center">
-          <div className="flex min-w-0 items-stretch justify-center gap-2 max-[44rem]:gap-1">
+        <div className="w-[min(100%,50rem)]">
+          {pgnGameInfo && (
+            <div
+              className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
+                topPlayer.color === sideToMove && !gameAtIdx.isGameOver()
+                  ? "bg-[#2b3327]"
+                  : "bg-black/14"
+              }`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
+                    topPlayer.color === "w"
+                      ? "bg-[#eee6d6] text-[#25211b]"
+                      : "bg-[#1b1a18] text-[#f5f3ed]"
+                  }`}
+                >
+                  {topPlayer.label[0]}
+                </span>
+
+                <div className="min-w-0">
+                  <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
+                    {topPlayer.name}
+                  </div>
+                  <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
+                    <span>{topPlayer.label}</span>
+                    <span>
+                      {topPlayer.elo ? `Elo ${topPlayer.elo}` : "Elo -"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
+                {topPlayer.clock ?? timeControlLabel}
+              </div>
+            </div>
+          )}
+
+          <div className="flex min-w-0 items-stretch justify-center gap-2 py-2 max-[44rem]:gap-1">
             {showEvaluationBar && (
               <EvaluationBar evaluation={currentEval} mate={currentMate} />
             )}
@@ -904,6 +1183,44 @@ export default function PgnViewer() {
               pieceSet={pieceSet}
             />
           </div>
+
+          {pgnGameInfo && (
+            <div
+              className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
+                bottomPlayer.color === sideToMove && !gameAtIdx.isGameOver()
+                  ? "bg-[#2b3327]"
+                  : "bg-black/14"
+              }`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
+                    bottomPlayer.color === "w"
+                      ? "bg-[#eee6d6] text-[#25211b]"
+                      : "bg-[#1b1a18] text-[#f5f3ed]"
+                  }`}
+                >
+                  {bottomPlayer.label[0]}
+                </span>
+
+                <div className="min-w-0">
+                  <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
+                    {bottomPlayer.name}
+                  </div>
+                  <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
+                    <span>{bottomPlayer.label}</span>
+                    <span>
+                      {bottomPlayer.elo ? `Elo ${bottomPlayer.elo}` : "Elo -"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
+                {bottomPlayer.clock ?? timeControlLabel}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-center gap-2 rounded-md border border-[#accc821a] bg-[#1d211d] p-2">
@@ -977,20 +1294,79 @@ export default function PgnViewer() {
           </button>
         </div>
 
+        <div className="flex w-[min(100%,50rem)] flex-wrap items-center gap-x-4 gap-y-2 border-y border-white/7 bg-black/12 px-3 py-2 text-xs font-bold text-[#cbc8c0]">
+          <span className="font-extrabold text-[#aaa7a0] uppercase">
+            {headers.Result ? resultLabel : "Analysis"}
+          </span>
+
+          {currentMoveDetails && (
+            <span className="font-mono text-[#f5f3ed]">
+              {currentMoveDetails.san}
+              {currentMoveDetails.clock ? ` · ${currentMoveDetails.clock}` : ""}
+            </span>
+          )}
+
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+            {openingName
+              ? t(`openings.${getOpeningKey(openingName)}`)
+              : t("pgnViewer.openingNotDetected")}
+          </span>
+
+          {headers.Termination && (
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[#aaa7a0]">
+              {headers.Termination}
+            </span>
+          )}
+
+          {(headers.Link || headers.ECOUrl) && (
+            <a
+              className="ml-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[#9ac45c] hover:text-[#b9de82]"
+              href={headers.Link || headers.ECOUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open game
+            </a>
+          )}
+        </div>
+
+        {currentMoveDetails?.comment && (
+          <div className="w-[min(100%,50rem)] border-b border-white/7 px-3 pb-2 text-xs font-bold text-[#dcd8cf]">
+            {currentMoveDetails.comment}
+          </div>
+        )}
+
         {positions.length === 0 && moves.length === 0 && !isAnalyzing && (
           <div className="px-4 py-8 text-center text-[0.95rem] leading-relaxed text-[#aaa7a0]">
             {t("pgnViewer.emptyState")}
           </div>
         )}
 
-        <div className="flex min-h-8 items-center gap-2 rounded-md border border-white/7 bg-black/20 px-3 text-xs font-bold text-[#cbc8c0]">
-          {t("common.opening")}
-          <strong>
-            {openingName
-              ? t(`openings.${getOpeningKey(openingName)}`)
-              : t("pgnViewer.openingNotDetected")}
-          </strong>
-        </div>
+        {headerEntries.length > 0 && (
+          <details className="w-[min(100%,50rem)] border-y border-white/7 bg-black/10 px-3 py-2 text-xs">
+            <summary className="cursor-pointer font-extrabold text-[#aaa7a0] uppercase marker:text-[#9ac45c]">
+              Full PGN data
+            </summary>
+
+            <div className="mt-2 grid max-h-56 grid-cols-2 gap-x-4 overflow-y-auto max-[44rem]:grid-cols-1">
+              {headerEntries.map(([key, value]) => {
+                return (
+                  <div
+                    key={key}
+                    className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 border-b border-white/5 py-2"
+                  >
+                    <span className="font-extrabold text-[#aaa7a0]">
+                      {getKnownHeaderLabel(key)}
+                    </span>
+                    <span className="min-w-0 overflow-hidden font-bold text-ellipsis whitespace-nowrap text-[#f5f3ed]">
+                      {value || "-"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        )}
       </div>
 
       <aside className="flex min-h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-lg border border-[#accc821a] bg-[#22251f] shadow-[0_1rem_2.5rem_rgb(0_0_0_/_20%)] max-[72rem]:min-h-0">
@@ -1014,7 +1390,7 @@ export default function PgnViewer() {
 
         <div className="flex flex-col gap-3 rounded-md border border-white/6 bg-[#242321] p-4">
           <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-            <span>Origem da partida</span>
+            <span>Game source</span>
             <select
               className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
               value={pgnSource}
@@ -1025,6 +1401,7 @@ export default function PgnViewer() {
                 setError(null);
                 setExternalGames([]);
                 setSelectedExternalGameId("");
+                setPgnGameInfo(null);
 
                 if (nextSource !== "paste") {
                   setPgnInput("");
@@ -1033,7 +1410,7 @@ export default function PgnViewer() {
             >
               <option value="lichess">Lichess</option>
               <option value="chesscom">Chess.com</option>
-              <option value="paste">Colar PGN</option>
+              <option value="paste">Paste PGN</option>
             </select>
           </label>
 
@@ -1060,13 +1437,14 @@ export default function PgnViewer() {
                 value={pgnInput}
                 onChange={(e) => {
                   setPgnInput(e.target.value);
+                  setPgnGameInfo(null);
                 }}
               />
             </>
           ) : (
             <>
               <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-                <span>Nome de usuário</span>
+                <span>Username</span>
                 <input
                   className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
                   placeholder={
@@ -1087,12 +1465,12 @@ export default function PgnViewer() {
                 onClick={handleLoadExternalGames}
                 disabled={isLoadingGames || !externalUsername.trim()}
               >
-                {isLoadingGames ? "Carregando..." : "Carregar partidas"}
+                {isLoadingGames ? "Loading..." : "Load games"}
               </button>
 
               {externalGames.length > 0 && (
                 <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
-                  <span>Partida</span>
+                  <span>Game</span>
                   <select
                     className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
                     value={selectedExternalGameId}
@@ -1104,6 +1482,9 @@ export default function PgnViewer() {
 
                       setSelectedExternalGameId(nextGameId);
                       setPgnInput(nextGame?.pgn ?? "");
+                      setPgnGameInfo(
+                        nextGame ? parsePgnGameInfo(nextGame.pgn) : null,
+                      );
                     }}
                   >
                     {externalGames.map((game) => {
@@ -1152,18 +1533,6 @@ export default function PgnViewer() {
               })}
             </select>
           </label>
-        </div>
-
-        <div className="border-b border-white/6 p-4">
-          <h2 className="mb-3 text-xs font-extrabold text-[#aaa7a0] uppercase">
-            {t("common.opening")}
-          </h2>
-
-          <div className="rounded-md border border-white/6 bg-[#302e2a] p-3 text-sm font-bold text-[#f5f3ed]">
-            {openingName
-              ? t(`openings.${getOpeningKey(openingName)}`)
-              : t("pgnViewer.noBookMatch")}
-          </div>
         </div>
 
         {currentAnalysisPosition && currentAnalysisLines.length > 0 && (

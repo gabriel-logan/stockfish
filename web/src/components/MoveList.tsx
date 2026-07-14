@@ -11,6 +11,9 @@ export interface MoveEntry {
   from?: string;
   to?: string;
   uci?: string;
+  clock?: string;
+  elapsed?: string;
+  comment?: string;
   captured?: "p" | "n" | "b" | "r" | "q";
   isManual?: boolean;
   classification?: ClassificationValue;
@@ -132,6 +135,11 @@ export default function MoveList({
                   size={16}
                 />
               )}
+              {pair.white.clock && (
+                <span className="ml-auto font-mono text-[0.65rem] text-[#9f9b92]">
+                  {pair.white.clock}
+                </span>
+              )}
             </button>
 
             {pair.black && (
@@ -154,6 +162,11 @@ export default function MoveList({
                     classification={pair.black.classification}
                     size={16}
                   />
+                )}
+                {pair.black.clock && (
+                  <span className="ml-auto font-mono text-[0.65rem] text-[#9f9b92]">
+                    {pair.black.clock}
+                  </span>
                 )}
               </button>
             )}
