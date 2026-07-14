@@ -30,6 +30,13 @@ import { classifyMove } from "../utils/classification";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
 import { playMoveResultSound } from "../utils/sounds";
 
+type PgnSource = "paste" | "lichess" | "chesscom";
+type ExternalGame = {
+  id: string;
+  label: string;
+  pgn: string;
+};
+
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
 }
@@ -109,6 +116,133 @@ function getSanLine(fen: string, pv: string[]) {
   return moves;
 }
 
+function getPgnHeader(pgn: string, header: string) {
+  const match = pgn.match(new RegExp(`\\[${header}\\s+"([^"]*)"\\]`));
+
+  return match?.[1] ?? "";
+}
+
+function splitPgnList(pgnText: string) {
+  return pgnText
+    .split(/\n\s*\n(?=\[Event\s+")/g)
+    .map((pgn) => {
+      return pgn.trim();
+    })
+    .filter(Boolean);
+}
+
+function formatExternalGameLabel(pgn: string, fallback: string) {
+  const white = getPgnHeader(pgn, "White") || "Brancas";
+  const black = getPgnHeader(pgn, "Black") || "Pretas";
+  const result = getPgnHeader(pgn, "Result") || "*";
+  const date = getPgnHeader(pgn, "Date");
+
+  if (date) {
+    return `${date} - ${white} vs ${black} ${result}`;
+  }
+
+  return `${fallback} - ${white} vs ${black} ${result}`;
+}
+
+async function fetchChessComGames(username: string): Promise<ExternalGame[]> {
+  const archivesResponse = await fetch(
+    `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/archives`,
+  );
+
+  if (!archivesResponse.ok) {
+    throw new Error("Não foi possível encontrar esse usuário no Chess.com.");
+  }
+
+  const archivesData = (await archivesResponse.json()) as {
+    archives?: string[];
+  };
+  const archives = archivesData.archives ?? [];
+
+  for (const archiveUrl of archives.slice().reverse()) {
+    const gamesResponse = await fetch(archiveUrl);
+
+    if (!gamesResponse.ok) {
+      continue;
+    }
+
+    const gamesData = (await gamesResponse.json()) as {
+      games?: {
+        pgn?: string;
+        rules?: string;
+        end_time?: number;
+        white?: { username?: string };
+        black?: { username?: string };
+      }[];
+    };
+    const games = (gamesData.games ?? [])
+      .filter((game) => {
+        return game.rules === "chess" && !!game.pgn;
+      })
+      .slice()
+      .reverse()
+      .slice(0, 20);
+
+    if (games.length === 0) {
+      continue;
+    }
+
+    return games.map((game, index) => {
+      const pgn = game.pgn ?? "";
+      const date = game.end_time
+        ? new Date(game.end_time * 1000).toLocaleDateString()
+        : "";
+      const white = game.white?.username || getPgnHeader(pgn, "White");
+      const black = game.black?.username || getPgnHeader(pgn, "Black");
+      const result = getPgnHeader(pgn, "Result") || "*";
+      const fallback = date || `Partida ${index + 1}`;
+
+      return {
+        id: `${game.end_time ?? index}-${index}`,
+        label:
+          white && black
+            ? `${fallback} - ${white} vs ${black} ${result}`
+            : formatExternalGameLabel(pgn, fallback),
+        pgn,
+      };
+    });
+  }
+
+  return [];
+}
+
+async function fetchLichessGames(username: string): Promise<ExternalGame[]> {
+  const params = new URLSearchParams({
+    max: "20",
+    clocks: "false",
+    evals: "false",
+    opening: "true",
+  });
+  const response = await fetch(
+    `https://lichess.org/api/games/user/${encodeURIComponent(username)}?${params.toString()}`,
+    {
+      headers: {
+        Accept: "application/x-chess-pgn",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      "Não foi possível carregar partidas desse usuário no Lichess.",
+    );
+  }
+
+  const pgnText = await response.text();
+
+  return splitPgnList(pgnText).map((pgn, index) => {
+    return {
+      id: `${getPgnHeader(pgn, "Site") || "lichess"}-${index}`,
+      label: formatExternalGameLabel(pgn, `Partida ${index + 1}`),
+      pgn,
+    };
+  });
+}
+
 interface PositionData {
   fen: string;
   san?: string;
@@ -129,7 +263,12 @@ export default function PgnViewer() {
   const location = useLocation();
   const initialPgn = (location.state as { pgn?: string })?.pgn;
 
+  const [pgnSource, setPgnSource] = useState<PgnSource>("paste");
   const [pgnInput, setPgnInput] = useState(initialPgn ?? "");
+  const [externalUsername, setExternalUsername] = useState("");
+  const [externalGames, setExternalGames] = useState<ExternalGame[]>([]);
+  const [selectedExternalGameId, setSelectedExternalGameId] = useState("");
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -678,6 +817,47 @@ export default function PgnViewer() {
     }
   };
 
+  const handleLoadExternalGames = async () => {
+    const username = externalUsername.trim();
+
+    if (!username) {
+      setError("Digite o nome de usuário para carregar as partidas.");
+      return;
+    }
+
+    setError(null);
+    setIsLoadingGames(true);
+    setExternalGames([]);
+    setSelectedExternalGameId("");
+    setPgnInput("");
+
+    try {
+      const loadedGames =
+        pgnSource === "chesscom"
+          ? await fetchChessComGames(username)
+          : await fetchLichessGames(username);
+
+      if (loadedGames.length === 0) {
+        setError("Nenhuma partida pública encontrada para esse usuário.");
+        return;
+      }
+
+      setExternalGames(loadedGames);
+      setSelectedExternalGameId(loadedGames[0].id);
+      setPgnInput(loadedGames[0].pgn);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Não foi possível carregar as partidas.";
+
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoadingGames(false);
+    }
+  };
+
   const iconActionButtonClass =
     "inline-flex min-h-11 w-13 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -833,29 +1013,111 @@ export default function PgnViewer() {
         </div>
 
         <div className="flex flex-col gap-3 rounded-md border border-white/6 bg-[#242321] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-base font-black text-white">
-              {t("pgnViewer.pastePgn")}
-            </label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+            <span>Origem da partida</span>
+            <select
+              className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+              value={pgnSource}
+              onChange={(e) => {
+                const nextSource = e.target.value as PgnSource;
 
-            <button
-              type="button"
-              className="inline-flex min-h-8 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
-              onClick={handlePaste}
+                setPgnSource(nextSource);
+                setError(null);
+                setExternalGames([]);
+                setSelectedExternalGameId("");
+
+                if (nextSource !== "paste") {
+                  setPgnInput("");
+                }
+              }}
             >
-              <FaClipboard aria-hidden="true" />
-              {t("common.paste")}
-            </button>
-          </div>
+              <option value="lichess">Lichess</option>
+              <option value="chesscom">Chess.com</option>
+              <option value="paste">Colar PGN</option>
+            </select>
+          </label>
 
-          <textarea
-            className="min-h-36 w-full resize-y rounded border border-white/10 bg-[#373530] p-3 font-mono text-sm leading-relaxed text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-            placeholder={t("pgnViewer.pastePlaceholder")}
-            value={pgnInput}
-            onChange={(e) => {
-              setPgnInput(e.target.value);
-            }}
-          />
+          {pgnSource === "paste" ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-base font-black text-white">
+                  {t("pgnViewer.pastePgn")}
+                </label>
+
+                <button
+                  type="button"
+                  className="inline-flex min-h-8 items-center justify-center gap-1 rounded border border-white/8 bg-[#36342f] px-3 text-xs font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white"
+                  onClick={handlePaste}
+                >
+                  <FaClipboard aria-hidden="true" />
+                  {t("common.paste")}
+                </button>
+              </div>
+
+              <textarea
+                className="min-h-36 w-full resize-y rounded border border-white/10 bg-[#373530] p-3 font-mono text-sm leading-relaxed text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                placeholder={t("pgnViewer.pastePlaceholder")}
+                value={pgnInput}
+                onChange={(e) => {
+                  setPgnInput(e.target.value);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+                <span>Nome de usuário</span>
+                <input
+                  className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none placeholder:text-[#8f8b84] focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                  placeholder={
+                    pgnSource === "chesscom"
+                      ? "ex: hikaru"
+                      : "ex: DrNykterstein"
+                  }
+                  value={externalUsername}
+                  onChange={(e) => {
+                    setExternalUsername(e.target.value);
+                  }}
+                />
+              </label>
+
+              <button
+                type="button"
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-white/8 bg-[#36342f] px-4 text-sm font-extrabold text-[#dcd8cf] transition-colors hover:bg-[#424039] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={handleLoadExternalGames}
+                disabled={isLoadingGames || !externalUsername.trim()}
+              >
+                {isLoadingGames ? "Carregando..." : "Carregar partidas"}
+              </button>
+
+              {externalGames.length > 0 && (
+                <label className="flex min-w-0 flex-col gap-1 text-xs font-bold text-[#aaa7a0]">
+                  <span>Partida</span>
+                  <select
+                    className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                    value={selectedExternalGameId}
+                    onChange={(e) => {
+                      const nextGameId = e.target.value;
+                      const nextGame = externalGames.find((game) => {
+                        return game.id === nextGameId;
+                      });
+
+                      setSelectedExternalGameId(nextGameId);
+                      setPgnInput(nextGame?.pgn ?? "");
+                    }}
+                  >
+                    {externalGames.map((game) => {
+                      return (
+                        <option key={game.id} value={game.id}>
+                          {game.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              )}
+            </>
+          )}
 
           <button
             type="button"
