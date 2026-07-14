@@ -1181,6 +1181,7 @@ export default function PgnViewer() {
               showEvaluationIcons={showMoveEvaluation}
               soundEnabled={soundEnabled}
               pieceSet={pieceSet}
+              squareSizeClass="[width:clamp(2.25rem,min(5.15vw,8.25vh),6.75rem)] [height:clamp(2.25rem,min(5.15vw,8.25vh),6.75rem)]"
             />
           </div>
 

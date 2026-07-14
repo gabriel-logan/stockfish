@@ -30,6 +30,7 @@ interface BoardProps {
   editPiece?: { type: PieceSymbol; color: Color } | "remove" | null;
   onEditMove?: (from: Square, to: Square) => void;
   onEditSquare?: (square: Square) => void;
+  squareSizeClass?: string;
 }
 
 type PromotionPiece = "q" | "r" | "b" | "n";
@@ -238,6 +239,7 @@ export default function Board({
   editPiece = null,
   onEditMove = () => {},
   onEditSquare = () => {},
+  squareSizeClass = SQUARE_SIZE_CLASS,
 }: BoardProps) {
   const { t } = useTranslation();
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -646,7 +648,7 @@ export default function Board({
     const isLastMoveSquare =
       lastMove !== null && (lastMove.from === square || lastMove.to === square);
 
-    let className = `relative flex items-center justify-center ${SQUARE_SIZE_CLASS}`;
+    let className = `relative flex items-center justify-center ${squareSizeClass}`;
 
     if (interactive) {
       className = `${className} cursor-pointer`;
