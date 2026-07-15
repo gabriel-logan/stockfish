@@ -863,9 +863,33 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     setIsGameOver(true);
   }, [isGameOver, moves.length, clearPendingBotMove]);
 
+  const canEditPosition = freePlay || (!gameStarted && moves.length === 0);
+
   const handleStartGame = useCallback(() => {
+    if (editMode) {
+      const validation = validateFen(gameRef.current.fen());
+
+      if (!validation.ok) {
+        toast.error(t("freePlay.invalidEditPosition"));
+
+        return;
+      }
+
+      setEditPiece(null);
+      setSelectedSquare(null);
+      setEditMode(false);
+      setIsGameOver(gameRef.current.isGameOver());
+    }
+
     gameStartedRef.current = true;
     setGameStarted(true);
+
+    const evalEngine = evalEngineRef.current;
+
+    if (evalEngine?.connected) {
+      evalEngine.setFullStrength();
+      evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
+    }
 
     // If it's the bot's turn, start analysis immediately
     if (
@@ -881,7 +905,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         setIsThinking(true);
       }
     }
-  }, []);
+  }, [editMode, t]);
 
   const preparePositionEditing = useCallback(() => {
     analysisVersionRef.current += 1;
@@ -909,6 +933,10 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   }, [clearPendingBotMove, syncMoves]);
 
   const toggleEditMode = useCallback(() => {
+    if (!canEditPosition) {
+      return;
+    }
+
     if (!editMode) {
       preparePositionEditing();
       setEditPiece(null);
@@ -936,7 +964,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       evalEngine.setFullStrength();
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     }
-  }, [editMode, preparePositionEditing, t]);
+  }, [canEditPosition, editMode, preparePositionEditing, t]);
 
   const updateEditedGame = useCallback((editedGame: Chess) => {
     gameRef.current = editedGame;
@@ -1187,7 +1215,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
             {freePlay ? t("freePlay.title") : t("playComputer.gameConsole")}
           </span>
           <div className="flex items-center gap-1">
-            {freePlay && (
+            {canEditPosition && (
               <button
                 type="button"
                 className={`grid size-9 place-items-center rounded transition-colors hover:text-white ${
@@ -1246,6 +1274,12 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
               >
                 {t("playComputer.startGame")}
               </button>
+
+              {editMode && (
+                <span className="text-xs font-bold text-[#aaa7a0]">
+                  {t("freePlay.editingHelp")}
+                </span>
+              )}
             </div>
           </div>
         ) : (
@@ -1279,7 +1313,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
           </div>
         )}
 
-        {freePlay && (
+        {canEditPosition && (
           <div className="border-b border-white/6 p-4">
             <button
               type="button"
