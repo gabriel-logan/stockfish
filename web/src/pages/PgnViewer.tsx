@@ -39,6 +39,7 @@ import {
 } from "../utils/openingNames";
 import { getMoveUci, parsePgnGameInfo, type PgnGameInfo } from "../utils/pgn";
 import { playMoveResultSound } from "../utils/sounds";
+import { getSafeExternalUrl } from "../utils/url";
 
 type PgnSource = "paste" | "lichess" | "chesscom";
 
@@ -385,6 +386,7 @@ export default function PgnViewer() {
     (currentIdx > 0 ? mainLineMoves[currentIdx - 1] : null);
   const headers = pgnGameInfo?.headers ?? {};
   const headerEntries = Object.entries(headers);
+  const gameLinkUrl = getSafeExternalUrl(headers.Link || headers.ECOUrl);
   const whiteName = headers.White || "White";
   const blackName = headers.Black || "Black";
   const resultLabel = getResultLabel(headers.Result);
@@ -1073,10 +1075,10 @@ export default function PgnViewer() {
             </span>
           )}
 
-          {(headers.Link || headers.ECOUrl) && (
+          {gameLinkUrl && (
             <a
               className="ml-auto min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[#9ac45c] hover:text-[#b9de82]"
-              href={headers.Link || headers.ECOUrl}
+              href={gameLinkUrl}
               target="_blank"
               rel="noreferrer"
             >
