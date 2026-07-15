@@ -18,9 +18,16 @@ See each package's README for setup instructions.
 
 ## Docker Compose
 
-The whole stack runs with a single command. No need to install Go, Node, or Stockfish locally.
+The whole stack runs with Docker. No need to install Go, Node, or Stockfish locally.
 
 The engine uses its own [Dockerfile](engine/Dockerfile). The frontend runs directly from the `node:22` image using Vite's preview server — no Dockerfile needed in `web/`.
+
+Before starting the API or the full stack, apply its Atlas schema. Repeat this after changing `api/db/schema.sql`.
+
+```bash
+docker compose --profile tools up -d api-db api-dev-db
+docker compose --profile tools run --rm atlas schema apply --env local --auto-approve
+```
 
 ```bash
 # Start in background

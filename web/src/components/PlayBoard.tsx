@@ -31,13 +31,17 @@ import {
   useSettingsStore,
 } from "../store/settingsStore";
 import { type SavedGame, useUserStore } from "../store/userStore";
-import type { ClassificationValue } from "../types/chess-types";
+import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
-import { getOpeningKey, getOpeningName } from "../utils/openingNames";
+import {
+  getLatestOpeningName,
+  getOpeningKey,
+  getOpeningName,
+} from "../utils/openingNames";
 import { formatPgnDate, getMoveUci } from "../utils/pgn";
 import { playErrorSound, playMoveResultSound } from "../utils/sounds";
 import Board from "./Board";
@@ -80,7 +84,6 @@ const CAPTURED_PIECE_ALT_KEYS = {
 } as const;
 
 type CapturedPiece = (typeof CAPTURED_PIECE_ORDER)[number];
-type PromotionPiece = "q" | "r" | "b" | "n";
 type EditPiece = { type: PieceSymbol; color: Color } | "remove" | null;
 
 interface PlayBoardProps {
@@ -149,8 +152,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const evalEngineRef = useRef<AnalysisEngine | null>(null);
 
   const isEngineRunning = useRef(false);
-  const prevEvalRef = useRef<number | null>(null);
-  const evaluationRef = useRef<number | null>(null);
   const movesRef = useRef<MoveEntry[]>([]);
   const analysisVersionRef = useRef(0);
   const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -201,7 +202,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const computerColor = playerColor === "w" ? "b" : "w";
 
   const computerColorRef = useRef(computerColor);
-  const playerColorRef = useRef(playerColor);
   const botEloRef = useRef(botElo);
   const soundEnabledRef = useRef(soundEnabled);
   const gameStartedRef = useRef(freePlay);
@@ -209,9 +209,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   useEffect(() => {
     computerColorRef.current = computerColor;
   }, [computerColor]);
-  useEffect(() => {
-    playerColorRef.current = playerColor;
-  }, [playerColor]);
   useEffect(() => {
     botEloRef.current = botElo;
   }, [botElo]);
@@ -221,9 +218,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   useEffect(() => {
     gameStartedRef.current = gameStarted;
   }, [gameStarted]);
-  useEffect(() => {
-    evaluationRef.current = evaluation;
-  }, [evaluation]);
 
   const syncMoves = useCallback((newMoves: MoveEntry[]) => {
     movesRef.current = newMoves;
@@ -311,10 +305,8 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         };
 
         syncMoves(nextMoves);
-        evaluationRef.current = after.score;
         setEvaluation(after.score);
         setMate(after.mate);
-        prevEvalRef.current = after.score;
 
         return after.score;
       } finally {
@@ -355,7 +347,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     };
 
     evalEngine.onAnalysis = (data) => {
-      evaluationRef.current = data.score;
       setEvaluation(data.score);
       setMate(data.mate);
     };
@@ -617,15 +608,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     const fens = moves.map((move) => move.fen);
     fens.push(currentFen);
 
-    for (let i = fens.length - 1; i >= 0; i--) {
-      const name = getOpeningName(fens[i]);
-
-      if (name) {
-        return name;
-      }
-    }
-
-    return null;
+    return getLatestOpeningName(fens);
   }, [currentFen, moves]);
 
   const playerLabel = freePlay
@@ -712,15 +695,11 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
     if (newMoves.length > 0) {
       const prevMove = newMoves[newMoves.length - 1];
-      evaluationRef.current = prevMove.evaluation ?? null;
       setEvaluation(prevMove.evaluation ?? null);
       setMate(prevMove.mate ?? null);
-      prevEvalRef.current = prevMove.evaluation ?? null;
     } else {
-      evaluationRef.current = null;
       setEvaluation(null);
       setMate(null);
-      prevEvalRef.current = null;
     }
 
     const hist = gameRef.current.history({ verbose: true });
@@ -1058,8 +1037,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     gameRef.current = newChess;
     setGame(newChess);
 
-    prevEvalRef.current = null;
-    evaluationRef.current = null;
     syncMoves([]);
     setSelectedSquare(null);
     setLastMove(null);
@@ -1100,8 +1077,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     gameRef.current = restartedGame;
     setGame(restartedGame);
 
-    prevEvalRef.current = null;
-    evaluationRef.current = null;
     syncMoves([]);
     setSelectedSquare(null);
     setLastMove(null);

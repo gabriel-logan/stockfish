@@ -281,7 +281,7 @@ pub fn ensure_player(game: &Game, user_id: Uuid) -> ApiResult<()> {
     Ok(())
 }
 
-pub async fn fetch_player_info(state: &AppState, user_id: Uuid) -> ApiResult<PlayerInfo> {
+async fn fetch_player_info(state: &AppState, user_id: Uuid) -> ApiResult<PlayerInfo> {
     let user = users::get_user(state, user_id).await?;
 
     Ok(PlayerInfo {

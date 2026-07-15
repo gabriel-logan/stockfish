@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FaBars,
@@ -53,7 +53,6 @@ export default function Layout({ children }: Props) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawerRef = useRef<HTMLDivElement>(null);
 
   function closeDrawer() {
     setDrawerOpen(false);
@@ -105,6 +104,275 @@ export default function Layout({ children }: Props) {
     return className;
   }
 
+  function renderSidebarContent(closeAfterAction: boolean) {
+    function navigateFromSidebar(path: string) {
+      navigate(path);
+
+      if (closeAfterAction) {
+        closeDrawer();
+      }
+    }
+
+    function logoutFromSidebar() {
+      void handleLogout();
+
+      if (closeAfterAction) {
+        closeDrawer();
+      }
+    }
+
+    return (
+      <>
+        <nav className="flex flex-col gap-1" aria-label={t("nav.primary")}>
+          <button
+            type="button"
+            className={getNavButtonClass("/play")}
+            onClick={() => {
+              navigateFromSidebar("/play");
+            }}
+          >
+            <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
+            {t("common.versusEngine")}
+          </button>
+
+          <button
+            type="button"
+            className={getNavButtonClass("/online")}
+            onClick={() => {
+              navigateFromSidebar("/online");
+            }}
+          >
+            <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
+            {t("common.playOnline")}
+          </button>
+
+          <button
+            type="button"
+            className={getNavButtonClass("/pgn")}
+            onClick={() => {
+              navigateFromSidebar("/pgn");
+            }}
+          >
+            <FaChartLine
+              className="text-xl text-[#a9d86f]"
+              aria-hidden="true"
+            />
+            {t("common.analyzePgn")}
+          </button>
+
+          <button
+            type="button"
+            className={getNavButtonClass("/free-play")}
+            onClick={() => {
+              navigateFromSidebar("/free-play");
+            }}
+          >
+            <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
+            {t("common.freePlay")}
+          </button>
+        </nav>
+
+        <div className="mt-4 border-t border-white/6 pt-4">
+          {authUser ? (
+            <div className="rounded-md border border-white/8 bg-[#292d27] p-2">
+              <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
+                <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
+                  {authUser.username.slice(0, 2).toUpperCase()}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
+                    {authUser.username}
+                  </div>
+                  <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
+                    {t("layout.onlineRating", { rating: authUser.rating })}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="flex min-h-9 w-full items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
+                onClick={logoutFromSidebar}
+              >
+                <FaSignOutAlt aria-hidden="true" />
+                {t("common.logout")}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex min-h-10 w-full items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
+              onClick={() => {
+                navigateFromSidebar("/login");
+              }}
+            >
+              <FaSignInAlt aria-hidden="true" />
+              {t("common.login")}
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 border-t border-white/6 pt-4">
+          <div className="mb-3 flex items-center justify-between gap-2 px-1">
+            <h2 className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-[#b7d58a] uppercase">
+              <FaUser className="text-[#97c45d]" aria-hidden="true" />
+              {t("layout.userSection")}
+            </h2>
+
+            <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-extrabold text-[#aaa7a0]">
+              {users.length}
+            </span>
+          </div>
+
+          <div className="rounded-md border border-white/8 bg-[#292d27] p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]">
+            <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
+              <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
+                {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
+                  {activeUser?.name ?? t("common.noUser")}
+                </div>
+                <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
+                  {activeUser
+                    ? t("layout.savedGamesCount", {
+                        count: activeUser.games.length,
+                      })
+                    : t("layout.createUser")}
+                </div>
+              </div>
+            </div>
+
+            {users.length > 0 && (
+              <div className="mb-2 flex gap-2">
+                <select
+                  className="h-9 min-w-0 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm font-bold text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
+                  value={activeUserId ?? ""}
+                  onChange={(e) => {
+                    setActiveUser(e.target.value);
+                  }}
+                >
+                  {users.map((user) => {
+                    return (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                {activeUserId && (
+                  <button
+                    type="button"
+                    className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
+                    title={t("layout.deleteUser")}
+                    onClick={() => {
+                      setShowDeleteUserModal(true);
+                    }}
+                  >
+                    <FaTrash aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
+                onClick={() => {
+                  setShowCreateModal(true);
+                }}
+              >
+                <FaUserPlus aria-hidden="true" />
+                {t("common.new")}
+              </button>
+
+              {activeUserId && (
+                <button
+                  type="button"
+                  className={`flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 text-xs font-extrabold transition-colors hover:text-white ${
+                    location.pathname === "/history"
+                      ? "bg-linear-to-br from-[#628d3f] to-[#3f735c] text-white"
+                      : "bg-[#3b3934] text-[#f0ece3] hover:bg-[#48453e]"
+                  }`}
+                  onClick={() => {
+                    navigateFromSidebar("/history");
+                  }}
+                >
+                  <FaHistory aria-hidden="true" />
+                  {t("common.games")}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 text-sm text-[#aaa7a0]">
+          <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
+            <FaCircle
+              size={10}
+              color={
+                engineHealthStatus === "connected"
+                  ? "#8ab84f"
+                  : engineHealthStatus === "checking"
+                    ? "#f2be1f"
+                    : "#df5353"
+              }
+              aria-hidden="true"
+            />
+            {engineHealthStatus === "connected"
+              ? t("common.engineConnected")
+              : engineHealthStatus === "checking"
+                ? t("common.engineChecking")
+                : t("common.engineDisconnected")}
+          </div>
+
+          <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
+            <FaCircle
+              size={10}
+              color={
+                apiHealthStatus === "connected"
+                  ? "#8ab84f"
+                  : apiHealthStatus === "checking"
+                    ? "#f2be1f"
+                    : "#df5353"
+              }
+              aria-hidden="true"
+            />
+            {apiHealthStatus === "connected"
+              ? t("common.apiConnected")
+              : apiHealthStatus === "checking"
+                ? t("common.apiChecking")
+                : t("common.apiDisconnected")}
+          </div>
+
+          <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
+            <FaGlobe className="shrink-0 text-[#97c45d]" aria-hidden="true" />
+            <LanguageSwitcher />
+          </div>
+
+          <Link
+            to="https://github.com/gabriel-logan/stockfish"
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2 transition-colors hover:bg-white/10"
+          >
+            <FaGithub className="text-[#97c45d]" aria-hidden="true" />
+            <strong>{t("common.gitHub")}</strong>
+          </Link>
+
+          <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
+            <FaUser className="text-[#97c45d]" aria-hidden="true" />
+            <strong>{t("layout.userCount", { count: users.length })}</strong>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <Fragment>
       <div className="grid min-h-screen grid-cols-[12rem_minmax(0,1fr)] bg-[#292b28] max-[72rem]:grid-cols-1">
@@ -117,254 +385,7 @@ export default function Layout({ children }: Props) {
             <span>{t("app.title")}</span>
           </div>
 
-          <nav className="flex flex-col gap-1" aria-label={t("nav.primary")}>
-            <button
-              type="button"
-              className={getNavButtonClass("/play")}
-              onClick={() => {
-                navigate("/play");
-              }}
-            >
-              <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.versusEngine")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/online")}
-              onClick={() => {
-                navigate("/online");
-              }}
-            >
-              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.playOnline")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/pgn")}
-              onClick={() => {
-                navigate("/pgn");
-              }}
-            >
-              <FaChartLine
-                className="text-xl text-[#a9d86f]"
-                aria-hidden="true"
-              />
-              {t("common.analyzePgn")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/free-play")}
-              onClick={() => {
-                navigate("/free-play");
-              }}
-            >
-              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.freePlay")}
-            </button>
-          </nav>
-
-          <div className="mt-4 border-t border-white/6 pt-4">
-            {authUser ? (
-              <div className="rounded-md border border-white/8 bg-[#292d27] p-2">
-                <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
-                  <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                    {authUser.username.slice(0, 2).toUpperCase()}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
-                      {authUser.username}
-                    </div>
-                    <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
-                      {t("layout.onlineRating", { rating: authUser.rating })}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="flex min-h-9 w-full items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
-                  onClick={() => {
-                    void handleLogout();
-                  }}
-                >
-                  <FaSignOutAlt aria-hidden="true" />
-                  {t("common.logout")}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="flex min-h-10 w-full items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
-                onClick={() => {
-                  navigate("/login");
-                }}
-              >
-                <FaSignInAlt aria-hidden="true" />
-                {t("common.login")}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-4 border-t border-white/6 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-2 px-1">
-              <h2 className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-[#b7d58a] uppercase">
-                <FaUser className="text-[#97c45d]" aria-hidden="true" />
-                {t("layout.userSection")}
-              </h2>
-
-              <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-extrabold text-[#aaa7a0]">
-                {users.length}
-              </span>
-            </div>
-
-            <div className="rounded-md border border-white/8 bg-[#292d27] p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]">
-              <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
-                <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                  {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
-                    {activeUser?.name ?? t("common.noUser")}
-                  </div>
-                  <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
-                    {activeUser
-                      ? t("layout.savedGamesCount", {
-                          count: activeUser.games.length,
-                        })
-                      : t("layout.createUser")}
-                  </div>
-                </div>
-              </div>
-
-              {users.length > 0 && (
-                <div className="mb-2 flex gap-2">
-                  <select
-                    className="h-9 min-w-0 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm font-bold text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-                    value={activeUserId ?? ""}
-                    onChange={(e) => {
-                      setActiveUser(e.target.value);
-                    }}
-                  >
-                    {users.map((user) => {
-                      return (
-                        <option key={user.id} value={user.id}>
-                          {user.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  {activeUserId && (
-                    <button
-                      type="button"
-                      className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                      title={t("layout.deleteUser")}
-                      onClick={() => {
-                        setShowDeleteUserModal(true);
-                      }}
-                    >
-                      <FaTrash aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  className="flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
-                  onClick={() => {
-                    setShowCreateModal(true);
-                  }}
-                >
-                  <FaUserPlus aria-hidden="true" />
-                  {t("common.new")}
-                </button>
-
-                {activeUserId && (
-                  <button
-                    type="button"
-                    className={`flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 text-xs font-extrabold transition-colors hover:text-white ${
-                      location.pathname === "/history"
-                        ? "bg-linear-to-br from-[#628d3f] to-[#3f735c] text-white"
-                        : "bg-[#3b3934] text-[#f0ece3] hover:bg-[#48453e]"
-                    }`}
-                    onClick={() => {
-                      navigate("/history");
-                    }}
-                  >
-                    <FaHistory aria-hidden="true" />
-                    {t("common.games")}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 text-sm text-[#aaa7a0]">
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaCircle
-                size={10}
-                color={
-                  engineHealthStatus === "connected"
-                    ? "#8ab84f"
-                    : engineHealthStatus === "checking"
-                      ? "#f2be1f"
-                      : "#df5353"
-                }
-                aria-hidden="true"
-              />
-              {engineHealthStatus === "connected"
-                ? t("common.engineConnected")
-                : engineHealthStatus === "checking"
-                  ? t("common.engineChecking")
-                  : t("common.engineDisconnected")}
-            </div>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaCircle
-                size={10}
-                color={
-                  apiHealthStatus === "connected"
-                    ? "#8ab84f"
-                    : apiHealthStatus === "checking"
-                      ? "#f2be1f"
-                      : "#df5353"
-                }
-                aria-hidden="true"
-              />
-              {apiHealthStatus === "connected"
-                ? t("common.apiConnected")
-                : apiHealthStatus === "checking"
-                  ? t("common.apiChecking")
-                  : t("common.apiDisconnected")}
-            </div>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaGlobe className="shrink-0 text-[#97c45d]" aria-hidden="true" />
-              <LanguageSwitcher />
-            </div>
-
-            <Link
-              to="https://github.com/gabriel-logan/stockfish"
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2 transition-colors hover:bg-white/10"
-            >
-              <FaGithub className="text-[#97c45d]" aria-hidden="true" />
-              <strong>{t("common.gitHub")}</strong>
-            </Link>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaUser className="text-[#97c45d]" aria-hidden="true" />
-              <strong>{t("layout.userCount", { count: users.length })}</strong>
-            </div>
-          </div>
+          {renderSidebarContent(false)}
         </aside>
 
         {drawerOpen && (
@@ -375,7 +396,6 @@ export default function Layout({ children }: Props) {
         )}
 
         <div
-          ref={drawerRef}
           className={`fixed top-0 left-0 z-50 flex h-full w-48 flex-col border-r border-[#9dc4701a] bg-[#20241f] p-4 shadow-xl transition-transform duration-200 ${
             drawerOpen ? "translate-x-0" : "-translate-x-full"
           }`}
@@ -397,258 +417,7 @@ export default function Layout({ children }: Props) {
             </button>
           </div>
 
-          <nav className="flex flex-col gap-1" aria-label={t("nav.primary")}>
-            <button
-              type="button"
-              className={getNavButtonClass("/play")}
-              onClick={() => {
-                navigate("/play");
-                closeDrawer();
-              }}
-            >
-              <FaPlay className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.versusEngine")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/online")}
-              onClick={() => {
-                navigate("/online");
-                closeDrawer();
-              }}
-            >
-              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.playOnline")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/pgn")}
-              onClick={() => {
-                navigate("/pgn");
-                closeDrawer();
-              }}
-            >
-              <FaChartLine
-                className="text-xl text-[#a9d86f]"
-                aria-hidden="true"
-              />
-              {t("common.analyzePgn")}
-            </button>
-
-            <button
-              type="button"
-              className={getNavButtonClass("/free-play")}
-              onClick={() => {
-                navigate("/free-play");
-                closeDrawer();
-              }}
-            >
-              <FaUsers className="text-xl text-[#a9d86f]" aria-hidden="true" />
-              {t("common.freePlay")}
-            </button>
-          </nav>
-
-          <div className="mt-4 border-t border-white/6 pt-4">
-            {authUser ? (
-              <div className="rounded-md border border-white/8 bg-[#292d27] p-2">
-                <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
-                  <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                    {authUser.username.slice(0, 2).toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
-                      {authUser.username}
-                    </div>
-                    <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
-                      {t("layout.onlineRating", { rating: authUser.rating })}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="flex min-h-9 w-full items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
-                  onClick={() => {
-                    void handleLogout();
-                    closeDrawer();
-                  }}
-                >
-                  <FaSignOutAlt aria-hidden="true" />
-                  {t("common.logout")}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="flex min-h-10 w-full items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
-                onClick={() => {
-                  navigate("/login");
-                  closeDrawer();
-                }}
-              >
-                <FaSignInAlt aria-hidden="true" />
-                {t("common.login")}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-4 border-t border-white/6 pt-4">
-            <div className="mb-3 flex items-center justify-between gap-2 px-1">
-              <h2 className="flex items-center gap-1.5 text-xs font-extrabold tracking-wide text-[#b7d58a] uppercase">
-                <FaUser className="text-[#97c45d]" aria-hidden="true" />
-                {t("layout.userSection")}
-              </h2>
-              <span className="rounded-full border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-extrabold text-[#aaa7a0]">
-                {users.length}
-              </span>
-            </div>
-
-            <div className="rounded-md border border-white/8 bg-[#292d27] p-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_4%)]">
-              <div className="mb-2 flex items-center gap-2 rounded border border-white/6 bg-[#20241f] p-2">
-                <span className="grid size-8 shrink-0 place-items-center rounded bg-[#5f8d3d] text-xs font-extrabold text-white">
-                  {activeUser ? activeUser.name.slice(0, 2).toUpperCase() : "?"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="overflow-hidden text-sm font-extrabold text-ellipsis whitespace-nowrap text-[#f4f1e8]">
-                    {activeUser?.name ?? t("common.noUser")}
-                  </div>
-                  <div className="text-[0.7rem] font-bold text-[#aaa7a0]">
-                    {activeUser
-                      ? t("layout.savedGamesCount", {
-                          count: activeUser.games.length,
-                        })
-                      : t("layout.createUser")}
-                  </div>
-                </div>
-              </div>
-
-              {users.length > 0 && (
-                <div className="mb-2 flex gap-2">
-                  <select
-                    className="h-9 min-w-0 flex-1 rounded border border-white/10 bg-[#373530] px-2 text-sm font-bold text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-                    value={activeUserId ?? ""}
-                    onChange={(e) => {
-                      setActiveUser(e.target.value);
-                    }}
-                  >
-                    {users.map((user) => {
-                      return (
-                        <option key={user.id} value={user.id}>
-                          {user.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-
-                  {activeUserId && (
-                    <button
-                      type="button"
-                      className="grid size-9 shrink-0 place-items-center rounded border border-white/8 bg-[#36342f] text-xs font-extrabold text-[#aaa7a0] transition-colors hover:bg-[#df5353] hover:text-white"
-                      title={t("layout.deleteUser")}
-                      onClick={() => {
-                        setShowDeleteUserModal(true);
-                      }}
-                    >
-                      <FaTrash aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  className="flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
-                  onClick={() => {
-                    setShowCreateModal(true);
-                  }}
-                >
-                  <FaUserPlus aria-hidden="true" />
-                  {t("common.new")}
-                </button>
-
-                {activeUserId && (
-                  <button
-                    type="button"
-                    className={`flex min-h-9 items-center justify-center gap-1 rounded border border-white/8 text-xs font-extrabold transition-colors hover:text-white ${
-                      location.pathname === "/history"
-                        ? "bg-linear-to-br from-[#628d3f] to-[#3f735c] text-white"
-                        : "bg-[#3b3934] text-[#f0ece3] hover:bg-[#48453e]"
-                    }`}
-                    onClick={() => {
-                      navigate("/history");
-                      closeDrawer();
-                    }}
-                  >
-                    <FaHistory aria-hidden="true" />
-                    {t("common.games")}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 text-sm text-[#aaa7a0]">
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaCircle
-                size={10}
-                color={
-                  engineHealthStatus === "connected"
-                    ? "#8ab84f"
-                    : engineHealthStatus === "checking"
-                      ? "#f2be1f"
-                      : "#df5353"
-                }
-                aria-hidden="true"
-              />
-              {engineHealthStatus === "connected"
-                ? t("common.engineConnected")
-                : engineHealthStatus === "checking"
-                  ? t("common.engineChecking")
-                  : t("common.engineDisconnected")}
-            </div>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaCircle
-                size={10}
-                color={
-                  apiHealthStatus === "connected"
-                    ? "#8ab84f"
-                    : apiHealthStatus === "checking"
-                      ? "#f2be1f"
-                      : "#df5353"
-                }
-                aria-hidden="true"
-              />
-              {apiHealthStatus === "connected"
-                ? t("common.apiConnected")
-                : apiHealthStatus === "checking"
-                  ? t("common.apiChecking")
-                  : t("common.apiDisconnected")}
-            </div>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaGlobe className="shrink-0 text-[#97c45d]" aria-hidden="true" />
-              <LanguageSwitcher />
-            </div>
-
-            <Link
-              to="https://github.com/gabriel-logan/stockfish"
-              target="_blank"
-              rel="noreferrer"
-              className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2 transition-colors hover:bg-white/10"
-            >
-              <FaGithub className="text-[#97c45d]" aria-hidden="true" />
-              <strong>{t("common.gitHub")}</strong>
-            </Link>
-
-            <div className="flex min-h-9 items-center gap-2 rounded-md border border-white/6 bg-white/5 px-2">
-              <FaUser className="text-[#97c45d]" aria-hidden="true" />
-              <strong>{t("layout.userCount", { count: users.length })}</strong>
-            </div>
-          </div>
+          {renderSidebarContent(true)}
         </div>
 
         <div className="min-w-0">

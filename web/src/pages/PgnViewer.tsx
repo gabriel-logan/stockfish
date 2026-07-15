@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FaChartLine,
@@ -28,11 +28,15 @@ import {
   type PieceSet,
   useSettingsStore,
 } from "../store/settingsStore";
-import type { ClassificationValue } from "../types/chess-types";
+import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
-import { getOpeningKey, getOpeningName } from "../utils/openingNames";
+import {
+  getLatestOpeningName,
+  getOpeningKey,
+  getOpeningName,
+} from "../utils/openingNames";
 import { getMoveUci, parsePgnGameInfo, type PgnGameInfo } from "../utils/pgn";
 import { playMoveResultSound } from "../utils/sounds";
 
@@ -74,8 +78,6 @@ const ACCURATE_CLASSIFICATIONS = new Set<ClassificationValue>([
   "perfect",
   "splendid",
 ]);
-
-type PromotionPiece = "q" | "r" | "b" | "n";
 
 function getUciMoveParams(uciMove: string) {
   if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uciMove)) {
@@ -328,7 +330,6 @@ export default function PgnViewer() {
   const [practiceMoves, setPracticeMoves] = useState<MoveEntry[]>([]);
   const [practiceCursor, setPracticeCursor] = useState(0);
 
-  const abortRef = useRef(false);
   const {
     showEvaluationBar,
     showMoveEvaluation,
@@ -477,15 +478,7 @@ export default function PgnViewer() {
       fens.push(currentFen);
     }
 
-    for (let i = fens.length - 1; i >= 0; i--) {
-      const name = getOpeningName(fens[i]);
-
-      if (name) {
-        return name;
-      }
-    }
-
-    return null;
+    return getLatestOpeningName(fens);
   }, [currentFen, positions, currentIdx, activePracticeMoves]);
 
   const getGameAtMove = useCallback(
@@ -599,8 +592,6 @@ export default function PgnViewer() {
     setPracticeCursor(0);
     setSelectedSquare(null);
     setPgnGameInfo(null);
-    abortRef.current = false;
-
     try {
       const parsedGameInfo = parsePgnGameInfo(pgnInput);
       const game = new Chess();
@@ -640,10 +631,6 @@ export default function PgnViewer() {
       await engine.connect();
 
       for (let i = 0; i < posData.length; i++) {
-        if (abortRef.current) {
-          break;
-        }
-
         try {
           const result = await engine.analyzePosition(posData[i].fen, 14, 3);
 

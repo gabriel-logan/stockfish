@@ -35,6 +35,7 @@ import type {
   Room,
   ServerMessage,
 } from "../types/api";
+import type { PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
 import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
@@ -46,7 +47,6 @@ import {
 } from "../utils/sounds";
 
 type OnlineStatus = "idle" | "matching" | "playing" | "finished";
-type PromotionPiece = "q" | "r" | "b" | "n";
 type SocketJoinMessage =
   | { type: "join_room"; room_id: string }
   | { type: "join_game"; game_id: string };

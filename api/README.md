@@ -16,8 +16,8 @@ Rust multiplayer chess server for online games.
 When started from the repository root:
 
 ```bash
-docker compose up -d --build api-db
-docker compose run --rm atlas schema apply --env local --auto-approve
+docker compose --profile tools up -d --build api-db api-dev-db
+docker compose --profile tools run --rm atlas schema apply --env local --auto-approve
 docker compose up -d --build api
 ```
 
@@ -38,6 +38,7 @@ Atlas uses `api-dev-db` as its clean development database while computing declar
 | `HOST` | `0.0.0.0` | HTTP bind host |
 | `PORT` | `6090` | HTTP bind port |
 | `DATABASE_URL` | required | PostgreSQL connection URL |
+| `DATABASE_MAX_CONNECTIONS` | `10` | PostgreSQL connection-pool limit |
 | `JWT_SECRET` | required | HS256 signing secret |
 | `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access token lifetime |
 | `REFRESH_TOKEN_TTL_SECONDS` | `2592000` | Refresh token lifetime |
@@ -78,30 +79,36 @@ ws://localhost:6090/ws?token=<accessToken>
 Client messages:
 
 ```json
-{"type":"join_room","roomId":"..."}
-{"type":"join_game","gameId":"..."}
-{"type":"move","gameId":"...","uci":"e2e4"}
+{"type":"join_room","room_id":"..."}
+{"type":"join_game","game_id":"..."}
+{"type":"move","game_id":"...","uci":"e2e4"}
 {"type":"ping"}
 ```
 
 Server messages:
 
 ```json
-{"type":"ready","userId":"..."}
+{"type":"ready","user_id":"..."}
 {"type":"room_updated","room":{}}
 {"type":"game_started","game":{}}
-{"type":"game_state","game":{},"moves":[]}
-{"type":"move_accepted","game":{},"move":{}}
+{"type":"game_state","game":{},"moves":[],"white_player":{},"black_player":{}}
+{"type":"move_accepted","game":{},"move_record":{}}
+{"type":"player_disconnected","user_id":"..."}
 {"type":"error","message":"..."}
 {"type":"pong"}
 ```
 
+`white_player` and `black_player` contain player data when available; either value can be `null`.
+
 ## Validation
 
-Use Docker if Rust is not installed on the host:
+Run these commands from the repository root. `CARGO_TARGET_DIR` keeps build artifacts outside the bind-mounted workspace.
 
 ```bash
-docker run --rm -v "$PWD/api:/app" -w /app rust:1.95-bookworm cargo fmt --all -- --check
-docker run --rm -v "$PWD/api:/app" -w /app rust:1.95-bookworm cargo clippy --workspace --all-targets --all-features -- -D warnings
-docker run --rm -v "$PWD/api:/app" -w /app rust:1.95-bookworm cargo build --workspace --all-features
+docker run --rm \
+  -v "$PWD/api:/app" \
+  -w /app \
+  -e CARGO_TARGET_DIR=/tmp/api-target \
+  rust:1.95-bookworm \
+  bash -c 'rustup component add rustfmt clippy && cargo fmt --all && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo build --workspace --all-features'
 ```

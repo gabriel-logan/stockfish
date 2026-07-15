@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import { UCI_ELO_DEFAULT } from "../utils/elo";
+
 export const PIECE_SETS = [
   { value: "alpha", label: "Alpha" },
   { value: "anarcandy", label: "Anarcandy" },
@@ -66,7 +68,7 @@ export const useSettingsStore = create<SettingsState>((set) => {
     showEvaluationBar: true,
     showMoveEvaluation: true,
     soundEnabled: true,
-    botElo: 1500,
+    botElo: UCI_ELO_DEFAULT,
     playerColor: "w",
     pieceSet: "maestro",
     setShowEvaluationBar: (show) => {

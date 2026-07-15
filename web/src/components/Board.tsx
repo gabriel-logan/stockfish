@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 
 import type { PieceSet } from "../store/settingsStore";
-import type { ClassificationValue } from "../types/chess-types";
+import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import { playClickSound, playIllegalMoveSound } from "../utils/sounds";
 
 interface BoardProps {
@@ -33,7 +33,6 @@ interface BoardProps {
   squareSizeClass?: string;
 }
 
-type PromotionPiece = "q" | "r" | "b" | "n";
 type BoardArrow = { from: Square; to: Square };
 type ArrowPoints = {
   x1: number;
