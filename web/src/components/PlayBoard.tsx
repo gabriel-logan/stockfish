@@ -447,6 +447,24 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       }, BOT_MOVE_DELAY_MS);
     };
 
+    return () => {
+      clearPendingBotMove();
+      isIntentionalDisconnectRef.current = true;
+      playEngine.disconnect();
+      evalEngine.disconnect();
+      playEngineRef.current = null;
+      evalEngineRef.current = null;
+    };
+  }, [classifyLastMove, clearPendingBotMove, freePlay, syncMoves]);
+
+  useEffect(() => {
+    const playEngine = playEngineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (!playEngine || !evalEngine) {
+      return;
+    }
+
     playEngine.onError = (msg) => {
       setError(msg);
       toast.error(msg);
@@ -476,6 +494,15 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       setError(t("errors.evaluationConnectionLost"));
       toast.error(t("errors.evalEngineDisconnected"));
     };
+  }, [t]);
+
+  useEffect(() => {
+    const playEngine = playEngineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (!playEngine || !evalEngine) {
+      return;
+    }
 
     Promise.all([playEngine.connect(), evalEngine.connect()])
       .then(() => {
@@ -486,16 +513,10 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         setError(err.message);
         toast.error(t("errors.connectionFailed", { message: err.message }));
       });
-
-    return () => {
-      clearPendingBotMove();
-      isIntentionalDisconnectRef.current = true;
-      playEngine.disconnect();
-      evalEngine.disconnect();
-      playEngineRef.current = null;
-      evalEngineRef.current = null;
-    };
-  }, [classifyLastMove, clearPendingBotMove, freePlay, syncMoves, t]);
+    // This connects the existing engine instances once. Language changes only
+    // update the translated callbacks in the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /*
     Keep a dedicated connection for playing moves and a separate full-strength
