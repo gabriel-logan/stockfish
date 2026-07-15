@@ -48,6 +48,25 @@ docker compose up --build -d
 > ```
 > Defaults to `localhost` when `HOST_IP` is not set.
 
+### Linux file permissions
+
+The `web` service builds the frontend inside Docker while mounting `./web` into the container. On Linux, files created through that bind mount keep the container user ID, so the service runs as `${DOCKER_UID:-1000}:${DOCKER_GID:-1000}` to avoid generating `web/dist` or `web/node_modules` as `root`.
+
+If your Linux user does not use UID/GID `1000`, set the values before running Compose:
+
+```bash
+DOCKER_UID=$(id -u) DOCKER_GID=$(id -g) docker compose up
+```
+
+Or put them in a local `.env` file:
+
+```env
+DOCKER_UID=1000
+DOCKER_GID=1000
+```
+
+This is mainly a Linux bind-mount concern. Docker Desktop on macOS and Windows normally translates file ownership through its VM/shared filesystem layer, so the default values usually work there.
+
 ```bash
 # Stop containers (keeps images)
 docker compose down
