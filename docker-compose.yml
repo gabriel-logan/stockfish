@@ -79,7 +79,7 @@ services:
       bash -c "
         mkdir -p /tmp/corepack /tmp/pnpm &&
         corepack enable --install-directory /tmp/pnpm &&
-        /tmp/pnpm/pnpm install --frozen-lockfile &&
+        /tmp/pnpm/pnpm install --frozen-lockfile --store-dir /tmp/pnpm/store &&
         /tmp/pnpm/pnpm build &&
         /tmp/pnpm/pnpm preview --host 0.0.0.0 --port 5173
       "
