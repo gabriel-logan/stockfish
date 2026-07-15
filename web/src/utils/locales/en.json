@@ -150,6 +150,7 @@
     "playAs": "Play as",
     "botElo": "Bot Elo: {{elo}}",
     "undoLastMove": "Undo last move",
+    "restartFromStartPosition": "Restart from starting position",
     "flipBoard": "Flip board",
     "copyPgn": "Copy PGN",
     "resign": "Resign",

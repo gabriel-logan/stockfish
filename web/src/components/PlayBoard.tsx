@@ -8,6 +8,7 @@ import {
   FaRedo,
   FaRobot,
   FaSave,
+  FaSyncAlt,
   FaUndo,
   FaUser,
   FaUsers,
@@ -153,6 +154,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
   const botMoveTimeoutRef = useRef<number | null>(null);
   const isIntentionalDisconnectRef = useRef(false);
+  const initialGameFenRef = useRef(new Chess().fen());
 
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(
@@ -552,6 +554,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         }
 
         if (!gameStartedRef.current) {
+          initialGameFenRef.current = fenBefore;
           gameStartedRef.current = true;
           setGameStarted(true);
         }
@@ -881,6 +884,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       setIsGameOver(gameRef.current.isGameOver());
     }
 
+    initialGameFenRef.current = gameRef.current.fen();
     gameStartedRef.current = true;
     setGameStarted(true);
 
@@ -957,6 +961,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     setSelectedSquare(null);
     setEditMode(false);
     setIsGameOver(gameRef.current.isGameOver());
+    initialGameFenRef.current = gameRef.current.fen();
 
     const evalEngine = evalEngineRef.current;
 
@@ -1066,6 +1071,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     }
 
     const newChess = new Chess();
+    initialGameFenRef.current = newChess.fen();
     gameRef.current = newChess;
     setGame(newChess);
 
@@ -1089,6 +1095,61 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       evalEngine.startAnalysis(newChess.fen(), 14, 1);
     }
   }, [freePlay, syncMoves, clearPendingBotMove]);
+
+  const restartGame = useCallback(() => {
+    analysisVersionRef.current += 1;
+    clearPendingBotMove();
+    isEngineRunning.current = false;
+    evalQueueRef.current = Promise.resolve();
+
+    const playEngine = playEngineRef.current;
+    const evalEngine = evalEngineRef.current;
+
+    if (playEngine?.connected) {
+      playEngine.stopAnalysis();
+    }
+
+    if (evalEngine?.connected) {
+      evalEngine.stopAnalysis();
+    }
+
+    const restartedGame = new Chess(initialGameFenRef.current);
+    gameRef.current = restartedGame;
+    setGame(restartedGame);
+
+    prevEvalRef.current = null;
+    evaluationRef.current = null;
+    syncMoves([]);
+    setSelectedSquare(null);
+    setLastMove(null);
+    setEvaluation(null);
+    setMate(null);
+    setGameStarted(true);
+    setIsGameOver(restartedGame.isGameOver());
+    setIsThinking(false);
+    setError(null);
+    setSavedGameId(null);
+    setEditMode(false);
+    setEditPiece(null);
+
+    if (evalEngine?.connected) {
+      evalEngine.setFullStrength();
+      evalEngine.startAnalysis(restartedGame.fen(), 14, 1);
+    }
+
+    if (
+      !freePlay &&
+      restartedGame.turn() === computerColorRef.current &&
+      !restartedGame.isGameOver()
+    ) {
+      if (playEngine?.connected) {
+        playEngine.setElo(botEloRef.current);
+        playEngine.startAnalysis(restartedGame.fen(), 14, 1);
+        isEngineRunning.current = true;
+        setIsThinking(true);
+      }
+    }
+  }, [clearPendingBotMove, freePlay, syncMoves]);
 
   const iconActionButtonClass =
     "inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-b from-[#3c3a36] to-[#302e2a] p-0 text-lg font-extrabold text-[#f4f1e8] shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#484640] hover:to-[#383631] disabled:cursor-not-allowed disabled:opacity-40";
@@ -1626,7 +1687,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
           />
         </div>
 
-        <div className="grid grid-cols-5 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
+        <div className="grid grid-cols-6 gap-2 border-t border-[#accc821a] bg-[#1d211d] p-3 max-[44rem]:grid-cols-1">
           <button
             type="button"
             className={iconActionButtonClass}
@@ -1635,6 +1696,16 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
             title={t("playComputer.undoLastMove")}
           >
             <FaUndo aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            className={iconActionButtonClass}
+            onClick={restartGame}
+            disabled={!gameStarted || moves.length === 0}
+            title={t("playComputer.restartFromStartPosition")}
+          >
+            <FaSyncAlt aria-hidden="true" />
           </button>
 
           <button
