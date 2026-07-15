@@ -11,6 +11,7 @@ use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
 use crate::hub::ServerMessage;
 use crate::models::{Game, MoveRecord, PlayerInfo, Room};
+use crate::users;
 
 const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -282,13 +283,7 @@ pub fn ensure_player(game: &Game, user_id: Uuid) -> ApiResult<()> {
 }
 
 pub async fn fetch_player_info(state: &AppState, user_id: Uuid) -> ApiResult<PlayerInfo> {
-    let user = sqlx::query_as::<_, crate::models::User>(
-        "SELECT id, username, email, rating, created_at FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("user not found".to_owned()))?;
+    let user = users::get_user(state, user_id).await?;
 
     Ok(PlayerInfo {
         id: user.id,

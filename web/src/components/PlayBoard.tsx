@@ -322,7 +322,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     [syncMoves],
   );
 
-  // Setup engines (one plays, one evaluates at full strength)
   useEffect(() => {
     const playEngine = new AnalysisEngine();
     const evalEngine = new AnalysisEngine();
@@ -380,7 +379,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         return;
       }
 
-      // Play computer's move
       if (
         gameRef.current.turn() !== computerColorRef.current ||
         gameRef.current.isGameOver()
@@ -459,7 +457,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
             playMoveResultSound(move, gameRef.current);
           }
         } catch {
-          // Invalid move from engine
+          // The engine can return a move for a stale position.
         }
       }, BOT_MOVE_DELAY_MS);
     };
@@ -599,7 +597,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
           setIsThinking(true);
         }
       } catch {
-        // Invalid move
+        // chess.js rejects illegal moves without changing the board.
       }
     },
     [freePlay, playerColor, botElo, syncMoves, classifyLastMove],
@@ -895,7 +893,6 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       evalEngine.startAnalysis(gameRef.current.fen(), 14, 1);
     }
 
-    // If it's the bot's turn, start analysis immediately
     if (
       gameRef.current.turn() === computerColorRef.current &&
       !gameRef.current.isGameOver()

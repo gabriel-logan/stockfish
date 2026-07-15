@@ -45,6 +45,9 @@ import {
 
 type OnlineStatus = "idle" | "matching" | "playing" | "finished";
 type PromotionPiece = "q" | "r" | "b" | "n";
+type SocketJoinMessage =
+  | { type: "join_room"; room_id: string }
+  | { type: "join_game"; game_id: string };
 
 const ONLINE_STATUS_KEYS = {
   idle: "online.connectionStatus.idle",
@@ -130,6 +133,22 @@ function formatPgnDate(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}.${month}.${day}`;
+}
+
+function getPgnResult(result: Game["result"] | undefined) {
+  if (result === "white_win") {
+    return "1-0";
+  }
+
+  if (result === "black_win") {
+    return "0-1";
+  }
+
+  if (result === "draw") {
+    return "1/2-1/2";
+  }
+
+  return "*";
 }
 
 export default function PlayOnline() {
@@ -302,8 +321,8 @@ export default function PlayOnline() {
     [soundEnabled, t],
   );
 
-  const connectRoomSocket = useCallback(
-    (roomId: string) => {
+  const connectSocket = useCallback(
+    (joinMessage: SocketJoinMessage) => {
       if (!accessToken) {
         return;
       }
@@ -315,34 +334,7 @@ export default function PlayOnline() {
       );
 
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "join_room", room_id: roomId }));
-      };
-
-      socket.onmessage = handleSocketMessage;
-
-      socket.onclose = () => {
-        setSendingMove(false);
-      };
-
-      socketRef.current = socket;
-    },
-    [accessToken, closeSocket, handleSocketMessage],
-  );
-
-  const connectGameSocket = useCallback(
-    (gameId: string) => {
-      if (!accessToken) {
-        return;
-      }
-
-      closeSocket();
-
-      const socket = new WebSocket(
-        `${baseUrlApiWS}/ws?token=${encodeURIComponent(accessToken)}`,
-      );
-
-      socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "join_game", game_id: gameId }));
+        socket.send(JSON.stringify(joinMessage));
       };
 
       socket.onmessage = handleSocketMessage;
@@ -388,11 +380,11 @@ export default function PlayOnline() {
         setGame(gameResponse.game);
         setMoves(gameResponse.moves);
         setStatus("playing");
-        connectGameSocket(response.game.id);
+        connectSocket({ type: "join_game", game_id: response.game.id });
         return;
       }
 
-      connectRoomSocket(response.room.id);
+      connectSocket({ type: "join_room", room_id: response.room.id });
       toast.info(t("online.matchmakingJoined"));
     } catch (error) {
       setStatus("idle");
@@ -411,11 +403,11 @@ export default function PlayOnline() {
         setGame(gameResponse.game);
         setMoves(gameResponse.moves);
         setStatus("playing");
-        connectGameSocket(response.game.id);
+        connectSocket({ type: "join_game", game_id: response.game.id });
         return;
       }
 
-      connectRoomSocket(response.room.id);
+      connectSocket({ type: "join_room", room_id: response.room.id });
     } catch (error) {
       setStatus("idle");
       toast.error(getApiErrorMessage(error));
@@ -474,14 +466,7 @@ export default function PlayOnline() {
       pgnGame.move(move.uci);
     }
 
-    const result =
-      game.result === "white_win"
-        ? "1-0"
-        : game.result === "black_win"
-          ? "0-1"
-          : game.result === "draw"
-            ? "1/2-1/2"
-            : "*";
+    const result = getPgnResult(game.result);
 
     const white = whitePlayer?.username ?? "White";
     const black = blackPlayer?.username ?? "Black";
@@ -527,14 +512,7 @@ export default function PlayOnline() {
     }
 
     const pgn = createPgnWithHeaders();
-    const result =
-      game?.result === "white_win"
-        ? "1-0"
-        : game?.result === "black_win"
-          ? "0-1"
-          : game?.result === "draw"
-            ? "1/2-1/2"
-            : "*";
+    const result = getPgnResult(game?.result);
 
     const opponent =
       game && user

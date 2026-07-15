@@ -6,7 +6,7 @@ use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
 use crate::games;
 use crate::hub::ServerMessage;
-use crate::models::{CreateRoomRequest, MatchmakingRequest, Room};
+use crate::models::{CreateRoomRequest, Game, MatchmakingRequest, Room};
 
 pub async fn create_room(
     state: web::Data<AppState>,
@@ -23,7 +23,9 @@ pub async fn create_room(
     )
     .await?;
 
-    state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+    state
+        .hub
+        .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
 
     Ok(web::Json(room))
 }
@@ -59,15 +61,9 @@ pub async fn join_room(
     user: AuthUser,
     room_id: web::Path<Uuid>,
 ) -> ApiResult<HttpResponse> {
-    let room = join_room_record(&state, user.id, *room_id).await?;
-    let game = games::start_game_if_ready(&state, &room).await?;
-
-    state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+    let (room, game) = join_room_and_start_game(&state, user.id, *room_id).await?;
 
     if let Some(game) = game {
-        state.hub.broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
-        state.hub.broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
-
         return Ok(HttpResponse::Ok().json(serde_json::json!({
             "room": room,
             "game": game
@@ -95,15 +91,9 @@ pub async fn join_matchmaking(
     )
     .await?
     {
-        let room = join_room_record(&state, user.id, room.id).await?;
-        let game = games::start_game_if_ready(&state, &room).await?;
-
-        state.hub.broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+        let (room, game) = join_room_and_start_game(&state, user.id, room.id).await?;
 
         if let Some(game) = game {
-            state.hub.broadcast_room(room.id, &ServerMessage::GameStarted { game: game.clone() });
-            state.hub.broadcast_game(game.id, &ServerMessage::GameStarted { game: game.clone() });
-
             return Ok(HttpResponse::Ok().json(serde_json::json!({
                 "matched": true,
                 "room": room,
@@ -159,6 +149,28 @@ pub async fn get_room_by_id(state: &AppState, room_id: Uuid) -> ApiResult<Room> 
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| ApiError::NotFound("room not found".to_owned()))
+}
+
+async fn join_room_and_start_game(
+    state: &AppState,
+    user_id: Uuid,
+    room_id: Uuid,
+) -> ApiResult<(Room, Option<Game>)> {
+    let room = join_room_record(state, user_id, room_id).await?;
+    let game = games::start_game_if_ready(state, &room).await?;
+
+    state
+        .hub
+        .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
+
+    if let Some(game) = &game {
+        let message = ServerMessage::GameStarted { game: game.clone() };
+
+        state.hub.broadcast_room(room.id, &message);
+        state.hub.broadcast_game(game.id, &message);
+    }
+
+    Ok((room, game))
 }
 
 async fn create_room_record(

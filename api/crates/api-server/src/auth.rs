@@ -130,13 +130,13 @@ pub async fn refresh(
             AND refresh_tokens.expires_at > now()
         "#,
     )
-    .bind(token_hash)
+    .bind(&token_hash)
     .fetch_optional(&state.db)
     .await?
     .ok_or(ApiError::Unauthorized)?;
 
     sqlx::query("UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1")
-        .bind(hash_refresh_token(&body.refresh_token))
+        .bind(&token_hash)
         .execute(&state.db)
         .await?;
 

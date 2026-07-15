@@ -51,6 +51,14 @@ type DisplayArrow = ArrowPoints & {
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 const PROMOTION_PIECES: PromotionPiece[] = ["q", "r", "b", "n"];
+const PIECE_TYPE_NAMES = {
+  p: "Pawn",
+  n: "Knight",
+  b: "Bishop",
+  r: "Rook",
+  q: "Queen",
+  k: "King",
+} as const;
 const BOARD_VIEWBOX_SIZE = 800;
 const BOARD_SQUARE_SIZE = BOARD_VIEWBOX_SIZE / 8;
 
@@ -254,15 +262,6 @@ export default function Board({
   const [manualArrows, setManualArrows] = useState<BoardArrow[]>([]);
   const [rightDrag, setRightDrag] = useState<BoardArrow | null>(null);
   const [draggedSquare, setDraggedSquare] = useState<Square | null>(null);
-
-  const pieceTypeName = {
-    p: "Pawn",
-    n: "Knight",
-    b: "Bishop",
-    r: "Rook",
-    q: "Queen",
-    k: "King",
-  } as const;
 
   const board = game.board();
 
@@ -790,7 +789,7 @@ export default function Board({
                     <img
                       src={`/pieces/${pieceSet}/${piece.color}${piece.type.toUpperCase()}.svg`}
                       alt={t(
-                        `board.${piece.color === "w" ? "white" : "black"}${pieceTypeName[piece.type]}`,
+                        `board.${piece.color === "w" ? "white" : "black"}${PIECE_TYPE_NAMES[piece.type]}`,
                       )}
                       className="size-[95%] object-contain drop-shadow-[0_0.1rem_0.06rem_rgb(0_0_0_/_18%)]"
                       draggable={!promotionMove}
@@ -839,7 +838,7 @@ export default function Board({
           <div className="grid grid-cols-4 gap-2 rounded-md border border-white/10 bg-[#252820] p-2 shadow-[0_1rem_2rem_rgb(0_0_0_/_35%)]">
             {PROMOTION_PIECES.map((piece) => {
               const label = t(
-                `board.${promotionMove.color === "w" ? "white" : "black"}${pieceTypeName[piece]}`,
+                `board.${promotionMove.color === "w" ? "white" : "black"}${PIECE_TYPE_NAMES[piece]}`,
               );
 
               return (

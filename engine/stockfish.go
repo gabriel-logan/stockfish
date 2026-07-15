@@ -79,10 +79,11 @@ func NewStockfish(path string) (*Stockfish, error) {
 	return sf, nil
 }
 
-func (sf *Stockfish) send(cmd string) error {
+func (sf *Stockfish) send(command string) error {
 	sf.writeMu.Lock()
 	defer sf.writeMu.Unlock()
-	_, err := io.WriteString(sf.stdin, cmd+"\n")
+
+	_, err := io.WriteString(sf.stdin, command+"\n")
 	return err
 }
 
@@ -91,36 +92,41 @@ func (sf *Stockfish) SetOption(name, value string) error {
 }
 
 func (sf *Stockfish) SetPosition(fen string, moves []string) error {
-	var cmd string
+	var command string
 	if fen == "" || fen == "startpos" {
-		cmd = "position startpos"
+		command = "position startpos"
 	} else {
-		cmd = "position fen " + fen
+		command = "position fen " + fen
 	}
 	if len(moves) > 0 {
-		cmd += " moves " + strings.Join(moves, " ")
+		command += " moves " + strings.Join(moves, " ")
 	}
-	return sf.send(cmd)
+
+	return sf.send(command)
 }
 
 func (sf *Stockfish) GoDepth(depth int, multiPV int) error {
-	if multiPV < 1 {
-		multiPV = 1
-	}
-	if err := sf.SetOption("MultiPV", fmt.Sprintf("%d", multiPV)); err != nil {
+	if err := sf.setMultiPV(multiPV); err != nil {
 		return err
 	}
+
 	return sf.send(fmt.Sprintf("go depth %d", depth))
 }
 
 func (sf *Stockfish) GoInfinite(multiPV int) error {
+	if err := sf.setMultiPV(multiPV); err != nil {
+		return err
+	}
+
+	return sf.send("go infinite")
+}
+
+func (sf *Stockfish) setMultiPV(multiPV int) error {
 	if multiPV < 1 {
 		multiPV = 1
 	}
-	if err := sf.SetOption("MultiPV", fmt.Sprintf("%d", multiPV)); err != nil {
-		return err
-	}
-	return sf.send("go infinite")
+
+	return sf.SetOption("MultiPV", fmt.Sprintf("%d", multiPV))
 }
 
 func (sf *Stockfish) Stop() error {

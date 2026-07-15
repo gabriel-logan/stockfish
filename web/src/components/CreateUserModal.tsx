@@ -19,11 +19,13 @@ export default function CreateUserModal({ open, onClose, onSubmit }: Props) {
   function handleSubmit() {
     const trimmed = name.trim();
 
-    if (trimmed) {
-      onSubmit(trimmed);
-      setName("");
-      onClose();
+    if (!trimmed) {
+      return;
     }
+
+    onSubmit(trimmed);
+    setName("");
+    onClose();
   }
 
   return (

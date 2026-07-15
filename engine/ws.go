@@ -104,8 +104,12 @@ func handleWS(cfg Config) http.HandlerFunc {
 			})
 		}
 
-		safeGo(func() { writePump(conn, sf, state, shutdown) })
-		safeGo(func() { readPump(conn, sf, state, shutdown) })
+		safeGo(func() {
+			writePump(conn, sf, state, shutdown)
+		})
+		safeGo(func() {
+			readPump(conn, sf, state, shutdown)
+		})
 	}
 }
 
@@ -153,11 +157,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 
 			switch msg.Type {
 			case "start":
-				if state.IsActive() {
-					state.MarkStoppedByClient()
-					if err := sf.Stop(); err != nil {
-						log.Printf("readPump stop: %v", err)
-					}
+				if stopActiveSearch(sf, state) {
 					time.Sleep(15 * time.Millisecond)
 				}
 
@@ -179,12 +179,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 				state.MarkStarted()
 
 			case "stop":
-				if state.IsActive() {
-					state.MarkStoppedByClient()
-					if err := sf.Stop(); err != nil {
-						log.Printf("readPump stop: %v", err)
-					}
-				}
+				stopActiveSearch(sf, state)
 
 			case "setoption":
 				if err := sf.SetOption(msg.FEN, msg.Moves); err != nil {
@@ -196,6 +191,20 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 			continue
 		}
 	}
+}
+
+func stopActiveSearch(sf *Stockfish, state *searchState) bool {
+	if !state.IsActive() {
+		return false
+	}
+
+	state.MarkStoppedByClient()
+
+	if err := sf.Stop(); err != nil {
+		log.Printf("readPump stop: %v", err)
+	}
+
+	return true
 }
 
 // parseSFLine parses a single line of Stockfish UCI output into a structured message.

@@ -72,22 +72,22 @@ export default function MoveList({
   }
 
   function getMoveButtonClass(isActive: boolean, isManual: boolean) {
-    let className =
+    const baseClass =
       "inline-flex min-h-7 min-w-0 items-center justify-start gap-1 rounded px-2 text-[#dcd8cf] transition-colors hover:bg-white/7 hover:text-white";
-
-    if (isManual) {
-      className = `${className} bg-white/14 text-white ring-1 ring-white/14`;
-    }
 
     if (isActive) {
       if (isManual) {
-        className = `${className} bg-white/22 ring-white/35`;
-      } else {
-        className = `${className} bg-[#315da8] text-white`;
+        return `${baseClass} bg-white/14 text-white ring-1 ring-white/14 bg-white/22 ring-white/35`;
       }
+
+      return `${baseClass} bg-[#315da8] text-white`;
     }
 
-    return className;
+    if (isManual) {
+      return `${baseClass} bg-white/14 text-white ring-1 ring-white/14`;
+    }
+
+    return baseClass;
   }
 
   return (

@@ -1,6 +1,7 @@
 use actix_web::{HttpRequest, HttpResponse, web};
 use actix_ws::Message;
 use serde::Deserialize;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -56,8 +57,7 @@ pub async fn websocket(
                 }
                 Message::Close(reason) => {
                     if let Some(game_id) = current_game_id {
-                        let msg = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
-                        state_for_task.hub.broadcast_game(game_id, &msg);
+                        broadcast_player_disconnected(&state_for_task, game_id, user_id);
                     }
                     let _ = session.close(reason).await;
                     return;
@@ -67,8 +67,7 @@ pub async fn websocket(
         }
 
         if let Some(game_id) = current_game_id {
-            let msg = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
-            state_for_task.hub.broadcast_game(game_id, &msg);
+            broadcast_player_disconnected(&state_for_task, game_id, user_id);
         }
 
         let _ = session.close(None).await;
@@ -84,9 +83,7 @@ async fn handle_text(
     text: &str,
     current_game_id: &mut Option<Uuid>,
 ) {
-    let parsed = serde_json::from_str::<ClientMessage>(text);
-
-    let result = match parsed {
+    let result = match serde_json::from_str::<ClientMessage>(text) {
         Ok(ClientMessage::JoinRoom { room_id }) => join_room_channel(state, session, room_id).await,
         Ok(ClientMessage::JoinGame { game_id }) => {
             match join_game_channel(state, user_id, session, game_id).await {
@@ -97,9 +94,7 @@ async fn handle_text(
                 Err(e) => Err(e),
             }
         }
-        Ok(ClientMessage::Move { game_id, uci }) => {
-            play_move(state, user_id, session, game_id, &uci).await
-        }
+        Ok(ClientMessage::Move { game_id, uci }) => play_move(state, user_id, game_id, &uci).await,
         Ok(ClientMessage::Ping) => {
             send_json(session, &ServerMessage::<serde_json::Value>::Pong).await;
             Ok(())
@@ -108,8 +103,33 @@ async fn handle_text(
     };
 
     if let Err(error) = result {
-        send_error(session, error.to_string()).await;
+        send_json(
+            session,
+            &ServerMessage::<serde_json::Value>::Error {
+                message: error.to_string(),
+            },
+        )
+        .await;
     }
+}
+
+fn broadcast_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
+    let message = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
+
+    state.hub.broadcast_game(game_id, &message);
+}
+
+fn forward_hub_messages(
+    mut session: actix_ws::Session,
+    mut messages: mpsc::UnboundedReceiver<String>,
+) {
+    actix_web::rt::spawn(async move {
+        while let Some(payload) = messages.recv().await {
+            if session.text(payload).await.is_err() {
+                return;
+            }
+        }
+    });
 }
 
 async fn join_room_channel(
@@ -118,16 +138,9 @@ async fn join_room_channel(
     room_id: Uuid,
 ) -> ApiResult<()> {
     let room = rooms::get_room_by_id(state, room_id).await?;
-    let mut rx = state.hub.subscribe_room(room_id);
-    let mut outbound = session.clone();
+    let messages = state.hub.subscribe_room(room_id);
 
-    actix_web::rt::spawn(async move {
-        while let Some(payload) = rx.recv().await {
-            if outbound.text(payload).await.is_err() {
-                return;
-            }
-        }
-    });
+    forward_hub_messages(session.clone(), messages);
 
     send_json(session, &ServerMessage::RoomUpdated { room }).await;
 
@@ -144,19 +157,16 @@ async fn join_game_channel(
     games::ensure_player(&game, user_id)?;
 
     let moves = games::list_moves(state, game_id).await?;
-    let white_player = games::fetch_player_info(state, game.white_user_id).await.ok();
-    let black_player = games::fetch_player_info(state, game.black_user_id).await.ok();
+    let white_player = games::fetch_player_info(state, game.white_user_id)
+        .await
+        .ok();
+    let black_player = games::fetch_player_info(state, game.black_user_id)
+        .await
+        .ok();
 
-    let mut rx = state.hub.subscribe_game(game_id);
-    let mut outbound = session.clone();
+    let messages = state.hub.subscribe_game(game_id);
 
-    actix_web::rt::spawn(async move {
-        while let Some(payload) = rx.recv().await {
-            if outbound.text(payload).await.is_err() {
-                return;
-            }
-        }
-    });
+    forward_hub_messages(session.clone(), messages);
 
     send_json(
         session,
@@ -172,13 +182,7 @@ async fn join_game_channel(
     Ok(())
 }
 
-async fn play_move(
-    state: &AppState,
-    user_id: Uuid,
-    _session: &mut actix_ws::Session,
-    game_id: Uuid,
-    uci: &str,
-) -> ApiResult<()> {
+async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) -> ApiResult<()> {
     let (game, move_record) = games::play_uci_move(state, user_id, game_id, uci).await?;
     let message = ServerMessage::MoveAccepted {
         game: game.clone(),
@@ -188,14 +192,6 @@ async fn play_move(
     state.hub.broadcast_game(game.id, &message);
 
     Ok(())
-}
-
-async fn send_error(session: &mut actix_ws::Session, message: String) {
-    send_json(
-        session,
-        &ServerMessage::<serde_json::Value>::Error { message },
-    )
-    .await;
 }
 
 async fn send_json<T: serde::Serialize>(

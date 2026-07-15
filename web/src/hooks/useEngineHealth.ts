@@ -13,9 +13,13 @@ export function useEngineHealthCheck(intervalMs = 30000) {
     const check = async () => {
       try {
         await engineApi.get("/health", { timeout: 5000 });
-        if (!cancelled) setStatus("connected");
+        if (!cancelled) {
+          setStatus("connected");
+        }
       } catch {
-        if (!cancelled) setStatus("disconnected");
+        if (!cancelled) {
+          setStatus("disconnected");
+        }
       }
     };
 

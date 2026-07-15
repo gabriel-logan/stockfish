@@ -16,15 +16,3 @@ func safeGo(fn func()) {
 		fn()
 	}()
 }
-
-// safeGoNamed is like safeGo but prefixes the log with the given name.
-func safeGoNamed(name string, fn func()) {
-	go func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("goroutine %q panic: %v\n%s", name, rec, debug.Stack())
-			}
-		}()
-		fn()
-	}()
-}

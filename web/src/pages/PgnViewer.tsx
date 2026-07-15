@@ -46,6 +46,43 @@ type PgnGameInfo = {
   moveInfo: PgnMoveInfo[];
 };
 
+const KNOWN_PGN_HEADER_LABELS: Record<string, string> = {
+  Event: "Event",
+  Site: "Site",
+  Date: "Date",
+  Round: "Round",
+  White: "White",
+  Black: "Black",
+  Result: "Result",
+  CurrentPosition: "Current position",
+  WhiteElo: "White Elo",
+  BlackElo: "Black Elo",
+  WhiteTitle: "White title",
+  BlackTitle: "Black title",
+  TimeControl: "Time control",
+  Termination: "Termination",
+  ECO: "ECO",
+  ECOUrl: "ECO URL",
+  Opening: "Opening",
+  Variant: "Variant",
+  UTCDate: "UTC date",
+  UTCTime: "UTC time",
+  Timezone: "Timezone",
+  StartTime: "Start time",
+  EndDate: "End date",
+  EndTime: "End time",
+  Link: "Link",
+};
+
+const ACCURATE_CLASSIFICATIONS = new Set<ClassificationValue>([
+  "excellent",
+  "best",
+  "forced",
+  "opening",
+  "perfect",
+  "splendid",
+]);
+
 function getMoveUci(move: { from: string; to: string; promotion?: string }) {
   return `${move.from}${move.to}${move.promotion ?? ""}`;
 }
@@ -132,35 +169,7 @@ function getPgnHeader(pgn: string, header: string) {
 }
 
 function getKnownHeaderLabel(header: string) {
-  const labels: Record<string, string> = {
-    Event: "Event",
-    Site: "Site",
-    Date: "Date",
-    Round: "Round",
-    White: "White",
-    Black: "Black",
-    Result: "Result",
-    CurrentPosition: "Current position",
-    WhiteElo: "White Elo",
-    BlackElo: "Black Elo",
-    WhiteTitle: "White title",
-    BlackTitle: "Black title",
-    TimeControl: "Time control",
-    Termination: "Termination",
-    ECO: "ECO",
-    ECOUrl: "ECO URL",
-    Opening: "Opening",
-    Variant: "Variant",
-    UTCDate: "UTC date",
-    UTCTime: "UTC time",
-    Timezone: "Timezone",
-    StartTime: "Start time",
-    EndDate: "End date",
-    EndTime: "End time",
-    Link: "Link",
-  };
-
-  return labels[header] ?? header;
+  return KNOWN_PGN_HEADER_LABELS[header] ?? header;
 }
 
 function getResultLabel(result: string) {
@@ -450,6 +459,24 @@ interface PositionData {
   classification?: ClassificationValue;
 }
 
+function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
+  const playerMoves = moveList.filter((move) => {
+    return move.color === color;
+  });
+
+  if (playerMoves.length === 0) {
+    return "-";
+  }
+
+  const accurateMoves = playerMoves.filter((move) => {
+    return (
+      move.classification && ACCURATE_CLASSIFICATIONS.has(move.classification)
+    );
+  });
+
+  return ((accurateMoves.length / playerMoves.length) * 100).toFixed(1);
+}
+
 export default function PgnViewer() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -652,7 +679,7 @@ export default function PgnViewer() {
         try {
           g.load(startFen);
         } catch {
-          /* ignore */
+          // Retain the default position when the stored starting FEN is invalid.
         }
       }
 
@@ -836,7 +863,7 @@ export default function PgnViewer() {
           setProgress(5 + ((i + 1) / posData.length) * 90);
           setPositions([...posData]);
         } catch {
-          // Skip failed position
+          // Continue with the positions that can still be analyzed.
         }
       }
 
@@ -959,7 +986,7 @@ export default function PgnViewer() {
           engine.disconnect();
         }
       } catch {
-        // Invalid move or analysis failure
+        // Keep the review usable when manual-move analysis fails.
       }
     },
     [
@@ -1020,31 +1047,6 @@ export default function PgnViewer() {
     practiceCursor,
     practiceMoves.length,
   ]);
-
-  function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
-    const good = new Set([
-      "excellent",
-      "best",
-      "forced",
-      "opening",
-      "perfect",
-      "splendid",
-    ]);
-
-    const playerMoves = moveList.filter((m) => {
-      return m.color === color;
-    });
-
-    if (playerMoves.length === 0) {
-      return "-";
-    }
-
-    const goodMoves = playerMoves.filter((m) => {
-      return m.classification && good.has(m.classification);
-    });
-
-    return ((goodMoves.length / playerMoves.length) * 100).toFixed(1);
-  }
 
   const handlePaste = async () => {
     try {
