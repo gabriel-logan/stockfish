@@ -216,11 +216,11 @@ function getClassificationRank(classification: ClassificationValue): number {
   }
 }
 
-function getWorstClassification(
+function getLeastSevereClassification(
   first: ClassificationValue,
   second: ClassificationValue,
 ): ClassificationValue {
-  if (getClassificationRank(first) >= getClassificationRank(second)) {
+  if (getClassificationRank(first) <= getClassificationRank(second)) {
     return first;
   }
 
@@ -407,7 +407,7 @@ export function classifyMove(
   const winPercentageLoss = (winBefore - winAfter) * colorMultiplier;
   const scoreLoss = (scoreBefore - scoreAfter) * colorMultiplier;
 
-  return getWorstClassification(
+  return getLeastSevereClassification(
     classifyWinPercentageLoss(winPercentageLoss),
     classifyScoreLoss(scoreLoss),
   );
