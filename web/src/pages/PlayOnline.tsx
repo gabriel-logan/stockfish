@@ -15,7 +15,7 @@ import { toast } from "react-toastify";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
-import MoveList, { type MoveEntry } from "../components/MoveList";
+import MoveList from "../components/MoveList";
 import { baseUrlApiWS } from "../constants";
 import { getApiErrorMessage } from "../lib/apiInstance";
 import { getGame, resignGame } from "../services/gameService";
@@ -35,8 +35,10 @@ import type {
   Room,
   ServerMessage,
 } from "../types/api";
+import type { MoveEntry } from "../types/moves";
 import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
+import { formatPgnDate } from "../utils/pgn";
 import {
   playErrorSound,
   playMoveRecordSound,
@@ -125,14 +127,6 @@ function getRoomStatusKey(status: string) {
   }
 
   return "online.roomStatus.waiting";
-}
-
-function formatPgnDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}.${month}.${day}`;
 }
 
 function getPgnResult(result: Game["result"] | undefined) {
@@ -348,6 +342,18 @@ export default function PlayOnline() {
     [accessToken, closeSocket, handleSocketMessage],
   );
 
+  const startOnlineGame = useCallback(
+    async (gameId: string) => {
+      const gameResponse = await getGame(gameId);
+
+      setGame(gameResponse.game);
+      setMoves(gameResponse.moves);
+      setStatus("playing");
+      connectSocket({ type: "join_game", game_id: gameId });
+    },
+    [connectSocket],
+  );
+
   useEffect(() => {
     void listRooms()
       .then((nextRooms) => {
@@ -376,11 +382,7 @@ export default function PlayOnline() {
       });
 
       if (response.game) {
-        const gameResponse = await getGame(response.game.id);
-        setGame(gameResponse.game);
-        setMoves(gameResponse.moves);
-        setStatus("playing");
-        connectSocket({ type: "join_game", game_id: response.game.id });
+        await startOnlineGame(response.game.id);
         return;
       }
 
@@ -399,11 +401,7 @@ export default function PlayOnline() {
       const response = await joinRoom(roomId);
 
       if (response.game) {
-        const gameResponse = await getGame(response.game.id);
-        setGame(gameResponse.game);
-        setMoves(gameResponse.moves);
-        setStatus("playing");
-        connectSocket({ type: "join_game", game_id: response.game.id });
+        await startOnlineGame(response.game.id);
         return;
       }
 

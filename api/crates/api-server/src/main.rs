@@ -25,6 +25,24 @@ struct AppState {
     hub: Hub,
 }
 
+fn cors_from_config(config: &Config) -> Cors {
+    if config
+        .cors_allowed_origins
+        .iter()
+        .any(|origin| origin == "*")
+    {
+        return Cors::permissive();
+    }
+
+    let mut cors = Cors::default().allow_any_method().allow_any_header();
+
+    for origin in &config.cors_allowed_origins {
+        cors = cors.allowed_origin(origin);
+    }
+
+    cors
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
@@ -48,21 +66,7 @@ async fn main() -> std::io::Result<()> {
     tracing::info!(%bind_addr, "starting api-server");
 
     HttpServer::new(move || {
-        let cors = if config
-            .cors_allowed_origins
-            .iter()
-            .any(|origin| origin == "*")
-        {
-            Cors::permissive()
-        } else {
-            let mut cors = Cors::default().allow_any_method().allow_any_header();
-
-            for origin in &config.cors_allowed_origins {
-                cors = cors.allowed_origin(origin);
-            }
-
-            cors
-        };
+        let cors = cors_from_config(&config);
 
         App::new()
             .wrap(Logger::default())

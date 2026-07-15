@@ -40,7 +40,7 @@ func NewStockfish(path string) (*Stockfish, error) {
 		done:  make(chan struct{}),
 	}
 
-	safeGo(func() {
+	safeGo("stockfish stdout scanner", func() {
 		defer close(sf.lines)
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)

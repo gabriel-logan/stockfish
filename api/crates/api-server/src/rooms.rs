@@ -8,6 +8,11 @@ use crate::games;
 use crate::hub::ServerMessage;
 use crate::models::{CreateRoomRequest, Game, MatchmakingRequest, Room};
 
+const DEFAULT_VISIBILITY: &str = "public";
+const DEFAULT_RATED: bool = false;
+const DEFAULT_TIME_CONTROL_SECONDS: i32 = 600;
+const DEFAULT_INCREMENT_SECONDS: i32 = 0;
+
 pub async fn create_room(
     state: web::Data<AppState>,
     user: AuthUser,
@@ -16,10 +21,11 @@ pub async fn create_room(
     let room = create_room_record(
         &state,
         user.id,
-        body.visibility.as_deref().unwrap_or("public"),
-        body.rated.unwrap_or(false),
-        body.time_control_seconds.unwrap_or(600),
-        body.increment_seconds.unwrap_or(0),
+        body.visibility.as_deref().unwrap_or(DEFAULT_VISIBILITY),
+        body.rated.unwrap_or(DEFAULT_RATED),
+        body.time_control_seconds
+            .unwrap_or(DEFAULT_TIME_CONTROL_SECONDS),
+        body.increment_seconds.unwrap_or(DEFAULT_INCREMENT_SECONDS),
     )
     .await?;
 
@@ -78,9 +84,11 @@ pub async fn join_matchmaking(
     user: AuthUser,
     body: web::Json<MatchmakingRequest>,
 ) -> ApiResult<HttpResponse> {
-    let time_control_seconds = body.time_control_seconds.unwrap_or(600);
-    let increment_seconds = body.increment_seconds.unwrap_or(0);
-    let rated = body.rated.unwrap_or(false);
+    let time_control_seconds = body
+        .time_control_seconds
+        .unwrap_or(DEFAULT_TIME_CONTROL_SECONDS);
+    let increment_seconds = body.increment_seconds.unwrap_or(DEFAULT_INCREMENT_SECONDS);
+    let rated = body.rated.unwrap_or(DEFAULT_RATED);
 
     if let Some(room) = find_waiting_room(
         &state,
@@ -105,7 +113,7 @@ pub async fn join_matchmaking(
     let room = create_room_record(
         &state,
         user.id,
-        "public",
+        DEFAULT_VISIBILITY,
         rated,
         time_control_seconds,
         increment_seconds,

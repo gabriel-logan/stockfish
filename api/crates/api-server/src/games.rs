@@ -50,8 +50,7 @@ pub async fn resign_game(
 
     let game = finish_game(&state, game.id, result, "resignation").await?;
 
-    let white_player = fetch_player_info(&state, game.white_user_id).await.ok();
-    let black_player = fetch_player_info(&state, game.black_user_id).await.ok();
+    let (white_player, black_player) = fetch_game_players(&state, &game).await;
 
     state.hub.broadcast_game(
         game.id,
@@ -290,6 +289,16 @@ pub async fn fetch_player_info(state: &AppState, user_id: Uuid) -> ApiResult<Pla
         username: user.username,
         rating: user.rating,
     })
+}
+
+pub async fn fetch_game_players(
+    state: &AppState,
+    game: &Game,
+) -> (Option<PlayerInfo>, Option<PlayerInfo>) {
+    let white_player = fetch_player_info(state, game.white_user_id).await.ok();
+    let black_player = fetch_player_info(state, game.black_user_id).await.ok();
+
+    (white_player, black_player)
 }
 
 async fn finish_game(

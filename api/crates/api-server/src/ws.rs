@@ -157,12 +157,7 @@ async fn join_game_channel(
     games::ensure_player(&game, user_id)?;
 
     let moves = games::list_moves(state, game_id).await?;
-    let white_player = games::fetch_player_info(state, game.white_user_id)
-        .await
-        .ok();
-    let black_player = games::fetch_player_info(state, game.black_user_id)
-        .await
-        .ok();
+    let (white_player, black_player) = games::fetch_game_players(state, &game).await;
 
     let messages = state.hub.subscribe_game(game_id);
 
@@ -198,7 +193,9 @@ async fn send_json<T: serde::Serialize>(
     session: &mut actix_ws::Session,
     message: &ServerMessage<T>,
 ) {
-    if let Ok(payload) = serde_json::to_string(message) {
-        let _ = session.text(payload).await;
-    }
+    let Some(payload) = message.to_json_string() else {
+        return;
+    };
+
+    let _ = session.text(payload).await;
 }

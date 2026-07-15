@@ -17,34 +17,26 @@ import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
-import type { MoveEntry } from "../components/MoveList";
 import MoveList from "../components/MoveList";
+import {
+  type ExternalGame,
+  fetchChessComGames,
+  fetchLichessGames,
+} from "../services/externalGameService";
 import {
   PIECE_SETS,
   type PieceSet,
   useSettingsStore,
 } from "../store/settingsStore";
 import type { ClassificationValue } from "../types/chess-types";
+import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
+import { getMoveUci, parsePgnGameInfo, type PgnGameInfo } from "../utils/pgn";
 import { playMoveResultSound } from "../utils/sounds";
 
 type PgnSource = "paste" | "lichess" | "chesscom";
-type ExternalGame = {
-  id: string;
-  label: string;
-  pgn: string;
-};
-type PgnMoveInfo = {
-  comment?: string;
-  clock?: string;
-  elapsed?: string;
-};
-type PgnGameInfo = {
-  headers: Record<string, string>;
-  moveInfo: PgnMoveInfo[];
-};
 
 const KNOWN_PGN_HEADER_LABELS: Record<string, string> = {
   Event: "Event",
@@ -82,10 +74,6 @@ const ACCURATE_CLASSIFICATIONS = new Set<ClassificationValue>([
   "perfect",
   "splendid",
 ]);
-
-function getMoveUci(move: { from: string; to: string; promotion?: string }) {
-  return `${move.from}${move.to}${move.promotion ?? ""}`;
-}
 
 type PromotionPiece = "q" | "r" | "b" | "n";
 
@@ -162,12 +150,6 @@ function getSanLine(fen: string, pv: string[]) {
   return moves;
 }
 
-function getPgnHeader(pgn: string, header: string) {
-  const match = pgn.match(new RegExp(`\\[${header}\\s+"([^"]*)"\\]`));
-
-  return match?.[1] ?? "";
-}
-
 function getKnownHeaderLabel(header: string) {
   return KNOWN_PGN_HEADER_LABELS[header] ?? header;
 }
@@ -226,221 +208,6 @@ function formatTimeControl(timeControl: string) {
   return `${baseLabel} + ${incrementSeconds}s`;
 }
 
-function parsePgnHeaders(pgn: string) {
-  const headers: Record<string, string> = {};
-  const headerRegex = /^\[([A-Za-z0-9_]+)\s+"((?:\\"|[^"])*)"\]$/gm;
-  let match = headerRegex.exec(pgn);
-
-  while (match) {
-    headers[match[1]] = match[2].replace(/\\"/g, '"');
-    match = headerRegex.exec(pgn);
-  }
-
-  return headers;
-}
-
-function stripPgnVariations(movetext: string) {
-  let depth = 0;
-  let result = "";
-
-  for (const char of movetext) {
-    if (char === "(") {
-      depth += 1;
-      continue;
-    }
-
-    if (char === ")") {
-      depth = Math.max(0, depth - 1);
-      continue;
-    }
-
-    if (depth === 0) {
-      result += char;
-    }
-  }
-
-  return result;
-}
-
-function cleanMoveComment(comment: string) {
-  return comment
-    .replace(/\[%clk\s+[^\]]+\]/g, "")
-    .replace(/\[%emt\s+[^\]]+\]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function parsePgnMoveInfo(pgn: string): PgnMoveInfo[] {
-  const movetext = stripPgnVariations(pgn.replace(/^\[[^\n]+\]\s*$/gm, ""));
-  const tokens = movetext.match(/\{[^}]*\}|\S+/g) ?? [];
-  const moveInfo: PgnMoveInfo[] = [];
-  let currentMoveIndex = -1;
-
-  for (const token of tokens) {
-    if (
-      /^\d+\.(\.\.)?$/.test(token) ||
-      /^(1-0|0-1|1\/2-1\/2|\*)$/.test(token)
-    ) {
-      continue;
-    }
-
-    if (/^\$\d+$/.test(token)) {
-      continue;
-    }
-
-    if (token.startsWith("{") && token.endsWith("}")) {
-      if (currentMoveIndex < 0) {
-        continue;
-      }
-
-      const rawComment = token.slice(1, -1).trim();
-      const clock = rawComment.match(/\[%clk\s+([^\]]+)\]/)?.[1];
-      const elapsed = rawComment.match(/\[%emt\s+([^\]]+)\]/)?.[1];
-      const comment = cleanMoveComment(rawComment);
-      const current = moveInfo[currentMoveIndex] ?? {};
-
-      moveInfo[currentMoveIndex] = {
-        ...current,
-        clock: clock ?? current.clock,
-        elapsed: elapsed ?? current.elapsed,
-        comment: [current.comment, comment].filter(Boolean).join(" "),
-      };
-      continue;
-    }
-
-    currentMoveIndex += 1;
-    moveInfo[currentMoveIndex] = moveInfo[currentMoveIndex] ?? {};
-  }
-
-  return moveInfo;
-}
-
-function parsePgnGameInfo(pgn: string): PgnGameInfo {
-  return {
-    headers: parsePgnHeaders(pgn),
-    moveInfo: parsePgnMoveInfo(pgn),
-  };
-}
-
-function splitPgnList(pgnText: string) {
-  return pgnText
-    .split(/\n\s*\n(?=\[Event\s+")/g)
-    .map((pgn) => {
-      return pgn.trim();
-    })
-    .filter(Boolean);
-}
-
-function formatExternalGameLabel(pgn: string, fallback: string) {
-  const white = getPgnHeader(pgn, "White") || "White";
-  const black = getPgnHeader(pgn, "Black") || "Black";
-  const result = getPgnHeader(pgn, "Result") || "*";
-  const date = getPgnHeader(pgn, "Date");
-
-  if (date) {
-    return `${date} - ${white} vs ${black} ${result}`;
-  }
-
-  return `${fallback} - ${white} vs ${black} ${result}`;
-}
-
-async function fetchChessComGames(username: string): Promise<ExternalGame[]> {
-  const archivesResponse = await fetch(
-    `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/archives`,
-  );
-
-  if (!archivesResponse.ok) {
-    throw new Error("Could not find that Chess.com user.");
-  }
-
-  const archivesData = (await archivesResponse.json()) as {
-    archives?: string[];
-  };
-  const archives = archivesData.archives ?? [];
-
-  for (const archiveUrl of archives.slice().reverse()) {
-    const gamesResponse = await fetch(archiveUrl);
-
-    if (!gamesResponse.ok) {
-      continue;
-    }
-
-    const gamesData = (await gamesResponse.json()) as {
-      games?: {
-        pgn?: string;
-        rules?: string;
-        end_time?: number;
-        white?: { username?: string };
-        black?: { username?: string };
-      }[];
-    };
-    const games = (gamesData.games ?? [])
-      .filter((game) => {
-        return game.rules === "chess" && !!game.pgn;
-      })
-      .slice()
-      .reverse()
-      .slice(0, 20);
-
-    if (games.length === 0) {
-      continue;
-    }
-
-    return games.map((game, index) => {
-      const pgn = game.pgn ?? "";
-      const date = game.end_time
-        ? new Date(game.end_time * 1000).toLocaleDateString()
-        : "";
-      const white = game.white?.username || getPgnHeader(pgn, "White");
-      const black = game.black?.username || getPgnHeader(pgn, "Black");
-      const result = getPgnHeader(pgn, "Result") || "*";
-      const fallback = date || `Game ${index + 1}`;
-
-      return {
-        id: `${game.end_time ?? index}-${index}`,
-        label:
-          white && black
-            ? `${fallback} - ${white} vs ${black} ${result}`
-            : formatExternalGameLabel(pgn, fallback),
-        pgn,
-      };
-    });
-  }
-
-  return [];
-}
-
-async function fetchLichessGames(username: string): Promise<ExternalGame[]> {
-  const params = new URLSearchParams({
-    max: "20",
-    clocks: "true",
-    evals: "false",
-    opening: "true",
-  });
-  const response = await fetch(
-    `https://lichess.org/api/games/user/${encodeURIComponent(username)}?${params.toString()}`,
-    {
-      headers: {
-        Accept: "application/x-chess-pgn",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error("Could not load games for that Lichess user.");
-  }
-
-  const pgnText = await response.text();
-
-  return splitPgnList(pgnText).map((pgn, index) => {
-    return {
-      id: `${getPgnHeader(pgn, "Site") || "lichess"}-${index}`,
-      label: formatExternalGameLabel(pgn, `Game ${index + 1}`),
-      pgn,
-    };
-  });
-}
-
 interface PositionData {
   fen: string;
   san?: string;
@@ -475,6 +242,60 @@ function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
   });
 
   return ((accurateMoves.length / playerMoves.length) * 100).toFixed(1);
+}
+
+interface PlayerDisplay {
+  color: "w" | "b";
+  label: string;
+  name: string;
+  elo?: string;
+  clock: string | null;
+}
+
+interface PgnPlayerCardProps {
+  player: PlayerDisplay;
+  isActive: boolean;
+  timeControlLabel: string;
+}
+
+function PgnPlayerCard({
+  player,
+  isActive,
+  timeControlLabel,
+}: PgnPlayerCardProps) {
+  return (
+    <div
+      className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
+        isActive ? "bg-[#2b3327]" : "bg-black/14"
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
+            player.color === "w"
+              ? "bg-[#eee6d6] text-[#25211b]"
+              : "bg-[#1b1a18] text-[#f5f3ed]"
+          }`}
+        >
+          {player.label[0]}
+        </span>
+
+        <div className="min-w-0">
+          <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
+            {player.name}
+          </div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
+            <span>{player.label}</span>
+            <span>{player.elo ? `Elo ${player.elo}` : "Elo -"}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
+        {player.clock ?? timeControlLabel}
+      </div>
+    </div>
+  );
 }
 
 export default function PgnViewer() {
@@ -1128,41 +949,13 @@ export default function PgnViewer() {
 
         <div className="w-[min(100%,50rem)]">
           {pgnGameInfo && (
-            <div
-              className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
+            <PgnPlayerCard
+              player={topPlayer}
+              isActive={
                 topPlayer.color === sideToMove && !gameAtIdx.isGameOver()
-                  ? "bg-[#2b3327]"
-                  : "bg-black/14"
-              }`}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
-                    topPlayer.color === "w"
-                      ? "bg-[#eee6d6] text-[#25211b]"
-                      : "bg-[#1b1a18] text-[#f5f3ed]"
-                  }`}
-                >
-                  {topPlayer.label[0]}
-                </span>
-
-                <div className="min-w-0">
-                  <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
-                    {topPlayer.name}
-                  </div>
-                  <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
-                    <span>{topPlayer.label}</span>
-                    <span>
-                      {topPlayer.elo ? `Elo ${topPlayer.elo}` : "Elo -"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
-                {topPlayer.clock ?? timeControlLabel}
-              </div>
-            </div>
+              }
+              timeControlLabel={timeControlLabel}
+            />
           )}
 
           <div className="flex min-w-0 items-stretch justify-center gap-2 py-2 max-[44rem]:gap-1">
@@ -1188,41 +981,13 @@ export default function PgnViewer() {
           </div>
 
           {pgnGameInfo && (
-            <div
-              className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
+            <PgnPlayerCard
+              player={bottomPlayer}
+              isActive={
                 bottomPlayer.color === sideToMove && !gameAtIdx.isGameOver()
-                  ? "bg-[#2b3327]"
-                  : "bg-black/14"
-              }`}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
-                    bottomPlayer.color === "w"
-                      ? "bg-[#eee6d6] text-[#25211b]"
-                      : "bg-[#1b1a18] text-[#f5f3ed]"
-                  }`}
-                >
-                  {bottomPlayer.label[0]}
-                </span>
-
-                <div className="min-w-0">
-                  <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
-                    {bottomPlayer.name}
-                  </div>
-                  <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
-                    <span>{bottomPlayer.label}</span>
-                    <span>
-                      {bottomPlayer.elo ? `Elo ${bottomPlayer.elo}` : "Elo -"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
-                {bottomPlayer.clock ?? timeControlLabel}
-              </div>
-            </div>
+              }
+              timeControlLabel={timeControlLabel}
+            />
           )}
         </div>
 

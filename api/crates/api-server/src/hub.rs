@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 use crate::models::PlayerInfo;
 
+type Subscriptions = HashMap<Uuid, Vec<mpsc::UnboundedSender<String>>>;
+
 #[derive(Clone, Default)]
 pub struct Hub {
     inner: Arc<Mutex<HubInner>>,
@@ -14,8 +16,8 @@ pub struct Hub {
 
 #[derive(Default)]
 struct HubInner {
-    rooms: HashMap<Uuid, Vec<mpsc::UnboundedSender<String>>>,
-    games: HashMap<Uuid, Vec<mpsc::UnboundedSender<String>>>,
+    rooms: Subscriptions,
+    games: Subscriptions,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,48 +51,61 @@ pub enum ServerMessage<T: Serialize> {
     Pong,
 }
 
+impl<T: Serialize> ServerMessage<T> {
+    pub(crate) fn to_json_string(&self) -> Option<String> {
+        serde_json::to_string(self).ok()
+    }
+}
+
 impl Hub {
     pub fn subscribe_room(&self, room_id: Uuid) -> mpsc::UnboundedReceiver<String> {
-        self.subscribe(|inner, tx| inner.rooms.entry(room_id).or_default().push(tx))
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        subscribe(&mut inner.rooms, room_id)
     }
 
     pub fn subscribe_game(&self, game_id: Uuid) -> mpsc::UnboundedReceiver<String> {
-        self.subscribe(|inner, tx| inner.games.entry(game_id).or_default().push(tx))
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        subscribe(&mut inner.games, game_id)
     }
 
     pub fn broadcast_room<T: Serialize>(&self, room_id: Uuid, message: &ServerMessage<T>) {
-        self.broadcast(|inner| inner.rooms.get_mut(&room_id), message);
+        let Some(payload) = message.to_json_string() else {
+            return;
+        };
+
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        broadcast(&mut inner.rooms, room_id, &payload);
     }
 
     pub fn broadcast_game<T: Serialize>(&self, game_id: Uuid, message: &ServerMessage<T>) {
-        self.broadcast(|inner| inner.games.get_mut(&game_id), message);
-    }
-
-    fn subscribe<F>(&self, push: F) -> mpsc::UnboundedReceiver<String>
-    where
-        F: FnOnce(&mut HubInner, mpsc::UnboundedSender<String>),
-    {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let mut inner = self.inner.lock().expect("hub mutex poisoned");
-        push(&mut inner, tx);
-
-        rx
-    }
-
-    fn broadcast<F, T>(&self, get_subscribers: F, message: &ServerMessage<T>)
-    where
-        F: FnOnce(&mut HubInner) -> Option<&mut Vec<mpsc::UnboundedSender<String>>>,
-        T: Serialize,
-    {
-        let Ok(payload) = serde_json::to_string(message) else {
+        let Some(payload) = message.to_json_string() else {
             return;
         };
 
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
-        let Some(subscribers) = get_subscribers(&mut inner) else {
-            return;
-        };
 
-        subscribers.retain(|subscriber| subscriber.send(payload.clone()).is_ok());
+        broadcast(&mut inner.games, game_id, &payload);
     }
+}
+
+fn subscribe(
+    subscriptions: &mut Subscriptions,
+    channel_id: Uuid,
+) -> mpsc::UnboundedReceiver<String> {
+    let (sender, receiver) = mpsc::unbounded_channel();
+
+    subscriptions.entry(channel_id).or_default().push(sender);
+
+    receiver
+}
+
+fn broadcast(subscriptions: &mut Subscriptions, channel_id: Uuid, payload: &str) {
+    let Some(subscribers) = subscriptions.get_mut(&channel_id) else {
+        return;
+    };
+
+    subscribers.retain(|subscriber| subscriber.send(payload.to_owned()).is_ok());
 }

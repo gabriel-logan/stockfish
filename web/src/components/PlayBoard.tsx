@@ -19,6 +19,7 @@ import { toast } from "react-toastify";
 import {
   Chess,
   type Color,
+  type Move,
   type PieceSymbol,
   type Square,
   validateFen,
@@ -31,15 +32,16 @@ import {
 } from "../store/settingsStore";
 import { type SavedGame, useUserStore } from "../store/userStore";
 import type { ClassificationValue } from "../types/chess-types";
+import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
 import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 import { getOpeningKey, getOpeningName } from "../utils/openingNames";
+import { formatPgnDate, getMoveUci } from "../utils/pgn";
 import { playErrorSound, playMoveResultSound } from "../utils/sounds";
 import Board from "./Board";
 import EvaluationBar from "./EvaluationBar";
-import type { MoveEntry } from "./MoveList";
 import MoveList from "./MoveList";
 
 const BOT_MOVE_DELAY_MS = 1200;
@@ -85,10 +87,6 @@ interface PlayBoardProps {
   freePlay?: boolean;
 }
 
-function getMoveUci(move: { from: string; to: string; promotion?: string }) {
-  return `${move.from}${move.to}${move.promotion ?? ""}`;
-}
-
 function getCapturedPieces(moves: MoveEntry[]) {
   const capturedByWhite: CapturedPiece[] = [];
   const capturedByBlack: CapturedPiece[] = [];
@@ -117,6 +115,18 @@ function getCapturedValue(pieces: CapturedPiece[]) {
   }, 0);
 }
 
+function createMoveEntry(move: Move, fen: string): MoveEntry {
+  return {
+    san: move.san,
+    fen,
+    color: move.color as "w" | "b",
+    from: move.from,
+    to: move.to,
+    uci: getMoveUci(move),
+    captured: move.captured as CapturedPiece | undefined,
+  };
+}
+
 function getGameResult(game: Chess) {
   if (game.isCheckmate()) {
     return game.turn() === "w" ? "0-1" : "1-0";
@@ -127,14 +137,6 @@ function getGameResult(game: Chess) {
   }
 
   return "*";
-}
-
-function formatPgnDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}.${month}.${day}`;
 }
 
 export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
@@ -435,15 +437,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
           setLastMove({ from: move.from as Square, to: move.to as Square });
 
-          const entry: MoveEntry = {
-            san: move.san,
-            fen: gameRef.current.fen(),
-            color: move.color as "w" | "b",
-            from: move.from,
-            to: move.to,
-            uci: getMoveUci(move),
-            captured: move.captured as CapturedPiece | undefined,
-          };
+          const entry = createMoveEntry(move, gameRef.current.fen());
           const nextMoves = [...movesRef.current, entry];
           const moveIndex = nextMoves.length - 1;
 
@@ -559,15 +553,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
         setLastMove({ from: move.from as Square, to: move.to as Square });
 
-        const entry: MoveEntry = {
-          san: move.san,
-          fen: gameRef.current.fen(),
-          color: move.color as "w" | "b",
-          from: move.from,
-          to: move.to,
-          uci: getMoveUci(move),
-          captured: move.captured as CapturedPiece | undefined,
-        };
+        const entry = createMoveEntry(move, gameRef.current.fen());
         const nextMoves = [...movesRef.current, entry];
         const moveIndex = nextMoves.length - 1;
 

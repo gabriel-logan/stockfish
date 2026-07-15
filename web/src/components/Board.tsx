@@ -230,6 +230,34 @@ function getArrowPoints(
   };
 }
 
+function createDisplayArrow(
+  arrow: BoardArrow,
+  orientation: "w" | "b",
+  key: string,
+  color: string,
+  opacity: number,
+): DisplayArrow | null {
+  const from = getSquareCenter(arrow.from, orientation);
+  const to = getSquareCenter(arrow.to, orientation);
+
+  if (!from || !to) {
+    return null;
+  }
+
+  const points = getArrowPoints(from, to);
+
+  if (!points) {
+    return null;
+  }
+
+  return {
+    key,
+    color,
+    opacity,
+    ...points,
+  };
+}
+
 export default function Board({
   game,
   onMove = () => {},
@@ -273,60 +301,44 @@ export default function Board({
     const arrows: DisplayArrow[] = [];
 
     if (suggestedMove) {
-      const from = getSquareCenter(suggestedMove.from, orientation);
-      const to = getSquareCenter(suggestedMove.to, orientation);
+      const arrow = createDisplayArrow(
+        suggestedMove,
+        orientation,
+        "suggested-move",
+        "#bce66b",
+        0.72,
+      );
 
-      if (from && to) {
-        const points = getArrowPoints(from, to);
-
-        if (points) {
-          arrows.push({
-            key: "suggested-move",
-            color: "#bce66b",
-            opacity: 0.72,
-            ...points,
-          });
-        }
+      if (arrow) {
+        arrows.push(arrow);
       }
     }
 
     for (const arrow of manualArrows) {
-      const from = getSquareCenter(arrow.from, orientation);
-      const to = getSquareCenter(arrow.to, orientation);
+      const displayArrow = createDisplayArrow(
+        arrow,
+        orientation,
+        `manual-${arrow.from}-${arrow.to}`,
+        "#f59e0b",
+        0.72,
+      );
 
-      if (!from || !to) {
-        continue;
+      if (displayArrow) {
+        arrows.push(displayArrow);
       }
-
-      const points = getArrowPoints(from, to);
-
-      if (!points) {
-        continue;
-      }
-
-      arrows.push({
-        key: `manual-${arrow.from}-${arrow.to}`,
-        color: "#f59e0b",
-        opacity: 0.72,
-        ...points,
-      });
     }
 
     if (rightDrag && rightDrag.from !== rightDrag.to) {
-      const from = getSquareCenter(rightDrag.from, orientation);
-      const to = getSquareCenter(rightDrag.to, orientation);
+      const arrow = createDisplayArrow(
+        rightDrag,
+        orientation,
+        "right-drag",
+        "#f59e0b",
+        0.55,
+      );
 
-      if (from && to) {
-        const points = getArrowPoints(from, to);
-
-        if (points) {
-          arrows.push({
-            key: "right-drag",
-            color: "#f59e0b",
-            opacity: 0.55,
-            ...points,
-          });
-        }
+      if (arrow) {
+        arrows.push(arrow);
       }
     }
 

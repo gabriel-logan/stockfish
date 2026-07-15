@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -49,7 +48,7 @@ func handleAnalyze(stockfishPath string) http.HandlerFunc {
 			}
 		}
 
-		moves := strings.Fields(req.Moves)
+		moves := parseUCIMoves(req.Moves)
 		if err := sf.SetPosition(req.FEN, moves); err != nil {
 			http.Error(w, `{"error":"set position failed"}`, http.StatusInternalServerError)
 			return
@@ -79,19 +78,7 @@ func handleAnalyze(stockfishPath string) http.HandlerFunc {
 				}
 				switch msg.Type {
 				case "analysis":
-					filtered := WSMessage{
-						Type:     "analysis",
-						Depth:    msg.Depth,
-						SelDepth: msg.SelDepth,
-						MultiPV:  msg.MultiPV,
-						Score:    msg.Score,
-						Mate:     msg.Mate,
-						PV:       msg.PV,
-						Nodes:    msg.Nodes,
-						NPS:      msg.NPS,
-						Time:     msg.Time,
-					}
-					analysis = append(analysis, filtered)
+					analysis = append(analysis, *msg)
 				case "bestmove":
 					bestMove = msg.BestMove
 					ponder = msg.Ponder

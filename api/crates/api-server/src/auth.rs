@@ -2,12 +2,13 @@ use actix_web::dev::Payload;
 use actix_web::{FromRequest, HttpRequest, web};
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use futures_util::future::{Ready, ready};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -33,6 +34,16 @@ pub struct AuthResponse {
     pub user: User,
     pub access_token: String,
     pub refresh_token: String,
+}
+
+#[derive(FromRow)]
+struct LoginUser {
+    id: Uuid,
+    username: String,
+    email: String,
+    password_hash: String,
+    rating: i32,
+    created_at: DateTime<Utc>,
 }
 
 impl FromRequest for AuthUser {
@@ -86,7 +97,7 @@ pub async fn login(
     state: web::Data<AppState>,
     body: web::Json<LoginRequest>,
 ) -> ApiResult<web::Json<AuthResponse>> {
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, i32, chrono::DateTime<Utc>)>(
+    let row = sqlx::query_as::<_, LoginUser>(
         r#"
         SELECT id, username, email, password_hash, rating, created_at
         FROM users
@@ -97,7 +108,15 @@ pub async fn login(
     .fetch_optional(&state.db)
     .await?;
 
-    let Some((id, username, email, password_hash, rating, created_at)) = row else {
+    let Some(LoginUser {
+        id,
+        username,
+        email,
+        password_hash,
+        rating,
+        created_at,
+    }) = row
+    else {
         return Err(ApiError::Unauthorized);
     };
 

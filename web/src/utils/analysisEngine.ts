@@ -65,8 +65,8 @@ export class AnalysisEngine {
 
           case "analysis":
             this.onAnalysis?.({
-              score: this.normalizeScore(msg.score),
-              mate: this.normalizeMate(msg.mate),
+              score: this.normalizeForActiveSide(msg.score),
+              mate: this.normalizeForActiveSide(msg.mate),
               depth: msg.depth,
               multiPv: msg.multi_pv ?? 1,
               pv: msg.pv ?? [],
@@ -218,27 +218,15 @@ export class AnalysisEngine {
     });
   }
 
-  private normalizeScore(score: number | undefined): number | null {
-    if (score === undefined) {
+  private normalizeForActiveSide(value: number | undefined): number | null {
+    if (value === undefined) {
       return null;
     }
 
     if (this.isBlackToMove()) {
-      return -score;
+      return -value;
     }
 
-    return score;
-  }
-
-  private normalizeMate(mate: number | undefined): number | null {
-    if (mate === undefined) {
-      return null;
-    }
-
-    if (this.isBlackToMove()) {
-      return -mate;
-    }
-
-    return mate;
+    return value;
   }
 }
