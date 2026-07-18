@@ -18,6 +18,7 @@ import { Chess, type Square } from "chess.js";
 import Board from "../components/Board";
 import EvaluationBar from "../components/EvaluationBar";
 import MoveList from "../components/MoveList";
+import PgnPlayerCard from "../components/PgnPlayerCard";
 import {
   type ExternalGame,
   fetchChessComGames,
@@ -30,298 +31,29 @@ import {
 } from "../store/settingsStore";
 import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
-import { AnalysisEngine, type AnalysisLine } from "../utils/analysisEngine";
-import { classifyMove } from "../utils/classification";
+import { getLatestOpeningName, getOpeningKey } from "../utils/openingNames";
+import { parsePgnGameInfo, type PgnGameInfo } from "../utils/pgn";
 import {
-  getLatestOpeningName,
-  getOpeningKey,
-  getOpeningName,
-} from "../utils/openingNames";
-import { getMoveUci, parsePgnGameInfo, type PgnGameInfo } from "../utils/pgn";
+  analyzePgnPositions,
+  analyzePracticeMove,
+  computeAccuracy,
+  createPgnPositions,
+  createPracticeMove,
+  formatTimeControl,
+  getFormattedScore,
+  getGameAtPgnPosition,
+  getGameWithPractice as getReviewGameWithPractice,
+  getKnownHeaderLabel,
+  getLastMoveForGame,
+  getLatestClock,
+  getMainLineMoves,
+  getResultLabel,
+  getSanLine,
+  type PgnSource,
+  type PositionData,
+} from "../utils/pgnReview";
 import { playMoveResultSound } from "../utils/sounds";
 import { getSafeExternalUrl } from "../utils/url";
-
-type PgnSource = "paste" | "lichess" | "chesscom";
-
-const KNOWN_PGN_HEADER_LABELS: Record<string, string> = {
-  Event: "Event",
-  Site: "Site",
-  Date: "Date",
-  Round: "Round",
-  White: "White",
-  Black: "Black",
-  Result: "Result",
-  CurrentPosition: "Current position",
-  WhiteElo: "White Elo",
-  BlackElo: "Black Elo",
-  WhiteTitle: "White title",
-  BlackTitle: "Black title",
-  TimeControl: "Time control",
-  Termination: "Termination",
-  ECO: "ECO",
-  ECOUrl: "ECO URL",
-  Opening: "Opening",
-  Variant: "Variant",
-  UTCDate: "UTC date",
-  UTCTime: "UTC time",
-  Timezone: "Timezone",
-  StartTime: "Start time",
-  EndDate: "End date",
-  EndTime: "End time",
-  Link: "Link",
-};
-
-const ACCURATE_CLASSIFICATIONS = new Set<ClassificationValue>([
-  "excellent",
-  "best",
-  "forced",
-  "opening",
-  "perfect",
-  "splendid",
-]);
-
-function getUciMoveParams(uciMove: string) {
-  if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uciMove)) {
-    return null;
-  }
-
-  return {
-    from: uciMove.slice(0, 2) as Square,
-    to: uciMove.slice(2, 4) as Square,
-    promotion: (uciMove.slice(4, 5) || undefined) as PromotionPiece | undefined,
-  };
-}
-
-function getMoveParams(move: MoveEntry) {
-  if (!move.from || !move.to) {
-    return null;
-  }
-
-  return {
-    from: move.from as Square,
-    to: move.to as Square,
-    promotion: move.uci?.slice(4, 5) || undefined,
-  };
-}
-
-function getFormattedScore(score: number | null, mate: number | null) {
-  if (mate !== null) {
-    if (Object.is(mate, -0) || mate === 0) {
-      return "M0";
-    }
-
-    const prefix = mate > 0 ? "+" : "-";
-
-    return `M${prefix}${Math.abs(mate)}`;
-  }
-
-  if (score === null) {
-    return "-";
-  }
-
-  if (score > 0) {
-    return `+${score.toFixed(2)}`;
-  }
-
-  return score.toFixed(2);
-}
-
-function getSanLine(fen: string, pv: string[]) {
-  const game = new Chess(fen);
-  const moves: string[] = [];
-
-  for (const uciMove of pv) {
-    const params = getUciMoveParams(uciMove);
-
-    if (!params) {
-      break;
-    }
-
-    try {
-      const move = game.move(params);
-
-      if (!move) {
-        break;
-      }
-
-      moves.push(move.san);
-    } catch {
-      break;
-    }
-  }
-
-  return moves;
-}
-
-function getKnownHeaderLabel(header: string) {
-  return KNOWN_PGN_HEADER_LABELS[header] ?? header;
-}
-
-function getResultLabel(result: string) {
-  if (result === "1-0") {
-    return "White won";
-  }
-
-  if (result === "0-1") {
-    return "Black won";
-  }
-
-  if (result === "1/2-1/2") {
-    return "Draw";
-  }
-
-  return result || "-";
-}
-
-function getLatestClock(moves: MoveEntry[], color: "w" | "b") {
-  for (let index = moves.length - 1; index >= 0; index--) {
-    const move = moves[index];
-
-    if (move.color === color && move.clock) {
-      return move.clock;
-    }
-  }
-
-  return null;
-}
-
-function formatTimeControl(timeControl: string) {
-  if (!timeControl || timeControl === "-") {
-    return "-";
-  }
-
-  const [baseSeconds, incrementSeconds] = timeControl.split("+");
-  const base = Number(baseSeconds);
-
-  if (!Number.isFinite(base)) {
-    return timeControl;
-  }
-
-  const minutes = Math.floor(base / 60);
-  const seconds = base % 60;
-  const baseLabel =
-    seconds === 0
-      ? `${minutes} min`
-      : `${minutes}:${String(seconds).padStart(2, "0")}`;
-
-  if (!incrementSeconds) {
-    return baseLabel;
-  }
-
-  return `${baseLabel} + ${incrementSeconds}s`;
-}
-
-interface PositionData {
-  fen: string;
-  san?: string;
-  color?: "w" | "b";
-  from?: string;
-  to?: string;
-  uci?: string;
-  clock?: string;
-  elapsed?: string;
-  comment?: string;
-  evaluation: number | null;
-  mate: number | null;
-  bestmove?: string | null;
-  lineCount?: number;
-  lines?: AnalysisLine[];
-  analysisComplete?: boolean;
-  classification?: ClassificationValue;
-}
-
-function computeAccuracy(moveList: MoveEntry[], color: "w" | "b"): string {
-  const playerMoves = moveList.filter((move) => {
-    return move.color === color;
-  });
-
-  if (playerMoves.length === 0) {
-    return "-";
-  }
-
-  const accurateMoves = playerMoves.filter((move) => {
-    return (
-      move.classification && ACCURATE_CLASSIFICATIONS.has(move.classification)
-    );
-  });
-
-  return ((accurateMoves.length / playerMoves.length) * 100).toFixed(1);
-}
-
-interface PlayerDisplay {
-  color: "w" | "b";
-  label: string;
-  name: string;
-  elo?: string;
-  clock: string | null;
-}
-
-interface PgnPlayerCardProps {
-  player: PlayerDisplay;
-  isActive: boolean;
-  timeControlLabel: string;
-}
-
-function PgnPlayerCard({
-  player,
-  isActive,
-  timeControlLabel,
-}: PgnPlayerCardProps) {
-  return (
-    <div
-      className={`flex min-h-14 items-center justify-between gap-3 border-y border-white/7 px-3 py-2 ${
-        isActive ? "bg-[#2b3327]" : "bg-black/14"
-      }`}
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          className={`grid size-9 shrink-0 place-items-center border border-white/10 text-xs font-black ${
-            player.color === "w"
-              ? "bg-[#eee6d6] text-[#25211b]"
-              : "bg-[#1b1a18] text-[#f5f3ed]"
-          }`}
-        >
-          {player.label[0]}
-        </span>
-
-        <div className="min-w-0">
-          <div className="overflow-hidden text-sm font-black text-ellipsis whitespace-nowrap text-white">
-            {player.name}
-          </div>
-          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-bold text-[#aaa7a0]">
-            <span>{player.label}</span>
-            <span>{player.elo ? `Elo ${player.elo}` : "Elo -"}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="min-w-24 border border-white/8 bg-[#111] px-3 py-1.5 text-right font-mono text-xl font-black text-white shadow-[inset_0_-0.12rem_0_rgb(255_255_255_/_8%)]">
-        {player.clock ?? timeControlLabel}
-      </div>
-    </div>
-  );
-}
-
-function shouldDeepenAnalysis(
-  evaluationBefore: number | null,
-  evaluationAfter: number | null,
-  mateBefore: number | null,
-  mateAfter: number | null,
-  color: "w" | "b",
-) {
-  if (mateBefore !== mateAfter && (mateBefore !== null || mateAfter !== null)) {
-    return true;
-  }
-
-  if (evaluationBefore === null || evaluationAfter === null) {
-    return false;
-  }
-
-  const colorMultiplier = color === "w" ? 1 : -1;
-  const scoreLoss = (evaluationBefore - evaluationAfter) * colorMultiplier;
-
-  return scoreLoss >= 0.5;
-}
 
 export default function PgnViewer() {
   const { t } = useTranslation();
@@ -362,26 +94,9 @@ export default function PgnViewer() {
     setSoundEnabled,
   } = useSettingsStore();
 
-  const mainLineMoves: MoveEntry[] = positions
-    .filter((p): p is PositionData & { san: string; color: "w" | "b" } => {
-      return !!p.san && !!p.color;
-    })
-    .map((p) => {
-      return {
-        san: p.san,
-        fen: p.fen,
-        color: p.color,
-        from: p.from,
-        to: p.to,
-        uci: p.uci,
-        clock: p.clock,
-        elapsed: p.elapsed,
-        comment: p.comment,
-        classification: p.classification,
-        evaluation: p.evaluation ?? undefined,
-        mate: p.mate ?? undefined,
-      };
-    });
+  const mainLineMoves = useMemo(() => {
+    return getMainLineMoves(positions);
+  }, [positions]);
 
   const activePracticeMoves = useMemo(() => {
     return practiceMoves.slice(0, practiceCursor);
@@ -507,69 +222,26 @@ export default function PgnViewer() {
 
   const getGameAtMove = useCallback(
     (posIdx: number): Chess => {
-      const g = new Chess();
-      if (positions.length === 0) {
-        return g;
-      }
-
-      const startFen = positions[0]?.fen;
-      if (startFen && startFen !== new Chess().fen()) {
-        try {
-          g.load(startFen);
-        } catch {
-          // Retain the default position when the stored starting FEN is invalid.
-        }
-      }
-
-      for (let i = 1; i <= posIdx; i++) {
-        const p = positions[i];
-        if (p?.san) {
-          try {
-            g.move(p.san);
-          } catch {
-            break;
-          }
-        }
-      }
-      return g;
+      return getGameAtPgnPosition(positions, posIdx);
     },
     [positions],
   );
 
   const getGameWithPractice = useCallback(
     (cursor: number): Chess => {
-      const g = positions.length > 0 ? getGameAtMove(currentIdx) : new Chess();
-
-      for (let i = 0; i < cursor; i++) {
-        const params = getMoveParams(practiceMoves[i]);
-
-        if (!params) {
-          continue;
-        }
-
-        try {
-          g.move(params);
-        } catch {
-          break;
-        }
-      }
-
-      return g;
+      return getReviewGameWithPractice(
+        positions,
+        currentIdx,
+        practiceMoves,
+        cursor,
+      );
     },
-    [currentIdx, getGameAtMove, positions.length, practiceMoves],
+    [currentIdx, positions, practiceMoves],
   );
 
   const showGame = useCallback((nextGame: Chess) => {
     setGameAtIdx(nextGame);
-
-    const history = nextGame.history({ verbose: true });
-
-    if (history.length > 0) {
-      const last = history[history.length - 1];
-      setLastMove({ from: last.from as Square, to: last.to as Square });
-    } else {
-      setLastMove(null);
-    }
+    setLastMove(getLastMoveForGame(nextGame));
   }, []);
 
   const goToPracticeCursor = useCallback(
@@ -618,121 +290,16 @@ export default function PgnViewer() {
     setPgnGameInfo(null);
     try {
       const parsedGameInfo = parsePgnGameInfo(pgnInput);
-      const game = new Chess();
-      game.loadPgn(pgnInput);
-
-      const history = game.history({ verbose: true });
-      const posData: PositionData[] = [];
-
-      if (history.length > 0) {
-        posData.push({ fen: history[0].before, evaluation: null, mate: null });
-        for (const [index, move] of history.entries()) {
-          const moveInfo = parsedGameInfo.moveInfo[index] ?? {};
-
-          posData.push({
-            fen: move.after,
-            san: move.san,
-            color: move.color as "w" | "b",
-            from: move.from,
-            to: move.to,
-            uci: getMoveUci(move),
-            clock: moveInfo.clock,
-            elapsed: moveInfo.elapsed,
-            comment: moveInfo.comment,
-            evaluation: null,
-            mate: null,
-          });
-        }
-      } else {
-        posData.push({ fen: game.fen(), evaluation: null, mate: null });
-      }
+      const posData = createPgnPositions(pgnInput, parsedGameInfo);
 
       setProgress(5);
       setPgnGameInfo(parsedGameInfo);
       setPositions([...posData]);
 
-      const engine = new AnalysisEngine();
-      await engine.connect();
-
-      for (let i = 0; i < posData.length; i++) {
-        try {
-          let result = await engine.analyzePosition(posData[i].fen, 10, 3);
-          let evaluationBefore = posData[i - 1]?.evaluation ?? null;
-          let mateBefore = posData[i - 1]?.mate ?? null;
-          let linesBefore = posData[i - 1]?.lines;
-          let bestMoveBefore = posData[i - 1]?.bestmove;
-          let analysisCompleteBefore =
-            posData[i - 1]?.analysisComplete ?? false;
-          let deepened = false;
-          const color = posData[i].color;
-
-          if (
-            i > 0 &&
-            color &&
-            shouldDeepenAnalysis(
-              evaluationBefore,
-              result.score,
-              mateBefore,
-              result.mate,
-              color,
-            )
-          ) {
-            const before = await engine.analyzePosition(
-              posData[i - 1].fen,
-              14,
-              3,
-            );
-
-            result = await engine.analyzePosition(posData[i].fen, 14, 3);
-            evaluationBefore = before.score;
-            mateBefore = before.mate;
-            linesBefore = before.lines;
-            bestMoveBefore = before.bestmove;
-            analysisCompleteBefore = before.completed;
-            deepened = true;
-          }
-
-          posData[i].evaluation = result.score;
-          posData[i].mate = result.mate;
-          posData[i].bestmove = result.bestmove;
-          posData[i].lineCount = result.lines.length;
-          posData[i].lines = result.lines;
-          posData[i].analysisComplete = result.completed;
-
-          if (i > 0 && color && analysisCompleteBefore && result.completed) {
-            const alternativeLine = linesBefore?.find((line) => {
-              return line.pv[0] !== posData[i].uci;
-            });
-
-            posData[i].classification = classifyMove(
-              evaluationBefore,
-              result.score,
-              color,
-              mateBefore,
-              result.mate,
-              bestMoveBefore === posData[i].uci,
-              deepened && linesBefore?.length === 1,
-              getOpeningName(posData[i].fen) !== null,
-              {
-                fenBefore: posData[i - 1].fen,
-                playedMove: posData[i].uci,
-                bestLinePvAfter: result.lines[0]?.pv,
-                alternativeEvalBefore: alternativeLine?.score,
-                alternativeMateBefore: alternativeLine?.mate,
-                fenTwoMovesAgo: posData[i - 2]?.fen ?? null,
-                previousMove: posData[i - 1].uci ?? null,
-              },
-            );
-          }
-
-          setProgress(5 + ((i + 1) / posData.length) * 90);
-          setPositions([...posData]);
-        } catch {
-          // Continue with the positions that can still be analyzed.
-        }
-      }
-
-      engine.disconnect();
+      await analyzePgnPositions(posData, {
+        onProgress: setProgress,
+        onPositions: setPositions,
+      });
 
       setPositions([...posData]);
       setProgress(100);
@@ -761,95 +328,50 @@ export default function PgnViewer() {
         return;
       }
 
+      const practiceMove = createPracticeMove(gameAtIdx, from, to, promotion);
+
+      if (!practiceMove) {
+        return;
+      }
+
+      const { boardGame, entry, fenBefore, move } = practiceMove;
+
+      setGameAtIdx(boardGame);
+      setLastMove({ from: move.from as Square, to: move.to as Square });
+      setSelectedSquare(null);
+      setPracticeMoves((currentMoves) => {
+        return currentMoves.slice(0, practiceCursor).concat(entry);
+      });
+      setPracticeCursor(practiceCursor + 1);
+
+      if (soundEnabled) {
+        playMoveResultSound(move, boardGame);
+      }
+
       try {
-        const boardGame = new Chess(gameAtIdx.fen());
-        const fenBefore = boardGame.fen();
-        const move = boardGame.move({ from, to, promotion });
-
-        if (!move) {
-          return;
-        }
-
-        const entry: MoveEntry = {
-          san: move.san,
-          fen: boardGame.fen(),
-          color: move.color as "w" | "b",
-          from: move.from,
-          to: move.to,
-          uci: getMoveUci(move),
-          captured: move.captured as MoveEntry["captured"],
-          isManual: true,
-        };
-
-        setGameAtIdx(boardGame);
-        setLastMove({ from: move.from as Square, to: move.to as Square });
-        setSelectedSquare(null);
-        setPracticeMoves((currentMoves) => {
-          return currentMoves.slice(0, practiceCursor).concat(entry);
+        const analysis = await analyzePracticeMove({
+          fenBefore,
+          entry,
+          activePracticeMoves,
+          positions,
+          currentIdx,
         });
-        setPracticeCursor(practiceCursor + 1);
 
-        if (soundEnabled) {
-          playMoveResultSound(move, boardGame);
-        }
+        setPracticeMoves((currentMoves) => {
+          const nextMoves = [...currentMoves];
+          const moveIndex = practiceCursor;
 
-        const engine = new AnalysisEngine();
-        await engine.connect();
+          if (!nextMoves[moveIndex]) {
+            return currentMoves;
+          }
 
-        try {
-          const before = await engine.analyzePosition(fenBefore, 14, 3);
-          const after = await engine.analyzePosition(entry.fen, 14);
-          const alternativeLine = before.lines.find((line) => {
-            return line.pv[0] !== entry.uci;
-          });
-          const previousPracticeMove =
-            activePracticeMoves[activePracticeMoves.length - 1];
-          const previousMainMove =
-            positions.length > 0 ? positions[currentIdx]?.uci : null;
-          const fenTwoMovesAgo =
-            activePracticeMoves[activePracticeMoves.length - 2]?.fen ??
-            positions[currentIdx - 1]?.fen ??
-            null;
-          const classification = classifyMove(
-            before.score,
-            after.score,
-            entry.color,
-            before.mate,
-            after.mate,
-            before.bestmove === entry.uci,
-            before.lines.length === 1,
-            getOpeningName(entry.fen) !== null,
-            {
-              fenBefore,
-              playedMove: entry.uci,
-              bestLinePvAfter: after.lines[0]?.pv,
-              alternativeEvalBefore: alternativeLine?.score,
-              alternativeMateBefore: alternativeLine?.mate,
-              fenTwoMovesAgo,
-              previousMove: previousPracticeMove?.uci ?? previousMainMove,
-            },
-          );
+          nextMoves[moveIndex] = {
+            ...nextMoves[moveIndex],
+            ...analysis,
+          };
 
-          setPracticeMoves((currentMoves) => {
-            const nextMoves = [...currentMoves];
-            const moveIndex = practiceCursor;
-
-            if (!nextMoves[moveIndex]) {
-              return currentMoves;
-            }
-
-            nextMoves[moveIndex] = {
-              ...nextMoves[moveIndex],
-              classification,
-              evaluation: after.score ?? undefined,
-              mate: after.mate ?? undefined,
-            };
-
-            return nextMoves;
-          });
-        } finally {
-          engine.disconnect();
-        }
+          return nextMoves;
+        });
       } catch {
         // Keep the review usable when manual-move analysis fails.
       }

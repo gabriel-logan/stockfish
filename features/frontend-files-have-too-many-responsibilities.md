@@ -1,6 +1,6 @@
 # Frontend Files Have Too Many Responsibilities
 
-- [ ] Resolved
+- [x] Resolved
 
 `PlayBoard.tsx`, `PgnViewer.tsx`, and `Board.tsx` concentrate game state, game rules, engine orchestration, move classification, PGN handling, persistence, board input, and UI.
 

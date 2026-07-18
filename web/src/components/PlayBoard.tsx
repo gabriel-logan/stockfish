@@ -16,14 +16,7 @@ import {
   FaVolumeUp,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
-import {
-  Chess,
-  type Color,
-  type Move,
-  type PieceSymbol,
-  type Square,
-  validateFen,
-} from "chess.js";
+import { Chess, type Color, type Square, validateFen } from "chess.js";
 
 import { getApiErrorMessage } from "../lib/apiInstance";
 import { createSavedGame } from "../services/savedGameService";
@@ -36,6 +29,7 @@ import {
 import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine } from "../utils/analysisEngine";
+import { PIECE_TYPE_NAMES } from "../utils/board";
 import { classifyMove } from "../utils/classification";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 import {
@@ -43,105 +37,31 @@ import {
   getOpeningKey,
   getOpeningName,
 } from "../utils/openingNames";
-import { formatPgnDate, getMoveUci } from "../utils/pgn";
+import {
+  BOT_MOVE_DELAY_MS,
+  CAPTURED_PIECE_ALT_KEYS,
+  CAPTURED_PIECE_ORDER,
+  type CapturedPiece,
+  createClearedEditedGame,
+  createEditableGame,
+  createEditedGameWithTurn,
+  createMoveEntry,
+  createPlayGamePgn,
+  EDIT_PIECES,
+  type EditPiece,
+  ENGINE_DISCONNECT_NOTICE_DELAY_MS,
+  getCapturedMaterial,
+  getGameResult,
+  moveEditedPieceInGame,
+  placeEditedPiece,
+} from "../utils/playBoard";
 import { playErrorSound, playMoveResultSound } from "../utils/sounds";
 import Board from "./Board";
 import EvaluationBar from "./EvaluationBar";
 import MoveList from "./MoveList";
 
-const BOT_MOVE_DELAY_MS = 1200;
-const ENGINE_DISCONNECT_NOTICE_DELAY_MS = 6000;
-const CAPTURED_PIECE_ORDER = ["q", "r", "b", "n", "p"] as const;
-const EDIT_PIECES: PieceSymbol[] = ["k", "q", "r", "b", "n", "p"];
-const PIECE_TYPE_NAMES = {
-  p: "Pawn",
-  n: "Knight",
-  b: "Bishop",
-  r: "Rook",
-  q: "Queen",
-  k: "King",
-} as const;
-const PIECE_VALUES = {
-  p: 1,
-  n: 3,
-  b: 3,
-  r: 5,
-  q: 9,
-} as const;
-const CAPTURED_PIECE_ALT_KEYS = {
-  w: {
-    p: "board.whitePawn",
-    n: "board.whiteKnight",
-    b: "board.whiteBishop",
-    r: "board.whiteRook",
-    q: "board.whiteQueen",
-  },
-  b: {
-    p: "board.blackPawn",
-    n: "board.blackKnight",
-    b: "board.blackBishop",
-    r: "board.blackRook",
-    q: "board.blackQueen",
-  },
-} as const;
-
-type CapturedPiece = (typeof CAPTURED_PIECE_ORDER)[number];
-type EditPiece = { type: PieceSymbol; color: Color } | "remove" | null;
-
 interface PlayBoardProps {
   freePlay?: boolean;
-}
-
-function getCapturedPieces(moves: MoveEntry[]) {
-  const capturedByWhite: CapturedPiece[] = [];
-  const capturedByBlack: CapturedPiece[] = [];
-
-  for (const move of moves) {
-    if (!move.captured) {
-      continue;
-    }
-
-    if (move.color === "w") {
-      capturedByWhite.push(move.captured);
-    } else {
-      capturedByBlack.push(move.captured);
-    }
-  }
-
-  return {
-    w: capturedByWhite,
-    b: capturedByBlack,
-  };
-}
-
-function getCapturedValue(pieces: CapturedPiece[]) {
-  return pieces.reduce((total, piece) => {
-    return total + PIECE_VALUES[piece];
-  }, 0);
-}
-
-function createMoveEntry(move: Move, fen: string): MoveEntry {
-  return {
-    san: move.san,
-    fen,
-    color: move.color as "w" | "b",
-    from: move.from,
-    to: move.to,
-    uci: getMoveUci(move),
-    captured: move.captured as CapturedPiece | undefined,
-  };
-}
-
-function getGameResult(game: Chess) {
-  if (game.isCheckmate()) {
-    return game.turn() === "w" ? "0-1" : "1-0";
-  }
-
-  if (game.isDraw()) {
-    return "1/2-1/2";
-  }
-
-  return "*";
 }
 
 export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
@@ -700,16 +620,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       ? t("common.white")
       : t("common.black");
   const capturedPieces = useMemo(() => {
-    const pieces = getCapturedPieces(moves);
-    const whiteValue = getCapturedValue(pieces.w);
-    const blackValue = getCapturedValue(pieces.b);
-
-    return {
-      pieces,
-      whiteValue,
-      blackValue,
-      materialScore: whiteValue - blackValue,
-    };
+    return getCapturedMaterial(moves);
   }, [moves]);
 
   function renderCapturedPieces(capturer: "w" | "b", pieces: CapturedPiece[]) {
@@ -798,43 +709,16 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   }, [freePlay, syncMoves, clearPendingBotMove]);
 
   const createPgnWithHeaders = useCallback(() => {
-    const result = getGameResult(gameRef.current);
-    const gameDate = new Date();
-    const pgnGame = new Chess();
-    const rawPgn = gameRef.current.pgn();
-
-    if (rawPgn.trim()) {
-      pgnGame.loadPgn(rawPgn);
-    }
-
-    const player = authUser?.username ?? "GLFish Player";
-    const stockfish = `Stockfish ${botEloRef.current}`;
-    const white = freePlay || playerColor === "w" ? player : stockfish;
-    const black = freePlay
-      ? t("freePlay.selfOpponent")
-      : playerColor === "w"
-        ? stockfish
-        : player;
-
-    pgnGame.setHeader("Event", freePlay ? "GLFish Free Play" : "GLFish Game");
-    pgnGame.setHeader("Site", "GLFish");
-    pgnGame.setHeader("Date", formatPgnDate(gameDate));
-    pgnGame.setHeader("Round", "-");
-    pgnGame.setHeader("White", white);
-    pgnGame.setHeader("Black", black);
-    pgnGame.setHeader("Result", result);
-    pgnGame.setHeader("Annotator", "GLFish");
-
-    if (!freePlay) {
-      const eloHeader = playerColor === "w" ? "BlackElo" : "WhiteElo";
-      pgnGame.setHeader(eloHeader, String(botEloRef.current));
-    }
-
-    if (openingName) {
-      pgnGame.setHeader("Opening", openingName);
-    }
-
-    return pgnGame.pgn();
+    return createPlayGamePgn({
+      game: gameRef.current,
+      date: new Date(),
+      freePlay,
+      playerColor,
+      playerName: authUser?.username ?? "GLFish Player",
+      botElo: botEloRef.current,
+      openingName,
+      selfOpponentLabel: t("freePlay.selfOpponent"),
+    });
   }, [authUser?.username, freePlay, openingName, playerColor, t]);
 
   const copyPgn = useCallback(() => {
@@ -965,9 +849,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     playEngineRef.current?.stopAnalysis();
     evalEngineRef.current?.stopAnalysis();
 
-    const editableGame = new Chess(gameRef.current.fen(), {
-      skipValidation: true,
-    });
+    const editableGame = createEditableGame(gameRef.current.fen());
 
     gameRef.current = editableGame;
     setGame(editableGame);
@@ -1026,20 +908,12 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
   const editSquare = useCallback(
     (square: Square) => {
-      const editedGame = new Chess(gameRef.current.fen(), {
-        skipValidation: true,
-      });
+      const editedGame = placeEditedPiece(gameRef.current, square, editPiece);
 
-      editedGame.remove(square);
+      if (!editedGame) {
+        toast.error(t("freePlay.onlyOneKing"));
 
-      if (editPiece && editPiece !== "remove") {
-        const wasPlaced = editedGame.put(editPiece, square);
-
-        if (!wasPlaced) {
-          toast.error(t("freePlay.onlyOneKing"));
-
-          return;
-        }
+        return;
       }
 
       updateEditedGame(editedGame);
@@ -1049,18 +923,11 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
   const moveEditedPiece = useCallback(
     (from: Square, to: Square) => {
-      const editedGame = new Chess(gameRef.current.fen(), {
-        skipValidation: true,
-      });
-      const piece = editedGame.get(from);
+      const editedGame = moveEditedPieceInGame(gameRef.current, from, to);
 
-      if (!piece) {
+      if (!editedGame) {
         return;
       }
-
-      editedGame.remove(from);
-      editedGame.remove(to);
-      editedGame.put(piece, to);
 
       updateEditedGame(editedGame);
     },
@@ -1068,12 +935,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   );
 
   const clearEditedBoard = useCallback(() => {
-    const editedGame = new Chess();
-
-    editedGame.clear();
-    editedGame.setTurn(gameRef.current.turn());
-
-    updateEditedGame(editedGame);
+    updateEditedGame(createClearedEditedGame(gameRef.current.turn()));
   }, [updateEditedGame]);
 
   const resetEditedBoard = useCallback(() => {
@@ -1082,17 +944,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
   const setEditedTurn = useCallback(
     (color: Color) => {
-      const fenParts = gameRef.current.fen().split(" ");
-      fenParts[1] = color;
-      fenParts[3] = "-";
-      fenParts[4] = "0";
-      fenParts[5] = "1";
-
-      updateEditedGame(
-        new Chess(fenParts.join(" "), {
-          skipValidation: true,
-        }),
-      );
+      updateEditedGame(createEditedGameWithTurn(gameRef.current, color));
     },
     [updateEditedGame],
   );
