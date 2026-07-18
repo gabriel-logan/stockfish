@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -33,7 +33,7 @@ func handleAnalyze(stockfishPath string) http.HandlerFunc {
 
 		sf, err := NewStockfish(stockfishPath)
 		if err != nil {
-			log.Printf("stockfish init: %v", err)
+			slog.ErrorContext(r.Context(), "stockfish initialization failed", "error", err)
 			http.Error(w, `{"error":"engine init failed"}`, http.StatusInternalServerError)
 			return
 		}
@@ -41,10 +41,10 @@ func handleAnalyze(stockfishPath string) http.HandlerFunc {
 
 		if req.Elo > 0 {
 			if err := sf.SetOption("UCI_LimitStrength", "true"); err != nil {
-				log.Printf("set limit strength: %v", err)
+				slog.WarnContext(r.Context(), "failed to set Stockfish strength limit", "error", err)
 			}
 			if err := sf.SetOption("UCI_Elo", fmt.Sprintf("%d", req.Elo)); err != nil {
-				log.Printf("set elo: %v", err)
+				slog.WarnContext(r.Context(), "failed to set Stockfish Elo", "error", err, "elo", req.Elo)
 			}
 		}
 

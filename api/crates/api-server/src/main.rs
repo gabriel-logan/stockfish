@@ -1,6 +1,8 @@
 use actix_cors::Cors;
-use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer, web};
+use actix_web::body::MessageBody;
+use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::middleware::{Next, from_fn};
+use actix_web::{App, Error, HttpServer, web};
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
@@ -43,10 +45,33 @@ fn cors_from_config(config: &Config) -> Cors {
     cors
 }
 
+async fn log_request(
+    request: ServiceRequest,
+    next: Next<impl MessageBody>,
+) -> Result<ServiceResponse<impl MessageBody>, Error> {
+    let method = request.method().clone();
+    let path = request.path().to_owned();
+    let started_at = std::time::Instant::now();
+
+    let response = next.call(request).await?;
+
+    let status = response.status();
+    let duration_ms = started_at.elapsed().as_millis() as u64;
+
+    if status.is_server_error() {
+        tracing::error!(%method, %path, status = status.as_u16(), duration_ms, "http request completed");
+    } else {
+        tracing::info!(%method, %path, status = status.as_u16(), duration_ms, "http request completed");
+    }
+
+    Ok(response)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .json()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
     let config = Config::from_env();
@@ -69,7 +94,7 @@ async fn main() -> std::io::Result<()> {
         let cors = cors_from_config(&config);
 
         App::new()
-            .wrap(Logger::default())
+            .wrap(from_fn(log_request))
             .wrap(cors)
             .app_data(web::Data::new(state.clone()))
             .configure(routes::configure)

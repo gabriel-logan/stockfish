@@ -36,7 +36,15 @@ impl ResponseError for ApiError {
     }
 
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(ErrorBody {
+        let status = self.status_code();
+
+        if status.is_server_error() {
+            tracing::error!(error = %self, status = status.as_u16(), "api request failed");
+        } else {
+            tracing::warn!(error = %self, status = status.as_u16(), "api request failed");
+        }
+
+        HttpResponse::build(status).json(ErrorBody {
             error: self.to_string(),
         })
     }

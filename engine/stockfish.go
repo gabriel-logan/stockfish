@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -52,7 +52,7 @@ func NewStockfish(path string) (*Stockfish, error) {
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			log.Printf("stockfish scanner: %v", err)
+			slog.Error("stockfish stdout scanner failed", "error", err)
 		}
 	})
 

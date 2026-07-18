@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"runtime/debug"
 )
 
@@ -10,7 +10,7 @@ func safeGo(name string, fn func()) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("goroutine %q panic: %v\n%s", name, rec, debug.Stack())
+				slog.Error("goroutine panic", "goroutine", name, "panic", rec, "stack", string(debug.Stack()))
 			}
 		}()
 		fn()

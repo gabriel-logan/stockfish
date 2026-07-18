@@ -1,12 +1,14 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	cfg := LoadConfig()
 
 	mux := http.NewServeMux()
@@ -20,6 +22,7 @@ func main() {
 	mux.HandleFunc("/analyze", handleAnalyze(cfg.StockfishPath))
 
 	h := corsMiddleware(mux)
+	h = requestLoggingMiddleware(h)
 	h = recoverMiddleware(h)
 
 	server := &http.Server{
@@ -27,8 +30,11 @@ func main() {
 		Handler: h,
 	}
 
-	fmt.Printf("server starting on http://localhost:%s (stockfish: %s)\n", cfg.Port, cfg.StockfishPath)
+	slog.Info("starting engine server", "port", cfg.Port, "stockfish_path", cfg.StockfishPath)
 	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("server: %v", err)
+		if err != http.ErrServerClosed {
+			slog.Error("engine server stopped", "error", err)
+			os.Exit(1)
+		}
 	}
 }

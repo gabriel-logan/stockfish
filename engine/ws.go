@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -77,13 +77,13 @@ func handleWS(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("ws upgrade: %v", err)
+			slog.WarnContext(r.Context(), "websocket upgrade failed", "error", err)
 			return
 		}
 
 		sf, err := NewStockfish(cfg.StockfishPath)
 		if err != nil {
-			log.Printf("stockfish init: %v", err)
+			slog.ErrorContext(r.Context(), "stockfish initialization failed", "error", err)
 
 			writeBinaryMsg(conn, WSMessage{Type: "error", Error: "engine init failed"})
 
@@ -124,7 +124,7 @@ func writePump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown
 		}
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		if err := writeBinaryMsg(conn, msg); err != nil {
-			log.Printf("writePump: %v", err)
+			slog.Warn("websocket write failed", "error", err)
 			return
 		}
 	}
@@ -137,7 +137,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 		mt, data, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("readPump: %v", err)
+				slog.Warn("websocket read failed", "error", err)
 			}
 			return
 		}
@@ -146,7 +146,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 		case websocket.TextMessage, websocket.BinaryMessage:
 			var msg WSMessage
 			if err := json.Unmarshal(data, &msg); err != nil {
-				log.Printf("readPump unmarshal: %v", err)
+				slog.Warn("websocket message decoding failed", "error", err)
 				continue
 			}
 			if msg.Type == "" {
@@ -161,7 +161,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 
 				moves := parseUCIMoves(msg.Moves)
 				if err := sf.SetPosition(msg.FEN, moves); err != nil {
-					log.Printf("readPump setpos: %v", err)
+					slog.Warn("Stockfish position update failed", "error", err)
 					continue
 				}
 
@@ -171,7 +171,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 				}
 
 				if err := sf.GoDepth(depth, msg.MultiPV); err != nil {
-					log.Printf("readPump go: %v", err)
+					slog.Warn("Stockfish analysis start failed", "error", err, "depth", depth, "multi_pv", msg.MultiPV)
 					continue
 				}
 				state.MarkStarted()
@@ -181,7 +181,7 @@ func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown 
 
 			case "setoption":
 				if err := sf.SetOption(msg.FEN, msg.Moves); err != nil {
-					log.Printf("readPump setopt: %v", err)
+					slog.Warn("Stockfish option update failed", "error", err, "option", msg.FEN)
 				}
 			}
 
@@ -199,7 +199,7 @@ func stopActiveSearch(sf *Stockfish, state *searchState) bool {
 	state.MarkStoppedByClient()
 
 	if err := sf.Stop(); err != nil {
-		log.Printf("readPump stop: %v", err)
+		slog.Warn("Stockfish analysis stop failed", "error", err)
 	}
 
 	return true
