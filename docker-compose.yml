@@ -30,7 +30,7 @@ services:
       - tools
 
   atlas:
-    image: arigaio/atlas:latest
+    image: arigaio/atlas:1.2.3
     working_dir: /app
     volumes:
       - ./api:/app
