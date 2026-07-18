@@ -656,7 +656,7 @@ export default function PgnViewer() {
 
       for (let i = 0; i < posData.length; i++) {
         try {
-          let result = await engine.analyzePosition(posData[i].fen, 10, 1);
+          let result = await engine.analyzePosition(posData[i].fen, 10, 3);
           let evaluationBefore = posData[i - 1]?.evaluation ?? null;
           let mateBefore = posData[i - 1]?.mate ?? null;
           let linesBefore = posData[i - 1]?.lines;
@@ -683,7 +683,7 @@ export default function PgnViewer() {
               3,
             );
 
-            result = await engine.analyzePosition(posData[i].fen, 14, 1);
+            result = await engine.analyzePosition(posData[i].fen, 14, 3);
             evaluationBefore = before.score;
             mateBefore = before.mate;
             linesBefore = before.lines;
