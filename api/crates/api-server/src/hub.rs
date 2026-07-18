@@ -109,3 +109,74 @@ fn broadcast(subscriptions: &mut Subscriptions, channel_id: Uuid, payload: &str)
 
     subscribers.retain(|subscriber| subscriber.send(payload.to_owned()).is_ok());
 }
+
+#[cfg(test)]
+mod tests {
+    use std::thread;
+
+    use super::*;
+
+    #[test]
+    fn room_broadcast_reaches_only_the_selected_room() {
+        let hub = Hub::default();
+        let first_room = Uuid::new_v4();
+        let second_room = Uuid::new_v4();
+        let mut first_receiver = hub.subscribe_room(first_room);
+        let mut second_receiver = hub.subscribe_room(second_room);
+
+        hub.broadcast_room(first_room, &ServerMessage::<serde_json::Value>::Pong);
+
+        assert_eq!(first_receiver.try_recv().unwrap(), r#"{"type":"pong"}"#);
+        assert!(second_receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn game_broadcast_removes_closed_subscribers() {
+        let hub = Hub::default();
+        let game_id = Uuid::new_v4();
+        let closed_receiver = hub.subscribe_game(game_id);
+        let mut active_receiver = hub.subscribe_game(game_id);
+
+        drop(closed_receiver);
+        hub.broadcast_game(game_id, &ServerMessage::<serde_json::Value>::Pong);
+
+        assert_eq!(active_receiver.try_recv().unwrap(), r#"{"type":"pong"}"#);
+
+        let inner = hub.inner.lock().unwrap();
+        assert_eq!(inner.games.get(&game_id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn concurrent_subscriptions_and_broadcasts_are_safe() {
+        let hub = Hub::default();
+        let room_id = Uuid::new_v4();
+        let mut receivers = Vec::new();
+
+        thread::scope(|scope| {
+            let mut handles = Vec::new();
+
+            for _ in 0..16 {
+                let hub = hub.clone();
+                handles.push(scope.spawn(move || hub.subscribe_room(room_id)));
+            }
+
+            for handle in handles {
+                receivers.push(handle.join().unwrap());
+            }
+        });
+
+        thread::scope(|scope| {
+            for _ in 0..8 {
+                let hub = hub.clone();
+                scope.spawn(move || {
+                    hub.broadcast_room(room_id, &ServerMessage::<serde_json::Value>::Pong);
+                });
+            }
+        });
+
+        for receiver in &mut receivers {
+            let messages: Vec<_> = std::iter::from_fn(|| receiver.try_recv().ok()).collect();
+            assert_eq!(messages.len(), 8);
+        }
+    }
+}

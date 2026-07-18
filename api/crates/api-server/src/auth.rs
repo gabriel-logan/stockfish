@@ -292,3 +292,65 @@ fn validate_password(password: &str) -> ApiResult<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn access_token_round_trip() {
+        let user_id = Uuid::new_v4();
+        let token = create_jwt(user_id, "access", 60, "test-secret").unwrap();
+
+        assert_eq!(decode_access_token(&token, "test-secret").unwrap(), user_id);
+        assert!(decode_access_token(&token, "wrong-secret").is_err());
+    }
+
+    #[test]
+    fn rejects_non_access_token() {
+        let token = create_jwt(Uuid::new_v4(), "refresh", 60, "test-secret").unwrap();
+
+        assert!(matches!(
+            decode_access_token(&token, "test-secret"),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn refresh_tokens_are_random_hex_and_hash_deterministically() {
+        let first = create_refresh_token();
+        let second = create_refresh_token();
+
+        assert_eq!(first.len(), 64);
+        assert!(first.chars().all(|character| character.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+        assert_eq!(hash_refresh_token("token"), hash_refresh_token("token"));
+        assert_ne!(hash_refresh_token("token"), hash_refresh_token("other"));
+    }
+
+    #[test]
+    fn password_hash_verifies_only_the_original_password() {
+        let hash = hash_password("correct horse battery staple").unwrap();
+
+        assert!(verify_password("correct horse battery staple", &hash).is_ok());
+        assert!(matches!(
+            verify_password("wrong password", &hash),
+            Err(ApiError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn validates_username_boundaries_after_trimming() {
+        assert!(validate_username("abc").is_ok());
+        assert!(validate_username(&"a".repeat(32)).is_ok());
+        assert!(validate_username("  player  ").is_ok());
+        assert!(validate_username("ab").is_err());
+        assert!(validate_username(&"a".repeat(33)).is_err());
+    }
+
+    #[test]
+    fn validates_password_minimum_length() {
+        assert!(validate_password("12345678").is_ok());
+        assert!(validate_password("1234567").is_err());
+    }
+}

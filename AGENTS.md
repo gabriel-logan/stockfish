@@ -9,6 +9,7 @@ For the frontend, always run:
 ```bash
 pnpm lint:fix
 pnpm format
+pnpm test
 pnpm build
 ```
 
@@ -17,6 +18,8 @@ For the Go server, always run:
 ```bash
 go vet ./...
 go fmt ./...
+go test ./...
+go test -race ./...
 go build -o /dev/null ./...
 ```
 
@@ -24,9 +27,12 @@ The Go build command is only for compilation validation and debugging. Do not ge
 
 For the Rust monorepo, always run:
 
+```bash
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
 cargo build --workspace --all-features
+```
 
 Use cargo check --workspace --all-targets --all-features for fast validation while iterating, but do not use it as a replacement for the full validation commands above.
 

@@ -413,3 +413,94 @@ fn append_pgn(game: &Game, san: &str) -> String {
 
     pgn
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game(side_to_move: &str, move_count: i32, pgn: &str) -> Game {
+        let now = Utc::now();
+
+        Game {
+            id: Uuid::new_v4(),
+            room_id: Uuid::new_v4(),
+            white_user_id: Uuid::new_v4(),
+            black_user_id: Uuid::new_v4(),
+            status: "active".to_owned(),
+            result: None,
+            result_reason: None,
+            fen: STARTING_FEN.to_owned(),
+            pgn: pgn.to_owned(),
+            side_to_move: side_to_move.to_owned(),
+            move_count,
+            white_clock_ms: 60_000,
+            black_clock_ms: 60_000,
+            last_move_at: now,
+            started_at: now,
+            finished_at: None,
+        }
+    }
+
+    #[test]
+    fn validates_a_legal_move() {
+        let validated = validate_move(STARTING_FEN, "e2e4").unwrap();
+
+        assert_eq!(validated.san, "e4");
+        assert_eq!(validated.side_to_move, "black");
+        assert!(
+            validated
+                .fen_after
+                .starts_with("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq")
+        );
+        assert!(validated.result.is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_position_and_illegal_move() {
+        assert!(matches!(
+            validate_move("not a fen", "e2e4"),
+            Err(ApiError::BadRequest(message)) if message == "invalid game position"
+        ));
+        assert!(matches!(
+            validate_move(STARTING_FEN, "e2e5"),
+            Err(ApiError::BadRequest(message)) if message == "illegal move"
+        ));
+    }
+
+    #[test]
+    fn identifies_checkmate() {
+        let fen = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3";
+        let (result, reason) = result_from_outcome(
+            Fen::from_ascii(fen.as_bytes())
+                .unwrap()
+                .into_position::<Chess>(CastlingMode::Standard)
+                .unwrap()
+                .outcome(),
+        );
+
+        assert_eq!(result.as_deref(), Some("black_win"));
+        assert_eq!(reason, "checkmate");
+    }
+
+    #[test]
+    fn appends_white_and_black_moves_to_pgn() {
+        assert_eq!(append_pgn(&game("white", 0, ""), "e4"), "1. e4");
+        assert_eq!(append_pgn(&game("black", 1, "1. e4"), "e5"), "1. e4 e5");
+        assert_eq!(
+            append_pgn(&game("white", 2, "1. e4 e5"), "Nf3"),
+            "1. e4 e5 2. Nf3"
+        );
+    }
+
+    #[test]
+    fn permits_only_game_players() {
+        let game = game("white", 0, "");
+
+        assert!(ensure_player(&game, game.white_user_id).is_ok());
+        assert!(ensure_player(&game, game.black_user_id).is_ok());
+        assert!(matches!(
+            ensure_player(&game, Uuid::new_v4()),
+            Err(ApiError::Forbidden)
+        ));
+    }
+}

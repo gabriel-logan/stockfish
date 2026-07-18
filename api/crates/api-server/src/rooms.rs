@@ -319,3 +319,34 @@ fn validate_room_options(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_valid_room_option_boundaries() {
+        assert!(validate_room_options("public", 60, 0).is_ok());
+        assert!(validate_room_options("private", 10_800, 60).is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_visibility() {
+        assert!(matches!(
+            validate_room_options("friends", 600, 0),
+            Err(ApiError::BadRequest(message)) if message == "visibility must be public or private"
+        ));
+    }
+
+    #[test]
+    fn rejects_time_control_outside_range() {
+        assert!(validate_room_options("public", 59, 0).is_err());
+        assert!(validate_room_options("public", 10_801, 0).is_err());
+    }
+
+    #[test]
+    fn rejects_increment_outside_range() {
+        assert!(validate_room_options("public", 600, -1).is_err());
+        assert!(validate_room_options("public", 600, 61).is_err());
+    }
+}
