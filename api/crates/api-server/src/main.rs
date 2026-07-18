@@ -14,6 +14,7 @@ mod hub;
 mod models;
 mod rooms;
 mod routes;
+mod saved_games;
 mod users;
 mod ws;
 

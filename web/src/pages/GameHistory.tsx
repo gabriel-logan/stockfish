@@ -1,26 +1,54 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaCheck, FaPen, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router";
 import { toast } from "react-toastify";
 
 import ConfirmModal from "../components/ConfirmModal";
-import { useUserStore } from "../store/userStore";
+import { getApiErrorMessage } from "../lib/apiInstance";
+import {
+  deleteSavedGame,
+  listSavedGames,
+  renameSavedGame,
+} from "../services/savedGameService";
+import { useAuthStore } from "../store/authStore";
+import type { SavedGame } from "../types/api";
 
 export default function GameHistory() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const users = useUserStore((s) => s.users);
-  const activeUserId = useUserStore((s) => s.activeUserId);
-  const deleteGame = useUserStore((s) => s.deleteGame);
-  const editGameName = useUserStore((s) => s.editGameName);
+  const user = useAuthStore((s) => s.user);
 
+  const [savedGames, setSavedGames] = useState<SavedGame[] | null>(null);
   const [gameToDelete, setGameToDelete] = useState<string | null>(null);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const activeUser = users.find((u) => u.id === activeUserId);
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void listSavedGames()
+      .then((games) => {
+        if (!cancelled) {
+          setSavedGames(games);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSavedGames([]);
+          toast.error(getApiErrorMessage(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   function startEditing(gameId: string, currentName: string) {
     setEditingGameId(gameId);
@@ -31,15 +59,48 @@ export default function GameHistory() {
     }, 0);
   }
 
-  function saveEditName(gameId: string) {
+  async function saveEditName(gameId: string) {
     const trimmed = editValue.trim();
 
-    editGameName(gameId, trimmed);
-    setEditingGameId(null);
-    toast.success(t("success.gameRenamed"));
+    if (!user) {
+      return;
+    }
+
+    try {
+      const savedGame = await renameSavedGame(gameId, trimmed);
+
+      setSavedGames((games) =>
+        (games ?? []).map((game) => (game.id === gameId ? savedGame : game)),
+      );
+      setEditingGameId(null);
+      toast.success(t("success.gameRenamed"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
   }
 
-  if (!activeUser) {
+  async function confirmDeleteGame() {
+    const gameId = gameToDelete;
+
+    if (!gameId) {
+      setGameToDelete(null);
+
+      return;
+    }
+
+    try {
+      await deleteSavedGame(gameId);
+      setSavedGames((games) => {
+        return (games ?? []).filter((game) => game.id !== gameId);
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setGameToDelete(null);
+    }
+  }
+
+  if (!user) {
     return (
       <div className="flex w-[min(100%,50rem)] flex-col items-center gap-6 pt-12 text-center">
         <h1 className="text-2xl font-black text-[#f4f1e8]">
@@ -56,16 +117,18 @@ export default function GameHistory() {
     <Fragment>
       <div className="flex w-[min(100%,50rem)] flex-col gap-6 pt-4">
         <h1 className="text-2xl font-black text-[#f4f1e8]">
-          {t("gameHistory.gamesTitle", { name: activeUser.name })}
+          {t("gameHistory.gamesTitle", { name: user.username })}
         </h1>
 
-        {activeUser.games.length === 0 ? (
+        {savedGames === null ? (
+          <p className="text-sm text-[#aaa7a0]">...</p>
+        ) : savedGames.length === 0 ? (
           <p className="text-sm text-[#aaa7a0]">
             {t("gameHistory.noSavedGames")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {[...activeUser.games].reverse().map((game) => {
+            {savedGames.map((game) => {
               const date = new Date(game.date);
 
               return (
@@ -93,7 +156,7 @@ export default function GameHistory() {
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                saveEditName(game.id);
+                                void saveEditName(game.id);
                               }
 
                               if (e.key === "Escape") {
@@ -155,7 +218,7 @@ export default function GameHistory() {
                         className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#628d3f] text-xs font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
                         title={t("common.save")}
                         onClick={() => {
-                          saveEditName(game.id);
+                          void saveEditName(game.id);
                         }}
                       >
                         <FaCheck aria-hidden="true" />
@@ -196,10 +259,7 @@ export default function GameHistory() {
         title={t("gameHistory.deleteConfirmTitle")}
         message={t("gameHistory.deleteConfirmMessage")}
         onConfirm={() => {
-          if (gameToDelete) {
-            deleteGame(gameToDelete);
-            setGameToDelete(null);
-          }
+          void confirmDeleteGame();
         }}
         onCancel={() => {
           setGameToDelete(null);

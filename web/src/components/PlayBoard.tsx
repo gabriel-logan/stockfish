@@ -25,17 +25,18 @@ import {
   validateFen,
 } from "chess.js";
 
+import { getApiErrorMessage } from "../lib/apiInstance";
+import { createSavedGame } from "../services/savedGameService";
+import { useAuthStore } from "../store/authStore";
 import {
   PIECE_SETS,
   type PieceSet,
   useSettingsStore,
 } from "../store/settingsStore";
-import { type SavedGame, useUserStore } from "../store/userStore";
 import type { ClassificationValue, PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
 import { AnalysisEngine } from "../utils/analysisEngine";
 import { classifyMove } from "../utils/classification";
-import { createId } from "../utils/createId";
 import { UCI_ELO_MAX, UCI_ELO_MIN } from "../utils/elo";
 import {
   getLatestOpeningName,
@@ -175,16 +176,13 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const [boardFlipped, setBoardFlipped] = useState(false);
   const [gameStarted, setGameStarted] = useState(freePlay);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const [savingGame, setSavingGame] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editPiece, setEditPiece] = useState<EditPiece>(null);
 
-  const activeUserId = useUserStore((s) => s.activeUserId);
-  const users = useUserStore((s) => s.users);
-  const saveGameToStore = useUserStore((s) => s.saveGame);
-  const activeUser = users.find((user) => {
-    return user.id === activeUserId;
-  });
-  const playerName = activeUser?.name ?? t("common.noUser");
+  const authUser = useAuthStore((s) => s.user);
+  const authUserId = authUser?.id ?? null;
+  const playerName = authUser?.username ?? t("common.noUser");
 
   const {
     showEvaluationBar,
@@ -809,7 +807,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       pgnGame.loadPgn(rawPgn);
     }
 
-    const player = activeUser?.name ?? "GLFish Player";
+    const player = authUser?.username ?? "GLFish Player";
     const stockfish = `Stockfish ${botEloRef.current}`;
     const white = freePlay || playerColor === "w" ? player : stockfish;
     const black = freePlay
@@ -837,7 +835,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     }
 
     return pgnGame.pgn();
-  }, [activeUser?.name, freePlay, openingName, playerColor, t]);
+  }, [authUser?.username, freePlay, openingName, playerColor, t]);
 
   const copyPgn = useCallback(() => {
     const pgn = createPgnWithHeaders();
@@ -854,39 +852,44 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     setBoardFlipped((prev) => !prev);
   }, []);
 
-  const saveCurrentGame = useCallback(() => {
-    if (savedGameId || !activeUserId) {
+  const saveCurrentGame = useCallback(async () => {
+    if (savedGameId || !authUserId || savingGame) {
       return;
     }
 
     const pgn = createPgnWithHeaders();
     const result = getGameResult(gameRef.current);
 
-    const savedGame: SavedGame = {
-      id: createId(),
-      pgn,
-      date: new Date().toISOString(),
-      result,
-      opponent: freePlay
-        ? t("freePlay.selfOpponent")
-        : `Stockfish (${botEloRef.current} ${t("common.elo")})`,
-      opening: openingName ?? undefined,
-      playerColor: freePlay ? "w" : playerColor,
-      botElo: freePlay ? undefined : botEloRef.current,
-      moves: movesRef.current.length,
-    };
+    try {
+      setSavingGame(true);
 
-    saveGameToStore(savedGame);
-    setSavedGameId(savedGame.id);
-    toast.success(t("success.gameSaved"));
+      const savedGame = await createSavedGame({
+        pgn,
+        result,
+        opponent: freePlay
+          ? t("freePlay.selfOpponent")
+          : `Stockfish (${botEloRef.current} ${t("common.elo")})`,
+        opening: openingName ?? undefined,
+        playerColor: freePlay ? "w" : playerColor,
+        botElo: freePlay ? undefined : botEloRef.current,
+        moves: movesRef.current.length,
+      });
+
+      setSavedGameId(savedGame.id);
+      toast.success(t("success.gameSaved"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSavingGame(false);
+    }
   }, [
-    activeUserId,
+    authUserId,
     freePlay,
     createPgnWithHeaders,
     savedGameId,
+    savingGame,
     openingName,
     playerColor,
-    saveGameToStore,
     t,
   ]);
 
@@ -1227,12 +1230,14 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
                 {t("common.newGame")}
               </button>
 
-              {activeUserId && (
+              {authUserId && (
                 <button
                   type="button"
                   className="inline-flex min-h-9 items-center justify-center gap-2 rounded border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-3 text-xs font-extrabold text-white transition hover:from-[#8bb75a] hover:to-[#5b9476] disabled:cursor-not-allowed disabled:opacity-45"
-                  onClick={saveCurrentGame}
-                  disabled={!!savedGameId}
+                  onClick={() => {
+                    void saveCurrentGame();
+                  }}
+                  disabled={savingGame || !!savedGameId}
                 >
                   <FaSave aria-hidden="true" />
                   {savedGameId ? t("common.saved") : t("common.save")}
@@ -1775,7 +1780,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
             <FaFlag aria-hidden="true" />
           </button>
 
-          {activeUserId && (
+          {authUserId && (
             <button
               type="button"
               className={
@@ -1783,8 +1788,12 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
                   ? `${iconActionButtonClass} bg-linear-to-br from-[#628d3f] to-[#3f735c] opacity-40`
                   : iconActionButtonClass
               }
-              onClick={saveCurrentGame}
-              disabled={moves.length === 0 || !activeUserId || !!savedGameId}
+              onClick={() => {
+                void saveCurrentGame();
+              }}
+              disabled={
+                moves.length === 0 || !authUserId || savingGame || !!savedGameId
+              }
               title={savedGameId ? t("common.saved") : t("common.save")}
             >
               <FaSave aria-hidden="true" />

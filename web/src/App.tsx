@@ -110,13 +110,13 @@ function App() {
 
           <Route element={<PrivateRoutes />}>
             <Route path="/online" element={<PlayOnline />} />
+            <Route path="/history" element={<GameHistory />} />
           </Route>
 
           <Route path="/" element={<PlayComputer />} />
           <Route path="/play" element={<PlayComputer />} />
           <Route path="/free-play" element={<FreePlay />} />
           <Route path="/pgn" element={<PgnViewer />} />
-          <Route path="/history" element={<GameHistory />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>

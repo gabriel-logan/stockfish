@@ -56,6 +56,30 @@ export interface MoveRecord {
   createdAt: string;
 }
 
+export interface SavedGame {
+  id: string;
+  name: string | null;
+  pgn: string;
+  date: string;
+  result: string;
+  opponent: string;
+  opening: string | null;
+  playerColor: "w" | "b";
+  botElo: number | null;
+  moves: number;
+}
+
+export interface CreateSavedGameRequest {
+  name?: string;
+  pgn: string;
+  result: string;
+  opponent: string;
+  opening?: string;
+  playerColor: "w" | "b";
+  botElo?: number;
+  moves: number;
+}
+
 export interface JoinMatchmakingResponse {
   matched: boolean;
   room: Room;

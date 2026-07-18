@@ -2,9 +2,9 @@ import { initReactI18next } from "react-i18next";
 import i18next from "i18next";
 
 import { resources } from "../constants";
-import { useUserStore } from "../store/userStore";
+import { usePreferencesStore } from "../store/preferencesStore";
 
-const language = useUserStore.getState().locale;
+const language = usePreferencesStore.getState().locale;
 
 i18next
   .use(initReactI18next) // passes i18n down to react-i18next
@@ -20,7 +20,7 @@ i18next
     },
   });
 
-useUserStore.subscribe((state) => {
+usePreferencesStore.subscribe((state) => {
   if (i18next.language !== state.locale) {
     void i18next.changeLanguage(state.locale);
   }

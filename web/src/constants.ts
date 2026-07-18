@@ -50,5 +50,5 @@ export const baseUrlEngineWS = import.meta.env.VITE_ENGINE_BASE_URL_WS;
 export const baseUrlApi = import.meta.env.VITE_API_BASE_URL;
 export const baseUrlApiWS = import.meta.env.VITE_API_BASE_URL_WS;
 
-export const STORAGE_KEY_USER_STORE = "stockfish-user-store";
+export const STORAGE_KEY_PREFERENCES_STORE = "stockfish-preferences-store";
 export const STORAGE_KEY_AUTH_STORE = "stockfish-auth-store";

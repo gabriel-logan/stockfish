@@ -63,6 +63,21 @@ pub struct MoveRecord {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedGame {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub pgn: String,
+    pub date: DateTime<Utc>,
+    pub result: String,
+    pub opponent: String,
+    pub opening: Option<String>,
+    pub player_color: String,
+    pub bot_elo: Option<i32>,
+    pub moves: i32,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
@@ -99,6 +114,25 @@ pub struct MatchmakingRequest {
     pub rated: Option<bool>,
     pub time_control_seconds: Option<i32>,
     pub increment_seconds: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSavedGameRequest {
+    pub name: Option<String>,
+    pub pgn: String,
+    pub result: String,
+    pub opponent: String,
+    pub opening: Option<String>,
+    pub player_color: String,
+    pub bot_elo: Option<i32>,
+    pub moves: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameSavedGameRequest {
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -66,3 +66,20 @@ CREATE TABLE moves (
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (game_id, move_number)
 );
+
+CREATE TABLE saved_games (
+    id uuid PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text,
+    pgn text NOT NULL,
+    result text NOT NULL,
+    opponent text NOT NULL,
+    opening text,
+    player_color text NOT NULL CHECK (player_color IN ('w', 'b')),
+    bot_elo integer,
+    moves integer NOT NULL CHECK (moves >= 0),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX saved_games_user_created_at_idx ON saved_games (user_id, created_at DESC);

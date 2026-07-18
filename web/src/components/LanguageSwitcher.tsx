@@ -1,4 +1,4 @@
-import { useUserStore } from "../store/userStore";
+import { usePreferencesStore } from "../store/preferencesStore";
 
 const LOCALES = [
   { value: "en", label: "EN" },
@@ -11,9 +11,9 @@ const inactiveClass =
   "bg-[#36342f] text-[#bebaae] hover:bg-[#48453e] hover:text-white";
 
 export default function LanguageSwitcher() {
-  const locale = useUserStore((s) => s.locale);
+  const locale = usePreferencesStore((s) => s.locale);
 
-  const setLocale = useUserStore((s) => s.setLocale);
+  const setLocale = usePreferencesStore((s) => s.setLocale);
 
   return (
     <div className="flex overflow-hidden rounded-md border border-white/8">

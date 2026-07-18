@@ -1,6 +1,6 @@
 use actix_web::web;
 
-use crate::{auth, games, rooms, users, ws};
+use crate::{auth, games, rooms, saved_games, users, ws};
 
 pub fn configure(config: &mut web::ServiceConfig) {
     config
@@ -30,6 +30,19 @@ pub fn configure(config: &mut web::ServiceConfig) {
             web::scope("/games")
                 .route("/{game_id}", web::get().to(games::get_game))
                 .route("/{game_id}/resign", web::post().to(games::resign_game)),
+        )
+        .service(
+            web::scope("/saved-games")
+                .route("", web::get().to(saved_games::list_saved_games))
+                .route("", web::post().to(saved_games::create_saved_game))
+                .route(
+                    "/{saved_game_id}",
+                    web::patch().to(saved_games::rename_saved_game),
+                )
+                .route(
+                    "/{saved_game_id}",
+                    web::delete().to(saved_games::delete_saved_game),
+                ),
         );
 }
 

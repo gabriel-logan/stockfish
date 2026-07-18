@@ -25,9 +25,9 @@ import {
   leaveMatchmaking,
   listRooms,
 } from "../services/roomService";
+import { createSavedGame } from "../services/savedGameService";
 import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
-import { type SavedGame, useUserStore } from "../store/userStore";
 import type {
   Game,
   MoveRecord,
@@ -41,7 +41,6 @@ import {
   decodeBinaryMessage,
   encodeBinaryMessage,
 } from "../utils/binaryMessage";
-import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
 import { formatPgnDate } from "../utils/pgn";
 import {
@@ -155,7 +154,6 @@ export default function PlayOnline() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const pieceSet = useSettingsStore((s) => s.pieceSet);
   const soundEnabled = useSettingsStore((s) => s.soundEnabled);
-  const saveGameToStore = useUserStore((s) => s.saveGame);
   const socketRef = useRef<WebSocket | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [game, setGame] = useState<Game | null>(null);
@@ -167,6 +165,7 @@ export default function PlayOnline() {
   const [whitePlayer, setWhitePlayer] = useState<PlayerInfo | null>(null);
   const [blackPlayer, setBlackPlayer] = useState<PlayerInfo | null>(null);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const [savingGame, setSavingGame] = useState(false);
 
   const currentFen = game?.fen;
 
@@ -515,8 +514,8 @@ export default function PlayOnline() {
       .catch(() => {});
   }
 
-  function handleSaveGame() {
-    if (savedGameId || !user) {
+  async function handleSaveGame() {
+    if (savedGameId || !user || savingGame) {
       return;
     }
 
@@ -533,20 +532,25 @@ export default function PlayOnline() {
     const playerColor =
       game && user ? (game.whiteUserId === user.id ? "w" : "b") : "w";
 
-    const savedGame: SavedGame = {
-      id: createId(),
-      pgn,
-      date: new Date().toISOString(),
-      result,
-      opponent,
-      opening: openingName ?? undefined,
-      playerColor,
-      moves: moves.length,
-    };
+    try {
+      setSavingGame(true);
 
-    saveGameToStore(savedGame);
-    setSavedGameId(savedGame.id);
-    toast.success(t("success.gameSaved"));
+      const savedGame = await createSavedGame({
+        pgn,
+        result,
+        opponent,
+        opening: openingName ?? undefined,
+        playerColor,
+        moves: moves.length,
+      });
+
+      setSavedGameId(savedGame.id);
+      toast.success(t("success.gameSaved"));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSavingGame(false);
+    }
   }
 
   return (
@@ -700,8 +704,10 @@ export default function PlayOnline() {
                         ? "flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white opacity-60"
                         : "flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
                     }
-                    onClick={handleSaveGame}
-                    disabled={!!savedGameId}
+                    onClick={() => {
+                      void handleSaveGame();
+                    }}
+                    disabled={savingGame || !!savedGameId}
                   >
                     {savedGameId ? (
                       <FaCheck aria-hidden="true" />

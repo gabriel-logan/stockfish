@@ -1,6 +1,6 @@
 # Two Competing User Concepts
 
-- [ ] Resolved
+- [x] Resolved
 
 The project has `authStore` for the API-authenticated user and `userStore` for local users.
 

@@ -68,6 +68,13 @@ Atlas uses `api-dev-db` as its clean development database while computing declar
 - `GET /games/{gameId}`
 - `POST /games/{gameId}/resign`
 
+### Saved Games
+
+- `GET /saved-games`
+- `POST /saved-games`
+- `PATCH /saved-games/{savedGameId}`
+- `DELETE /saved-games/{savedGameId}`
+
 ## WebSocket
 
 Connect with a token:
