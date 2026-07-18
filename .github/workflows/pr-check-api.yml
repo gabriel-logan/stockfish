@@ -1,0 +1,56 @@
+name: PR Check - API
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "api/**"
+      - ".github/workflows/pr-check-api.yml"
+
+  push:
+    branches: ["main"]
+    paths:
+      - "api/**"
+      - ".github/workflows/pr-check-api.yml"
+
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Run rustfmt check
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace --all-features
+
+      - name: Build the API
+        run: cargo build --workspace --all-features
+
+      - name: Setup nightly Rust with rust-src
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Run thread sanitizer tests
+        run: RUSTFLAGS="-Z sanitizer=thread" cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu --workspace --all-features -- --ignored

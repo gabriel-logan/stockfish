@@ -1,0 +1,52 @@
+name: PR Check - Engine
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "engine/**"
+      - ".github/workflows/pr-check-engine.yml"
+
+  push:
+    branches: ["main"]
+    paths:
+      - "engine/**"
+      - ".github/workflows/pr-check-engine.yml"
+
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: engine
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+          cache-dependency-path: engine/go.sum
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Check gofmt
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run race detector tests
+        run: go test -race ./...
+
+      - name: Build the engine
+        run: go build -o /dev/null ./...
