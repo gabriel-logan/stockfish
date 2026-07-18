@@ -1,0 +1,73 @@
+name: PR Check - Web
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "web/src/**"
+      - "web/tsconfig.json"
+      - "web/eslint.config.*"
+      - "web/pnpm-lock.yaml"
+      - "web/public/**"
+      - ".github/workflows/pr-check-web.yml"
+
+  push:
+    branches: ["main"]
+    paths:
+      - "web/src/**"
+      - "web/tsconfig.json"
+      - "web/eslint.config.*"
+      - "web/pnpm-lock.yaml"
+      - "web/public/**"
+      - ".github/workflows/pr-check-web.yml"
+
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js (latest)
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: "pnpm"
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run prettier formatting check
+        run: pnpm format:check
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build the project
+        run: pnpm build
+
+      - name: Check if dist directory exists
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory does not exist."
+            exit 1
+          fi
