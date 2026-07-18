@@ -9,7 +9,7 @@ import {
 import type { MoveEntry } from "../types/moves";
 import { formatPgnDate, getMoveUci } from "./pgn";
 
-export const BOT_MOVE_DELAY_MS = 1200;
+export const BOT_MOVE_DELAY_MS = 1000;
 export const ENGINE_DISCONNECT_NOTICE_DELAY_MS = 6000;
 export const CAPTURED_PIECE_ORDER = ["q", "r", "b", "n", "p"] as const;
 export const EDIT_PIECES: PieceSymbol[] = ["k", "q", "r", "b", "n", "p"];
