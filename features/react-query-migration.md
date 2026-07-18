@@ -1,6 +1,6 @@
 # React Query Migration
 
-- [ ] Resolved
+- [x] Resolved
 
 Currently, the frontend manages server state manually using `useEffect`, local loading flags, explicit `try/catch` blocks, direct service calls, and *ad hoc* cache updates within components.
 

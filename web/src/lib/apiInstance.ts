@@ -3,6 +3,7 @@ import axios from "axios";
 import { baseUrlApi } from "../constants";
 import { useAuthStore } from "../store/authStore";
 import type { AuthResponse } from "../types/api";
+import { queryClient } from "./queryClient";
 
 const apiInstance = axios.create({
   baseURL: baseUrlApi,
@@ -36,27 +37,42 @@ apiInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    const refreshQueryKey = ["auth-refresh", refreshToken];
+
     try {
-      const response = await axios.post<AuthResponse>(
-        `${baseUrlApi}/auth/refresh`,
-        { refreshToken },
-      );
+      const refreshedSession = await queryClient.fetchQuery({
+        queryKey: refreshQueryKey,
+        queryFn: async () => {
+          const response = await axios.post<AuthResponse>(
+            `${baseUrlApi}/auth/refresh`,
+            { refreshToken },
+          );
+
+          return response.data;
+        },
+        retry: false,
+        staleTime: 0,
+        gcTime: 0,
+      });
 
       useAuthStore
         .getState()
         .setSession(
-          response.data.user,
-          response.data.accessToken,
-          response.data.refreshToken,
+          refreshedSession.user,
+          refreshedSession.accessToken,
+          refreshedSession.refreshToken,
         );
 
-      originalRequest.headers.Authorization = `Bearer ${response.data.accessToken}`;
+      originalRequest.headers.Authorization = `Bearer ${refreshedSession.accessToken}`;
 
       return apiInstance(originalRequest);
     } catch (refreshError) {
       useAuthStore.getState().clearSession();
+      queryClient.removeQueries();
 
       return Promise.reject(refreshError);
+    } finally {
+      queryClient.removeQueries({ queryKey: refreshQueryKey, exact: true });
     }
   },
 );

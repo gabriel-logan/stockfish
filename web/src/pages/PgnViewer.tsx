@@ -21,9 +21,9 @@ import MoveList from "../components/MoveList";
 import PgnPlayerCard from "../components/PgnPlayerCard";
 import {
   type ExternalGame,
-  fetchChessComGames,
-  fetchLichessGames,
-} from "../services/externalGameService";
+  type ExternalGamesRequest,
+  useExternalGamesQuery,
+} from "../queries/externalGameQueries";
 import {
   PIECE_SETS,
   type PieceSet,
@@ -55,6 +55,8 @@ import {
 import { playMoveResultSound } from "../utils/sounds";
 import { getSafeExternalUrl } from "../utils/url";
 
+const EMPTY_EXTERNAL_GAMES: ExternalGame[] = [];
+
 export default function PgnViewer() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -63,9 +65,9 @@ export default function PgnViewer() {
   const [pgnSource, setPgnSource] = useState<PgnSource>("paste");
   const [pgnInput, setPgnInput] = useState(initialPgn ?? "");
   const [externalUsername, setExternalUsername] = useState("");
-  const [externalGames, setExternalGames] = useState<ExternalGame[]>([]);
+  const [externalGamesRequest, setExternalGamesRequest] =
+    useState<ExternalGamesRequest | null>(null);
   const [selectedExternalGameId, setSelectedExternalGameId] = useState("");
-  const [isLoadingGames, setIsLoadingGames] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,50 @@ export default function PgnViewer() {
   const [boardFlipped, setBoardFlipped] = useState(false);
   const [practiceMoves, setPracticeMoves] = useState<MoveEntry[]>([]);
   const [practiceCursor, setPracticeCursor] = useState(0);
+  const {
+    data: externalGamesData,
+    error: externalGamesError,
+    isError: externalGamesFailed,
+    isFetching: isLoadingGames,
+    isSuccess: externalGamesLoaded,
+  } = useExternalGamesQuery(externalGamesRequest);
+  const externalGames = externalGamesData ?? EMPTY_EXTERNAL_GAMES;
+  const selectedExternalGame = useMemo(() => {
+    return (
+      externalGames.find((game) => {
+        return game.id === selectedExternalGameId;
+      }) ??
+      externalGames[0] ??
+      null
+    );
+  }, [externalGames, selectedExternalGameId]);
+  const externalPgnGameInfo = useMemo(() => {
+    if (!selectedExternalGame) {
+      return null;
+    }
+
+    try {
+      return parsePgnGameInfo(selectedExternalGame.pgn);
+    } catch {
+      return null;
+    }
+  }, [selectedExternalGame]);
+  const activePgnInput =
+    pgnSource === "paste" ? pgnInput : (selectedExternalGame?.pgn ?? "");
+  const activePgnGameInfo =
+    pgnSource === "paste" ? pgnGameInfo : externalPgnGameInfo;
+  const externalGamesErrorMessage =
+    externalGamesRequest && externalGamesFailed
+      ? externalGamesError instanceof Error
+        ? externalGamesError.message
+        : "Could not load games."
+      : null;
+  const externalGamesEmptyMessage =
+    externalGamesRequest && externalGamesLoaded && externalGames.length === 0
+      ? "No public games found for that user."
+      : null;
+  const visibleError =
+    error ?? externalGamesErrorMessage ?? externalGamesEmptyMessage;
 
   const {
     showEvaluationBar,
@@ -121,7 +167,7 @@ export default function PgnViewer() {
   const currentMoveDetails =
     latestPracticeMove ??
     (currentIdx > 0 ? mainLineMoves[currentIdx - 1] : null);
-  const headers = pgnGameInfo?.headers ?? {};
+  const headers = activePgnGameInfo?.headers ?? {};
   const headerEntries = Object.entries(headers);
   const gameLinkUrl = getSafeExternalUrl(headers.Link || headers.ECOUrl);
   const whiteName = headers.White || "White";
@@ -273,7 +319,7 @@ export default function PgnViewer() {
   );
 
   const handleLoadPgn = async () => {
-    if (!pgnInput.trim()) {
+    if (!activePgnInput.trim()) {
       setError(t("errors.pasteValidPgn"));
       toast.error(t("errors.pasteValidPgn"));
       return;
@@ -289,8 +335,8 @@ export default function PgnViewer() {
     setSelectedSquare(null);
     setPgnGameInfo(null);
     try {
-      const parsedGameInfo = parsePgnGameInfo(pgnInput);
-      const posData = createPgnPositions(pgnInput, parsedGameInfo);
+      const parsedGameInfo = parsePgnGameInfo(activePgnInput);
+      const posData = createPgnPositions(activePgnInput, parsedGameInfo);
 
       setProgress(5);
       setPgnGameInfo(parsedGameInfo);
@@ -447,7 +493,7 @@ export default function PgnViewer() {
     }
   };
 
-  const handleLoadExternalGames = async () => {
+  const handleLoadExternalGames = () => {
     const username = externalUsername.trim();
 
     if (!username) {
@@ -455,37 +501,13 @@ export default function PgnViewer() {
       return;
     }
 
+    const source = pgnSource === "chesscom" ? "chesscom" : "lichess";
+
     setError(null);
-    setIsLoadingGames(true);
-    setExternalGames([]);
     setSelectedExternalGameId("");
     setPgnInput("");
     setPgnGameInfo(null);
-
-    try {
-      const loadedGames =
-        pgnSource === "chesscom"
-          ? await fetchChessComGames(username)
-          : await fetchLichessGames(username);
-
-      if (loadedGames.length === 0) {
-        setError("No public games found for that user.");
-        return;
-      }
-
-      setExternalGames(loadedGames);
-      setSelectedExternalGameId(loadedGames[0].id);
-      setPgnInput(loadedGames[0].pgn);
-      setPgnGameInfo(parsePgnGameInfo(loadedGames[0].pgn));
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not load games.";
-
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsLoadingGames(false);
-    }
+    setExternalGamesRequest({ source, username });
   };
 
   const iconActionButtonClass =
@@ -494,9 +516,9 @@ export default function PgnViewer() {
   return (
     <div className="grid w-[min(100%,108rem)] grid-cols-[minmax(0,1fr)_minmax(20rem,31.25rem)] gap-4 max-[72rem]:grid-cols-1">
       <div className="flex min-w-0 flex-col items-center gap-3">
-        {error && (
+        {visibleError && (
           <div className="w-[min(100%,50rem)] rounded-md border border-red-300/25 bg-[#5a201c] px-4 py-3 text-center text-sm font-bold text-[#ffd8d4]">
-            {error}
+            {visibleError}
           </div>
         )}
 
@@ -514,7 +536,7 @@ export default function PgnViewer() {
         </div>
 
         <div className="w-[min(100%,50rem)]">
-          {pgnGameInfo && (
+          {activePgnGameInfo && (
             <PgnPlayerCard
               player={topPlayer}
               isActive={
@@ -546,7 +568,7 @@ export default function PgnViewer() {
             />
           </div>
 
-          {pgnGameInfo && (
+          {activePgnGameInfo && (
             <PgnPlayerCard
               player={bottomPlayer}
               isActive={
@@ -733,7 +755,7 @@ export default function PgnViewer() {
 
                 setPgnSource(nextSource);
                 setError(null);
-                setExternalGames([]);
+                setExternalGamesRequest(null);
                 setSelectedExternalGameId("");
                 setPgnGameInfo(null);
 
@@ -807,18 +829,9 @@ export default function PgnViewer() {
                   <span>Game</span>
                   <select
                     className="h-10 w-full rounded border border-white/10 bg-[#373530] px-3 text-sm text-[#ebe8df] outline-none focus:border-[#9ac45c] focus:ring-3 focus:ring-[#9ac45c2e]"
-                    value={selectedExternalGameId}
+                    value={selectedExternalGame?.id ?? ""}
                     onChange={(e) => {
-                      const nextGameId = e.target.value;
-                      const nextGame = externalGames.find((game) => {
-                        return game.id === nextGameId;
-                      });
-
-                      setSelectedExternalGameId(nextGameId);
-                      setPgnInput(nextGame?.pgn ?? "");
-                      setPgnGameInfo(
-                        nextGame ? parsePgnGameInfo(nextGame.pgn) : null,
-                      );
+                      setSelectedExternalGameId(e.target.value);
                     }}
                   >
                     {externalGames.map((game) => {
@@ -838,7 +851,7 @@ export default function PgnViewer() {
             type="button"
             className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/8 bg-linear-to-br from-[#7fa64c] to-[#4f8468] px-4 text-sm font-extrabold text-white shadow-[inset_0_-0.14rem_0_rgb(0_0_0_/_20%)] transition hover:from-[#8bb75a] hover:to-[#5b9476] disabled:cursor-not-allowed disabled:opacity-40"
             onClick={handleLoadPgn}
-            disabled={isAnalyzing || !pgnInput.trim()}
+            disabled={isAnalyzing || !activePgnInput.trim()}
           >
             {isAnalyzing ? t("common.analyzing") : t("common.analyze")}
           </button>

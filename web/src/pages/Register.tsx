@@ -5,31 +5,30 @@ import { Link, useNavigate } from "react-router";
 import { toast } from "react-toastify";
 
 import { getApiErrorMessage } from "../lib/apiInstance";
-import { registerUser } from "../services/authService";
-import { useAuthStore } from "../store/authStore";
+import { useRegisterMutation } from "../mutations/authMutations";
 
 export default function Register() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const setSession = useAuthStore((s) => s.setSession);
+  const { mutate: register, isPending: submitting } = useRegisterMutation();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
 
-    try {
-      const response = await registerUser(username, email, password);
-      setSession(response.user, response.accessToken, response.refreshToken);
-      navigate("/online", { replace: true });
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
+    register(
+      { username, email, password },
+      {
+        onSuccess: () => {
+          navigate("/online", { replace: true });
+        },
+        onError: (error) => {
+          toast.error(getApiErrorMessage(error));
+        },
+      },
+    );
   }
 
   return (

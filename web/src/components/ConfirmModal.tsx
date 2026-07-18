@@ -6,6 +6,7 @@ interface Props {
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -15,6 +16,7 @@ export default function ConfirmModal({
   title,
   message,
   confirmLabel,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: Props) {
@@ -61,6 +63,7 @@ export default function ConfirmModal({
             type="button"
             className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-red-400/30 bg-[#df5353] px-4 text-xs font-extrabold text-white transition-colors hover:bg-[#e56e6e]"
             onClick={onConfirm}
+            disabled={confirmDisabled}
           >
             <FaTrash aria-hidden="true" />
             {label}

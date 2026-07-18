@@ -19,7 +19,7 @@ import { toast } from "react-toastify";
 import { Chess, type Color, type Square, validateFen } from "chess.js";
 
 import { getApiErrorMessage } from "../lib/apiInstance";
-import { createSavedGame } from "../services/savedGameService";
+import { useCreateSavedGameMutation } from "../mutations/savedGameMutations";
 import { useAuthStore } from "../store/authStore";
 import {
   PIECE_SETS,
@@ -96,13 +96,14 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const [boardFlipped, setBoardFlipped] = useState(false);
   const [gameStarted, setGameStarted] = useState(freePlay);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
-  const [savingGame, setSavingGame] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editPiece, setEditPiece] = useState<EditPiece>(null);
 
   const authUser = useAuthStore((s) => s.user);
   const authUserId = authUser?.id ?? null;
   const playerName = authUser?.username ?? t("common.noUser");
+  const { mutate: saveGame, isPending: savingGame } =
+    useCreateSavedGameMutation();
 
   const {
     showEvaluationBar,
@@ -736,7 +737,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     setBoardFlipped((prev) => !prev);
   }, []);
 
-  const saveCurrentGame = useCallback(async () => {
+  const saveCurrentGame = useCallback(() => {
     if (savedGameId || !authUserId || savingGame) {
       return;
     }
@@ -744,10 +745,8 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
     const pgn = createPgnWithHeaders();
     const result = getGameResult(gameRef.current);
 
-    try {
-      setSavingGame(true);
-
-      const savedGame = await createSavedGame({
+    saveGame(
+      {
         pgn,
         result,
         opponent: freePlay
@@ -757,23 +756,26 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         playerColor: freePlay ? "w" : playerColor,
         botElo: freePlay ? undefined : botEloRef.current,
         moves: movesRef.current.length,
-      });
-
-      setSavedGameId(savedGame.id);
-      toast.success(t("success.gameSaved"));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      setSavingGame(false);
-    }
+      },
+      {
+        onSuccess: (savedGame) => {
+          setSavedGameId(savedGame.id);
+          toast.success(t("success.gameSaved"));
+        },
+        onError: (error) => {
+          toast.error(getApiErrorMessage(error));
+        },
+      },
+    );
   }, [
     authUserId,
-    freePlay,
     createPgnWithHeaders,
-    savedGameId,
-    savingGame,
+    freePlay,
     openingName,
     playerColor,
+    saveGame,
+    savedGameId,
+    savingGame,
     t,
   ]);
 

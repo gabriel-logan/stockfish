@@ -17,10 +17,12 @@ import {
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "react-toastify";
 
-import { useApiHealthCheck } from "../hooks/useApiHealth";
-import { useEngineHealthCheck } from "../hooks/useEngineHealth";
 import { getApiErrorMessage } from "../lib/apiInstance";
-import { logoutUser } from "../services/authService";
+import { useLogoutMutation } from "../mutations/authMutations";
+import {
+  useApiHealthQuery,
+  useEngineHealthQuery,
+} from "../queries/healthQueries";
 import { useAuthStore } from "../store/authStore";
 import LanguageSwitcher from "./LanguageSwitcher";
 
@@ -33,11 +35,23 @@ export default function Layout({ children }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const engineHealthStatus = useEngineHealthCheck();
-  const apiHealthStatus = useApiHealthCheck();
+  const engineHealth = useEngineHealthQuery();
+  const apiHealth = useApiHealthQuery();
+  const engineHealthStatus =
+    engineHealth.isPending && !engineHealth.data
+      ? "checking"
+      : engineHealth.isError
+        ? "disconnected"
+        : (engineHealth.data ?? "checking");
+  const apiHealthStatus =
+    apiHealth.isPending && !apiHealth.data
+      ? "checking"
+      : apiHealth.isError
+        ? "disconnected"
+        : (apiHealth.data ?? "checking");
   const authUser = useAuthStore((s) => s.user);
   const refreshToken = useAuthStore((s) => s.refreshToken);
-  const clearSession = useAuthStore((s) => s.clearSession);
+  const { mutate: logout, isPending: logoutPending } = useLogoutMutation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   function closeDrawer() {
@@ -61,17 +75,21 @@ export default function Layout({ children }: Props) {
     };
   }, [drawerOpen]);
 
-  async function handleLogout() {
-    try {
-      if (refreshToken) {
-        await logoutUser(refreshToken);
-      }
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      clearSession();
-      navigate("/login");
+  function handleLogout() {
+    if (logoutPending) {
+      return;
     }
+
+    logout(refreshToken, {
+      onError: (error) => {
+        if (refreshToken) {
+          toast.error(getApiErrorMessage(error));
+        }
+      },
+      onSettled: () => {
+        navigate("/login");
+      },
+    });
   }
 
   function getNavButtonClass(path: string) {
@@ -95,7 +113,7 @@ export default function Layout({ children }: Props) {
     }
 
     function logoutFromSidebar() {
-      void handleLogout();
+      handleLogout();
 
       if (closeAfterAction) {
         closeDrawer();
@@ -191,6 +209,7 @@ export default function Layout({ children }: Props) {
                   type="button"
                   className="flex min-h-9 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-xs font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e] hover:text-white"
                   onClick={logoutFromSidebar}
+                  disabled={logoutPending}
                 >
                   <FaSignOutAlt aria-hidden="true" />
                   {t("common.logout")}

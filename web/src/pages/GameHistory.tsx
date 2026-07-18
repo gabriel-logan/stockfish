@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaCheck, FaPen, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router";
@@ -7,48 +7,32 @@ import { toast } from "react-toastify";
 import ConfirmModal from "../components/ConfirmModal";
 import { getApiErrorMessage } from "../lib/apiInstance";
 import {
-  deleteSavedGame,
-  listSavedGames,
-  renameSavedGame,
-} from "../services/savedGameService";
+  useDeleteSavedGameMutation,
+  useRenameSavedGameMutation,
+} from "../mutations/savedGameMutations";
+import { useSavedGamesQuery } from "../queries/savedGameQueries";
 import { useAuthStore } from "../store/authStore";
-import type { SavedGame } from "../types/api";
 
 export default function GameHistory() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const userId = user?.id ?? null;
+  const {
+    data: savedGames = [],
+    error: savedGamesError,
+    isError: savedGamesFailed,
+    isPending: loadingSavedGames,
+  } = useSavedGamesQuery(userId);
+  const { mutate: renameSavedGame, isPending: renamingSavedGame } =
+    useRenameSavedGameMutation();
+  const { mutate: deleteSavedGame, isPending: deletingSavedGame } =
+    useDeleteSavedGameMutation();
 
-  const [savedGames, setSavedGames] = useState<SavedGame[] | null>(null);
   const [gameToDelete, setGameToDelete] = useState<string | null>(null);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void listSavedGames()
-      .then((games) => {
-        if (!cancelled) {
-          setSavedGames(games);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setSavedGames([]);
-          toast.error(getApiErrorMessage(error));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
 
   function startEditing(gameId: string, currentName: string) {
     setEditingGameId(gameId);
@@ -59,27 +43,28 @@ export default function GameHistory() {
     }, 0);
   }
 
-  async function saveEditName(gameId: string) {
+  function saveEditName(gameId: string) {
     const trimmed = editValue.trim();
 
     if (!user) {
       return;
     }
 
-    try {
-      const savedGame = await renameSavedGame(gameId, trimmed);
-
-      setSavedGames((games) =>
-        (games ?? []).map((game) => (game.id === gameId ? savedGame : game)),
-      );
-      setEditingGameId(null);
-      toast.success(t("success.gameRenamed"));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    }
+    renameSavedGame(
+      { gameId, name: trimmed },
+      {
+        onSuccess: () => {
+          setEditingGameId(null);
+          toast.success(t("success.gameRenamed"));
+        },
+        onError: (error) => {
+          toast.error(getApiErrorMessage(error));
+        },
+      },
+    );
   }
 
-  async function confirmDeleteGame() {
+  function confirmDeleteGame() {
     const gameId = gameToDelete;
 
     if (!gameId) {
@@ -88,16 +73,14 @@ export default function GameHistory() {
       return;
     }
 
-    try {
-      await deleteSavedGame(gameId);
-      setSavedGames((games) => {
-        return (games ?? []).filter((game) => game.id !== gameId);
-      });
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      setGameToDelete(null);
-    }
+    deleteSavedGame(gameId, {
+      onError: (error) => {
+        toast.error(getApiErrorMessage(error));
+      },
+      onSettled: () => {
+        setGameToDelete(null);
+      },
+    });
   }
 
   if (!user) {
@@ -120,8 +103,12 @@ export default function GameHistory() {
           {t("gameHistory.gamesTitle", { name: user.username })}
         </h1>
 
-        {savedGames === null ? (
+        {loadingSavedGames ? (
           <p className="text-sm text-[#aaa7a0]">...</p>
+        ) : savedGamesFailed ? (
+          <p className="text-sm text-[#df5353]">
+            {getApiErrorMessage(savedGamesError)}
+          </p>
         ) : savedGames.length === 0 ? (
           <p className="text-sm text-[#aaa7a0]">
             {t("gameHistory.noSavedGames")}
@@ -218,8 +205,9 @@ export default function GameHistory() {
                         className="grid size-8 shrink-0 place-items-center rounded border border-white/8 bg-[#628d3f] text-xs font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
                         title={t("common.save")}
                         onClick={() => {
-                          void saveEditName(game.id);
+                          saveEditName(game.id);
                         }}
+                        disabled={renamingSavedGame}
                       >
                         <FaCheck aria-hidden="true" />
                       </button>
@@ -259,11 +247,12 @@ export default function GameHistory() {
         title={t("gameHistory.deleteConfirmTitle")}
         message={t("gameHistory.deleteConfirmMessage")}
         onConfirm={() => {
-          void confirmDeleteGame();
+          confirmDeleteGame();
         }}
         onCancel={() => {
           setGameToDelete(null);
         }}
+        confirmDisabled={deletingSavedGame}
       />
     </Fragment>
   );

@@ -12,24 +12,27 @@ import {
   FaWifi,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
+import { useQueryClient } from "@tanstack/react-query";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
 import MoveList from "../components/MoveList";
 import { baseUrlApiWS } from "../constants";
 import { getApiErrorMessage } from "../lib/apiInstance";
-import { getGame, resignGame } from "../services/gameService";
+import { useResignGameMutation } from "../mutations/gameMutations";
 import {
-  joinMatchmaking,
-  joinRoom,
-  leaveMatchmaking,
-  listRooms,
-} from "../services/roomService";
-import { createSavedGame } from "../services/savedGameService";
+  useJoinMatchmakingMutation,
+  useJoinRoomMutation,
+  useLeaveMatchmakingMutation,
+} from "../mutations/roomMutations";
+import { useCreateSavedGameMutation } from "../mutations/savedGameMutations";
+import { useRoomsQuery } from "../queries/roomQueries";
+import { getGame } from "../services/gameService";
 import { useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type {
   Game,
+  GameResponse,
   MoveRecord,
   PlayerInfo,
   Room,
@@ -60,6 +63,8 @@ const ONLINE_STATUS_KEYS = {
   playing: "online.connectionStatus.playing",
   finished: "online.connectionStatus.finished",
 } as const satisfies Record<OnlineStatus, string>;
+
+const EMPTY_ROOMS: Room[] = [];
 
 function getLastMove(moves: MoveRecord[]) {
   const lastMove = moves.at(-1);
@@ -150,22 +155,38 @@ function getPgnResult(result: Game["result"] | undefined) {
 
 export default function PlayOnline() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const pieceSet = useSettingsStore((s) => s.pieceSet);
   const soundEnabled = useSettingsStore((s) => s.soundEnabled);
   const socketRef = useRef<WebSocket | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const {
+    data: roomsData,
+    error: roomsError,
+    isError: roomsFailed,
+    isFetching: loadingRooms,
+    refetch: refetchRooms,
+  } = useRoomsQuery(Boolean(accessToken));
+  const { mutate: joinMatchmaking, isPending: joiningMatchmaking } =
+    useJoinMatchmakingMutation();
+  const { mutate: joinRoom, isPending: joiningRoom } = useJoinRoomMutation();
+  const { mutate: leaveMatchmaking, isPending: leavingMatchmaking } =
+    useLeaveMatchmakingMutation();
+  const { mutate: resignGame, isPending: resigningGame } =
+    useResignGameMutation();
+  const { mutate: saveGame, isPending: savingGame } =
+    useCreateSavedGameMutation();
   const [game, setGame] = useState<Game | null>(null);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [status, setStatus] = useState<OnlineStatus>("idle");
-  const [loadingRooms, setLoadingRooms] = useState(false);
   const [sendingMove, setSendingMove] = useState(false);
   const [whitePlayer, setWhitePlayer] = useState<PlayerInfo | null>(null);
   const [blackPlayer, setBlackPlayer] = useState<PlayerInfo | null>(null);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
-  const [savingGame, setSavingGame] = useState(false);
+  const rooms = roomsData ?? EMPTY_ROOMS;
+  const joiningGame = joiningMatchmaking || joiningRoom;
 
   const currentFen = game?.fen;
 
@@ -223,18 +244,9 @@ export default function PlayOnline() {
     );
   }, [rooms, user]);
 
-  const refreshRooms = useCallback(async () => {
-    setLoadingRooms(true);
-
-    try {
-      const nextRooms = await listRooms();
-      setRooms(nextRooms);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      setLoadingRooms(false);
-    }
-  }, []);
+  const refreshRooms = useCallback(() => {
+    void refetchRooms();
+  }, [refetchRooms]);
 
   const closeSocket = useCallback(() => {
     socketRef.current?.close();
@@ -256,6 +268,10 @@ export default function PlayOnline() {
           playNotificationSound();
         }
 
+        queryClient.setQueryData<GameResponse>(["games", message.game.id], {
+          game: message.game,
+          moves: [],
+        });
         setGame(message.game);
         setStatus("playing");
         setSavedGameId(null);
@@ -265,7 +281,27 @@ export default function PlayOnline() {
         return;
       }
 
+      if (message.type === "room_updated") {
+        queryClient.setQueryData<Room[]>(["rooms"], (currentRooms) => {
+          if (!currentRooms) {
+            return [message.room];
+          }
+
+          const filteredRooms = currentRooms.filter((room) => {
+            return room.id !== message.room.id;
+          });
+
+          return [message.room, ...filteredRooms];
+        });
+
+        return;
+      }
+
       if (message.type === "game_state") {
+        queryClient.setQueryData<GameResponse>(["games", message.game.id], {
+          game: message.game,
+          moves: message.moves,
+        });
         setGame(message.game);
         setMoves((currentMoves) => {
           if (message.moves.length > 0 || message.game.moveCount === 0) {
@@ -281,6 +317,23 @@ export default function PlayOnline() {
       }
 
       if (message.type === "move_accepted") {
+        queryClient.setQueryData<GameResponse>(
+          ["games", message.game.id],
+          (gameResponse) => {
+            const currentMoves = gameResponse?.moves ?? [];
+            const moveExists = currentMoves.some((move) => {
+              return move.id === message.move_record.id;
+            });
+
+            return {
+              game: message.game,
+              moves: moveExists
+                ? currentMoves
+                : [...currentMoves, message.move_record],
+            };
+          },
+        );
+
         if (soundEnabled) {
           playMoveRecordSound(
             message.move_record.san,
@@ -321,7 +374,7 @@ export default function PlayOnline() {
         toast.error(message.message);
       }
     },
-    [soundEnabled, t],
+    [queryClient, soundEnabled, t],
   );
 
   const connectSocket = useCallback(
@@ -353,83 +406,87 @@ export default function PlayOnline() {
   );
 
   const startOnlineGame = useCallback(
-    async (gameId: string) => {
-      const gameResponse = await getGame(gameId);
-
-      setGame(gameResponse.game);
-      setMoves(gameResponse.moves);
-      setStatus("playing");
-      connectSocket({ type: "join_game", game_id: gameId });
+    (gameId: string) => {
+      return queryClient
+        .fetchQuery({
+          queryKey: ["games", gameId],
+          queryFn: () => {
+            return getGame(gameId);
+          },
+        })
+        .then((gameResponse) => {
+          setGame(gameResponse.game);
+          setMoves(gameResponse.moves);
+          setStatus("playing");
+          connectSocket({ type: "join_game", game_id: gameId });
+        });
     },
-    [connectSocket],
+    [connectSocket, queryClient],
   );
 
   useEffect(() => {
-    void listRooms()
-      .then((nextRooms) => {
-        setRooms(nextRooms);
-      })
-      .catch((error: unknown) => {
-        toast.error(getApiErrorMessage(error));
-      });
-
     return () => {
       closeSocket();
     };
   }, [closeSocket]);
 
-  async function handleJoinMatchmaking() {
+  function handleJoinMatchmaking() {
     setStatus("matching");
 
-    try {
-      const response = await joinMatchmaking();
-      setRooms((currentRooms) => {
-        const filteredRooms = currentRooms.filter((room) => {
-          return room.id !== response.room.id;
-        });
+    joinMatchmaking(undefined, {
+      onSuccess: (response) => {
+        if (response.game) {
+          void startOnlineGame(response.game.id).catch((error: unknown) => {
+            setStatus("idle");
+            toast.error(getApiErrorMessage(error));
+          });
 
-        return [response.room, ...filteredRooms];
-      });
+          return;
+        }
 
-      if (response.game) {
-        await startOnlineGame(response.game.id);
-        return;
-      }
-
-      connectSocket({ type: "join_room", room_id: response.room.id });
-      toast.info(t("online.matchmakingJoined"));
-    } catch (error) {
-      setStatus("idle");
-      toast.error(getApiErrorMessage(error));
-    }
+        connectSocket({ type: "join_room", room_id: response.room.id });
+        toast.info(t("online.matchmakingJoined"));
+      },
+      onError: (error) => {
+        setStatus("idle");
+        toast.error(getApiErrorMessage(error));
+      },
+    });
   }
 
-  async function handleJoinRoom(roomId: string) {
+  function handleJoinRoom(roomId: string) {
     setStatus("matching");
 
-    try {
-      const response = await joinRoom(roomId);
+    joinRoom(roomId, {
+      onSuccess: (response) => {
+        if (response.game) {
+          void startOnlineGame(response.game.id).catch((error: unknown) => {
+            setStatus("idle");
+            toast.error(getApiErrorMessage(error));
+          });
 
-      if (response.game) {
-        await startOnlineGame(response.game.id);
-        return;
-      }
+          return;
+        }
 
-      connectSocket({ type: "join_room", room_id: response.room.id });
-    } catch (error) {
-      setStatus("idle");
-      toast.error(getApiErrorMessage(error));
-    }
+        connectSocket({ type: "join_room", room_id: response.room.id });
+      },
+      onError: (error) => {
+        setStatus("idle");
+        toast.error(getApiErrorMessage(error));
+      },
+    });
   }
 
-  async function handleLeaveMatchmaking() {
-    try {
-      await leaveMatchmaking();
-      setStatus("idle");
-      await refreshRooms();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    }
+  function handleLeaveMatchmaking() {
+    leaveMatchmaking(undefined, {
+      onSuccess: () => {
+        setStatus("idle");
+        refreshRooms();
+      },
+      onError: (error) => {
+        toast.error(getApiErrorMessage(error));
+      },
+    });
   }
 
   function handleMove(from: Square, to: Square, promotion?: PromotionPiece) {
@@ -449,18 +506,20 @@ export default function PlayOnline() {
     setSelectedSquare(null);
   }
 
-  async function handleResign() {
+  function handleResign() {
     if (!game) {
       return;
     }
 
-    try {
-      const nextGame = await resignGame(game.id);
-      setGame(nextGame);
-      setStatus("finished");
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    }
+    resignGame(game.id, {
+      onSuccess: (nextGame) => {
+        setGame(nextGame);
+        setStatus("finished");
+      },
+      onError: (error) => {
+        toast.error(getApiErrorMessage(error));
+      },
+    });
   }
 
   const createPgnWithHeaders = useCallback(() => {
@@ -514,7 +573,7 @@ export default function PlayOnline() {
       .catch(() => {});
   }
 
-  async function handleSaveGame() {
+  function handleSaveGame() {
     if (savedGameId || !user || savingGame) {
       return;
     }
@@ -532,25 +591,25 @@ export default function PlayOnline() {
     const playerColor =
       game && user ? (game.whiteUserId === user.id ? "w" : "b") : "w";
 
-    try {
-      setSavingGame(true);
-
-      const savedGame = await createSavedGame({
+    saveGame(
+      {
         pgn,
         result,
         opponent,
         opening: openingName ?? undefined,
         playerColor,
         moves: moves.length,
-      });
-
-      setSavedGameId(savedGame.id);
-      toast.success(t("success.gameSaved"));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    } finally {
-      setSavingGame(false);
-    }
+      },
+      {
+        onSuccess: (savedGame) => {
+          setSavedGameId(savedGame.id);
+          toast.success(t("success.gameSaved"));
+        },
+        onError: (error) => {
+          toast.error(getApiErrorMessage(error));
+        },
+      },
+    );
   }
 
   return (
@@ -641,8 +700,9 @@ export default function PlayOnline() {
                 type="button"
                 className="flex min-h-10 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-sm font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e]"
                 onClick={() => {
-                  void handleLeaveMatchmaking();
+                  handleLeaveMatchmaking();
                 }}
+                disabled={leavingMatchmaking}
               >
                 <FaDoorOpen aria-hidden="true" />
                 {t("online.leaveQueue")}
@@ -651,9 +711,9 @@ export default function PlayOnline() {
               <button
                 type="button"
                 className="flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e] disabled:opacity-60"
-                disabled={status === "playing"}
+                disabled={status === "playing" || joiningGame}
                 onClick={() => {
-                  void handleJoinMatchmaking();
+                  handleJoinMatchmaking();
                 }}
               >
                 <FaPlay aria-hidden="true" />
@@ -665,8 +725,9 @@ export default function PlayOnline() {
               type="button"
               className="flex min-h-10 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-sm font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e]"
               onClick={() => {
-                void refreshRooms();
+                refreshRooms();
               }}
+              disabled={loadingRooms}
             >
               <FaSyncAlt aria-hidden="true" />
               {loadingRooms ? "..." : t("online.rooms")}
@@ -677,8 +738,9 @@ export default function PlayOnline() {
                 type="button"
                 className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#df535366] bg-[#3b2525] text-sm font-extrabold text-[#ffd5d5] transition-colors hover:bg-[#df5353] hover:text-white"
                 onClick={() => {
-                  void handleResign();
+                  handleResign();
                 }}
+                disabled={resigningGame}
               >
                 <FaFlag aria-hidden="true" />
                 {t("online.resign")}
@@ -705,7 +767,7 @@ export default function PlayOnline() {
                         : "flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e]"
                     }
                     onClick={() => {
-                      void handleSaveGame();
+                      handleSaveGame();
                     }}
                     disabled={savingGame || !!savedGameId}
                   >
@@ -740,11 +802,15 @@ export default function PlayOnline() {
           </div>
 
           <div className="max-h-44 overflow-y-auto">
-            {availableRooms.length === 0 && (
+            {roomsFailed ? (
+              <p className="p-4 text-sm font-bold text-[#df5353]">
+                {getApiErrorMessage(roomsError)}
+              </p>
+            ) : availableRooms.length === 0 ? (
               <p className="p-4 text-sm font-bold text-[#8f8b84]">
                 {t("online.noRooms")}
               </p>
-            )}
+            ) : null}
 
             {availableRooms.map((room) => {
               return (
@@ -753,8 +819,9 @@ export default function PlayOnline() {
                   type="button"
                   className="grid w-full gap-1 border-b border-white/4 px-4 py-3 text-left text-sm transition-colors hover:bg-white/5"
                   onClick={() => {
-                    void handleJoinRoom(room.id);
+                    handleJoinRoom(room.id);
                   }}
+                  disabled={joiningGame || status === "playing"}
                 >
                   <strong className="text-[#f3f1e9]">
                     {room.timeControlSeconds / 60}+{room.incrementSeconds}

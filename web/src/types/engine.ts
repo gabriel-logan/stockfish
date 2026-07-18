@@ -47,33 +47,6 @@ export type WSServerMessage =
       error: string;
     };
 
-// ── REST API types ──
-
-export interface AnalyzeRequest {
-  fen: string;
-  depth: number;
-  multi_pv: number;
-}
-
-export interface AnalysisEntry {
-  type: string;
-  depth: number;
-  seldepth?: number;
-  multi_pv?: number;
-  score?: number;
-  mate?: number;
-  pv?: string[];
-  nodes?: number;
-  nps?: number;
-  time_ms?: number;
-}
-
-export interface AnalyzeResponse {
-  bestmove?: string;
-  ponder?: string;
-  analysis: AnalysisEntry[];
-}
-
 // ── Parsed / high-level types ──
 
 export interface AnalysisData {
