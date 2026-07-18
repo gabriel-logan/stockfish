@@ -36,6 +36,9 @@ jobs:
           go-version-file: engine/go.mod
           cache-dependency-path: engine/go.sum
 
+      - name: Run go mod tidy
+        run: go mod tidy
+
       - name: Run go vet
         run: go vet ./...
 
