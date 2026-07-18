@@ -31,6 +31,7 @@ For the Rust monorepo, always run:
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
+RUSTFLAGS="-Z sanitizer=thread" cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu --workspace --all-features -- --ignored
 cargo build --workspace --all-features
 ```
 

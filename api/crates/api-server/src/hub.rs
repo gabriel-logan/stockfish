@@ -147,6 +147,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "run separately under ThreadSanitizer"]
     fn concurrent_subscriptions_and_broadcasts_are_safe() {
         let hub = Hub::default();
         let room_id = Uuid::new_v4();

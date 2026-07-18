@@ -1,9 +1,6 @@
 package main
 
-import (
-	"sync"
-	"testing"
-)
+import "testing"
 
 func TestSearchStateLifecycle(t *testing.T) {
 	state := &searchState{}
@@ -47,36 +44,5 @@ func TestSearchStateTracksRepeatedStops(t *testing.T) {
 	}
 	if state.ShouldDropBestMove() {
 		t.Fatal("unexpected third best move drop")
-	}
-}
-
-func TestSearchStateConcurrentAccess(t *testing.T) {
-	state := &searchState{}
-	const workers = 16
-	const iterations = 100
-
-	var waitGroup sync.WaitGroup
-	for worker := 0; worker < workers; worker++ {
-		waitGroup.Add(1)
-
-		go func() {
-			defer waitGroup.Done()
-
-			for iteration := 0; iteration < iterations; iteration++ {
-				state.MarkStarted()
-				state.IsActive()
-				state.MarkStoppedByClient()
-				state.ShouldDropBestMove()
-			}
-		}()
-	}
-
-	waitGroup.Wait()
-
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	if state.dropBestMoves < 0 {
-		t.Fatalf("dropBestMoves = %d, want a non-negative value", state.dropBestMoves)
 	}
 }

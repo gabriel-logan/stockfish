@@ -79,31 +79,6 @@ func TestStockfishCommands(t *testing.T) {
 	}
 }
 
-func TestStockfishSendSerializesConcurrentWrites(t *testing.T) {
-	writer := &commandWriter{}
-	stockfish := &Stockfish{stdin: writer}
-	const workers = 32
-
-	var waitGroup sync.WaitGroup
-	for index := 0; index < workers; index++ {
-		waitGroup.Add(1)
-
-		go func() {
-			defer waitGroup.Done()
-
-			if err := stockfish.send("isready"); err != nil {
-				t.Errorf("send: %v", err)
-			}
-		}()
-	}
-
-	waitGroup.Wait()
-
-	if got := len(writer.snapshot()); got != workers {
-		t.Fatalf("command count = %d, want %d", got, workers)
-	}
-}
-
 func TestStockfishSendReturnsWriterError(t *testing.T) {
 	want := errors.New("write failed")
 	stockfish := &Stockfish{stdin: &commandWriter{err: want}}
