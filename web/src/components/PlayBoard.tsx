@@ -49,6 +49,7 @@ import EvaluationBar from "./EvaluationBar";
 import MoveList from "./MoveList";
 
 const BOT_MOVE_DELAY_MS = 1200;
+const ENGINE_DISCONNECT_NOTICE_DELAY_MS = 6000;
 const CAPTURED_PIECE_ORDER = ["q", "r", "b", "n", "p"] as const;
 const EDIT_PIECES: PieceSymbol[] = ["k", "q", "r", "b", "n", "p"];
 const PIECE_TYPE_NAMES = {
@@ -156,6 +157,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
   const analysisVersionRef = useRef(0);
   const evalQueueRef = useRef<Promise<void>>(Promise.resolve());
   const botMoveTimeoutRef = useRef<number | null>(null);
+  const disconnectNoticeTimeoutRef = useRef<number | null>(null);
   const isIntentionalDisconnectRef = useRef(false);
   const initialGameFenRef = useRef(new Chess().fen());
 
@@ -231,6 +233,15 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
     window.clearTimeout(botMoveTimeoutRef.current);
     botMoveTimeoutRef.current = null;
+  }, []);
+
+  const clearDisconnectNotice = useCallback(() => {
+    if (disconnectNoticeTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(disconnectNoticeTimeoutRef.current);
+    disconnectNoticeTimeoutRef.current = null;
   }, []);
 
   const classifyLastMove = useCallback(
@@ -449,13 +460,20 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
     return () => {
       clearPendingBotMove();
+      clearDisconnectNotice();
       isIntentionalDisconnectRef.current = true;
       playEngine.disconnect();
       evalEngine.disconnect();
       playEngineRef.current = null;
       evalEngineRef.current = null;
     };
-  }, [classifyLastMove, clearPendingBotMove, freePlay, syncMoves]);
+  }, [
+    classifyLastMove,
+    clearDisconnectNotice,
+    clearPendingBotMove,
+    freePlay,
+    syncMoves,
+  ]);
 
   useEffect(() => {
     const playEngine = playEngineRef.current;
@@ -475,14 +493,38 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       toast.error(msg);
     };
 
+    const scheduleDisconnectNotice = (
+      errorMessage: string,
+      toastMessage: string,
+    ) => {
+      clearDisconnectNotice();
+
+      disconnectNoticeTimeoutRef.current = window.setTimeout(() => {
+        disconnectNoticeTimeoutRef.current = null;
+
+        if (isIntentionalDisconnectRef.current) {
+          return;
+        }
+
+        if (playEngine.connected && evalEngine.connected) {
+          return;
+        }
+
+        setError(errorMessage);
+        toast.error(toastMessage);
+      }, ENGINE_DISCONNECT_NOTICE_DELAY_MS);
+    };
+
     playEngine.onDisconnect = () => {
       if (isIntentionalDisconnectRef.current) {
         return;
       }
 
       setConnected(false);
-      setError(t("errors.connectionLost"));
-      toast.error(t("errors.playEngineDisconnected"));
+      scheduleDisconnectNotice(
+        t("errors.connectionLost"),
+        t("errors.playEngineDisconnected"),
+      );
     };
 
     evalEngine.onDisconnect = () => {
@@ -491,12 +533,15 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       }
 
       setConnected(false);
-      setError(t("errors.evaluationConnectionLost"));
-      toast.error(t("errors.evalEngineDisconnected"));
+      scheduleDisconnectNotice(
+        t("errors.evaluationConnectionLost"),
+        t("errors.evalEngineDisconnected"),
+      );
     };
 
     const handleReconnect = () => {
       if (playEngine.connected && evalEngine.connected) {
+        clearDisconnectNotice();
         setConnected(true);
         setError(null);
       }
@@ -504,7 +549,11 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
 
     playEngine.onReconnect = handleReconnect;
     evalEngine.onReconnect = handleReconnect;
-  }, [t]);
+
+    return () => {
+      clearDisconnectNotice();
+    };
+  }, [clearDisconnectNotice, t]);
 
   useEffect(() => {
     const playEngine = playEngineRef.current;
