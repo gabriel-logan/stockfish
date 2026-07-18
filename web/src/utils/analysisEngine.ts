@@ -5,6 +5,7 @@ import type {
   WSClientMessage,
   WSServerMessage,
 } from "../types/engine";
+import { decodeBinaryMessage, encodeBinaryMessage } from "./binaryMessage";
 
 export type { AnalysisData, BestMoveData };
 
@@ -49,11 +50,10 @@ export class AnalysisEngine {
       };
 
       ws.onmessage = (event) => {
-        const text = new TextDecoder().decode(event.data);
         let msg: WSServerMessage;
 
         try {
-          msg = JSON.parse(text);
+          msg = decodeBinaryMessage<WSServerMessage>(event.data);
         } catch {
           return;
         }
@@ -106,7 +106,7 @@ export class AnalysisEngine {
 
   private send(msg: WSClientMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(encodeBinaryMessage(msg));
     }
   }
 

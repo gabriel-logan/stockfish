@@ -1,4 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse, web};
+use actix_web::web::Bytes;
 use actix_ws::Message;
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -42,12 +43,12 @@ pub async fn websocket(
 
         while let Some(Ok(message)) = stream.recv().await {
             match message {
-                Message::Text(text) => {
-                    handle_text(
+                Message::Binary(bytes) => {
+                    handle_binary(
                         &state_for_task,
                         user_id,
                         &mut session,
-                        &text,
+                        &bytes,
                         &mut current_game_id,
                     )
                     .await;
@@ -76,14 +77,14 @@ pub async fn websocket(
     Ok(response)
 }
 
-async fn handle_text(
+async fn handle_binary(
     state: &AppState,
     user_id: Uuid,
     session: &mut actix_ws::Session,
-    text: &str,
+    bytes: &[u8],
     current_game_id: &mut Option<Uuid>,
 ) {
-    let result = match serde_json::from_str::<ClientMessage>(text) {
+    let result = match serde_json::from_slice::<ClientMessage>(bytes) {
         Ok(ClientMessage::JoinRoom { room_id }) => join_room_channel(state, session, room_id).await,
         Ok(ClientMessage::JoinGame { game_id }) => {
             match join_game_channel(state, user_id, session, game_id).await {
@@ -125,7 +126,7 @@ fn forward_hub_messages(
 ) {
     actix_web::rt::spawn(async move {
         while let Some(payload) = messages.recv().await {
-            if session.text(payload).await.is_err() {
+            if session.binary(Bytes::from(payload)).await.is_err() {
                 return;
             }
         }
@@ -197,5 +198,5 @@ async fn send_json<T: serde::Serialize>(
         return;
     };
 
-    let _ = session.text(payload).await;
+    let _ = session.binary(Bytes::from(payload)).await;
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalysisEngine } from "./analysisEngine";
+import { encodeBinaryMessage } from "./binaryMessage";
 
 class MockWebSocket {
   static OPEN = 1;
@@ -30,7 +31,7 @@ class MockWebSocket {
   }
 
   receive(message: unknown): void {
-    const data = new TextEncoder().encode(JSON.stringify(message));
+    const data = encodeBinaryMessage(message);
 
     this.onmessage?.(
       new MessageEvent("message", {
@@ -113,7 +114,7 @@ describe("AnalysisEngine", () => {
     expect(socket.send).toHaveBeenCalledTimes(5);
     expect(socket.send).toHaveBeenNthCalledWith(
       1,
-      JSON.stringify({
+      encodeBinaryMessage({
         type: "setoption",
         fen: "UCI_LimitStrength",
         moves: "true",
@@ -121,7 +122,7 @@ describe("AnalysisEngine", () => {
     );
     expect(socket.send).toHaveBeenNthCalledWith(
       3,
-      JSON.stringify({
+      encodeBinaryMessage({
         type: "setoption",
         fen: "UCI_LimitStrength",
         moves: "false",
@@ -129,11 +130,16 @@ describe("AnalysisEngine", () => {
     );
     expect(socket.send).toHaveBeenNthCalledWith(
       4,
-      JSON.stringify({ type: "start", fen: "fen", depth: 18, multi_pv: 3 }),
+      encodeBinaryMessage({
+        type: "start",
+        fen: "fen",
+        depth: 18,
+        multi_pv: 3,
+      }),
     );
     expect(socket.send).toHaveBeenNthCalledWith(
       5,
-      JSON.stringify({ type: "stop" }),
+      encodeBinaryMessage({ type: "stop" }),
     );
   });
 

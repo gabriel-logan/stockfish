@@ -37,6 +37,10 @@ import type {
 } from "../types/api";
 import type { PromotionPiece } from "../types/chess-types";
 import type { MoveEntry } from "../types/moves";
+import {
+  decodeBinaryMessage,
+  encodeBinaryMessage,
+} from "../utils/binaryMessage";
 import { createId } from "../utils/createId";
 import { getOpeningName } from "../utils/openingNames";
 import { formatPgnDate } from "../utils/pgn";
@@ -239,8 +243,14 @@ export default function PlayOnline() {
   }, []);
 
   const handleSocketMessage = useCallback(
-    (event: MessageEvent<string>) => {
-      const message = JSON.parse(event.data) as ServerMessage;
+    (event: MessageEvent<ArrayBuffer>) => {
+      let message: ServerMessage;
+
+      try {
+        message = decodeBinaryMessage<ServerMessage>(event.data);
+      } catch {
+        return;
+      }
 
       if (message.type === "game_started") {
         if (soundEnabled) {
@@ -251,7 +261,7 @@ export default function PlayOnline() {
         setStatus("playing");
         setSavedGameId(null);
         socketRef.current?.send(
-          JSON.stringify({ type: "join_game", game_id: message.game.id }),
+          encodeBinaryMessage({ type: "join_game", game_id: message.game.id }),
         );
         return;
       }
@@ -326,9 +336,10 @@ export default function PlayOnline() {
       const socket = new WebSocket(
         `${baseUrlApiWS}/ws?token=${encodeURIComponent(accessToken)}`,
       );
+      socket.binaryType = "arraybuffer";
 
       socket.onopen = () => {
-        socket.send(JSON.stringify(joinMessage));
+        socket.send(encodeBinaryMessage(joinMessage));
       };
 
       socket.onmessage = handleSocketMessage;
@@ -430,7 +441,7 @@ export default function PlayOnline() {
     const uci = `${from}${to}${promotion ?? ""}`;
     setSendingMove(true);
     socketRef.current.send(
-      JSON.stringify({
+      encodeBinaryMessage({
         type: "move",
         game_id: game.id,
         uci,
