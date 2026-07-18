@@ -494,6 +494,16 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
       setError(t("errors.evaluationConnectionLost"));
       toast.error(t("errors.evalEngineDisconnected"));
     };
+
+    const handleReconnect = () => {
+      if (playEngine.connected && evalEngine.connected) {
+        setConnected(true);
+        setError(null);
+      }
+    };
+
+    playEngine.onReconnect = handleReconnect;
+    evalEngine.onReconnect = handleReconnect;
   }, [t]);
 
   useEffect(() => {

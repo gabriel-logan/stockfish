@@ -39,6 +39,11 @@ class MockWebSocket {
       }),
     );
   }
+
+  closeFromServer(): void {
+    this.readyState = 3;
+    this.onclose?.(new Event("close") as CloseEvent);
+  }
 }
 
 describe("AnalysisEngine", () => {
@@ -212,5 +217,69 @@ describe("AnalysisEngine", () => {
       lines: [{ score: 25, mate: null, depth: 12, multiPv: 1, pv: ["e2e4"] }],
       completed: false,
     });
+  });
+
+  it("reconnects and restores strength and active analysis after an unexpected close", async () => {
+    vi.useFakeTimers();
+    const [engine, socket] = await connectEngine();
+    const onDisconnect = vi.fn();
+    const onReconnect = vi.fn();
+
+    engine.onDisconnect = onDisconnect;
+    engine.onReconnect = onReconnect;
+    engine.setElo(1200);
+    engine.startAnalysis("fen", 18, 2);
+
+    socket.closeFromServer();
+
+    expect(onDisconnect).toHaveBeenCalledOnce();
+    expect(engine.connected).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const reconnectedSocket = MockWebSocket.instances[1];
+
+    reconnectedSocket.open();
+    await Promise.resolve();
+
+    expect(onReconnect).toHaveBeenCalledOnce();
+    expect(engine.connected).toBe(true);
+    expect(reconnectedSocket.send).toHaveBeenCalledTimes(3);
+    expect(reconnectedSocket.send).toHaveBeenNthCalledWith(
+      1,
+      encodeBinaryMessage({
+        type: "setoption",
+        fen: "UCI_LimitStrength",
+        moves: "true",
+      }),
+    );
+    expect(reconnectedSocket.send).toHaveBeenNthCalledWith(
+      2,
+      encodeBinaryMessage({
+        type: "setoption",
+        fen: "UCI_Elo",
+        moves: "1200",
+      }),
+    );
+    expect(reconnectedSocket.send).toHaveBeenNthCalledWith(
+      3,
+      encodeBinaryMessage({
+        type: "start",
+        fen: "fen",
+        depth: 18,
+        multi_pv: 2,
+      }),
+    );
+  });
+
+  it("does not reconnect after an intentional disconnect", async () => {
+    vi.useFakeTimers();
+    const [engine] = await connectEngine();
+
+    engine.disconnect();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(engine.connected).toBe(false);
   });
 });

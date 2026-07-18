@@ -17,36 +17,84 @@ export interface AnalysisLine {
   pv: string[];
 }
 
+interface ActiveAnalysisRequest {
+  fen: string;
+  depth: number;
+  multiPv: number;
+}
+
+type StrengthSetting =
+  | {
+      type: "elo";
+      elo: number;
+    }
+  | {
+      type: "full";
+    };
+
+const reconnectBaseDelayMs = 1000;
+const reconnectMaxDelayMs = 10000;
+
 export class AnalysisEngine {
   private ws: WebSocket | null = null;
   private isConnected = false;
+  private shouldReconnect = false;
+  private isReconnecting = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectPromise: Promise<void> | null = null;
   private activeFen: string | null = null;
+  private activeAnalysisRequest: ActiveAnalysisRequest | null = null;
+  private strengthSetting: StrengthSetting | null = null;
 
   onAnalysis: ((data: AnalysisData) => void) | null = null;
   onBestMove: ((data: BestMoveData) => void) | null = null;
   onReady: (() => void) | null = null;
   onError: ((error: string) => void) | null = null;
   onDisconnect: (() => void) | null = null;
+  onReconnect: (() => void) | null = null;
 
   get connected(): boolean {
     return this.isConnected;
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.isConnected = true;
-        resolve();
-        return;
-      }
+    this.shouldReconnect = true;
 
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+
+    this.clearReconnectTimer();
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.isConnected = true;
+      return Promise.resolve();
+    }
+
+    this.connectPromise = new Promise((resolve, reject) => {
       const ws = new WebSocket(baseUrlEngineWS);
       ws.binaryType = "arraybuffer";
+      this.ws = ws;
+
+      let settled = false;
 
       ws.onopen = () => {
+        const wasReconnecting = this.isReconnecting;
+
+        settled = true;
         this.ws = ws;
         this.isConnected = true;
+        this.isReconnecting = false;
+        this.reconnectAttempts = 0;
+        this.connectPromise = null;
+        this.restoreConnectionState();
+
         resolve();
+
+        if (wasReconnecting) {
+          this.onReconnect?.();
+        }
       };
 
       ws.onmessage = (event) => {
@@ -74,6 +122,7 @@ export class AnalysisEngine {
             break;
 
           case "bestmove":
+            this.activeAnalysisRequest = null;
             this.onBestMove?.({
               bestmove: msg.bestmove ?? null,
               ponder: msg.ponder ?? null,
@@ -87,21 +136,45 @@ export class AnalysisEngine {
       };
 
       ws.onerror = () => {
-        reject(new Error("WebSocket connection failed"));
+        if (!settled) {
+          settled = true;
+          this.connectPromise = null;
+          reject(new Error("WebSocket connection failed"));
+        }
       };
 
       ws.onclose = () => {
+        if (this.ws !== ws) {
+          return;
+        }
+
         this.isConnected = false;
         this.ws = null;
-        this.onDisconnect?.();
+        this.connectPromise = null;
+
+        if (!settled) {
+          settled = true;
+          reject(new Error("WebSocket connection closed"));
+        }
+
+        if (this.shouldReconnect) {
+          this.onDisconnect?.();
+          this.scheduleReconnect();
+        }
       };
     });
+
+    return this.connectPromise;
   }
 
   disconnect(): void {
+    this.shouldReconnect = false;
+    this.clearReconnectTimer();
     this.ws?.close();
     this.ws = null;
     this.isConnected = false;
+    this.connectPromise = null;
+    this.activeAnalysisRequest = null;
   }
 
   private send(msg: WSClientMessage): void {
@@ -116,19 +189,23 @@ export class AnalysisEngine {
   }
 
   setElo(elo: number): void {
+    this.strengthSetting = { type: "elo", elo };
     this.sendEloOptions(elo);
   }
 
   setFullStrength(): void {
+    this.strengthSetting = { type: "full" };
     this.send({ type: "setoption", fen: "UCI_LimitStrength", moves: "false" });
   }
 
   startAnalysis(fen: string, depth: number = 14, multiPv: number = 1): void {
     this.activeFen = fen;
+    this.activeAnalysisRequest = { fen, depth, multiPv };
     this.send({ type: "start", fen, depth, multi_pv: multiPv });
   }
 
   stopAnalysis(): void {
+    this.activeAnalysisRequest = null;
     this.send({ type: "stop" });
   }
 
@@ -222,6 +299,56 @@ export class AnalysisEngine {
     return [...lines.values()].sort((a, b) => {
       return a.multiPv - b.multiPv;
     });
+  }
+
+  private restoreConnectionState(): void {
+    if (this.strengthSetting?.type === "elo") {
+      this.sendEloOptions(this.strengthSetting.elo);
+    }
+
+    if (this.strengthSetting?.type === "full") {
+      this.send({
+        type: "setoption",
+        fen: "UCI_LimitStrength",
+        moves: "false",
+      });
+    }
+
+    if (this.activeAnalysisRequest) {
+      const { fen, depth, multiPv } = this.activeAnalysisRequest;
+
+      this.send({ type: "start", fen, depth, multi_pv: multiPv });
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.shouldReconnect || this.reconnectTimer) {
+      return;
+    }
+
+    this.isReconnecting = true;
+
+    const delay = Math.min(
+      reconnectBaseDelayMs * 2 ** this.reconnectAttempts,
+      reconnectMaxDelayMs,
+    );
+
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect().catch(() => {
+        this.scheduleReconnect();
+      });
+    }, delay);
+  }
+
+  private clearReconnectTimer(): void {
+    if (!this.reconnectTimer) {
+      return;
+    }
+
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   private normalizeForActiveSide(value: number | undefined): number | null {

@@ -10,6 +10,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	websocketWriteWait  = 10 * time.Second
+	websocketPongWait   = 60 * time.Second
+	websocketPingPeriod = 25 * time.Second
+)
+
 type searchState struct {
 	mu            sync.Mutex
 	active        bool
@@ -114,24 +120,48 @@ func handleWS(cfg Config) http.HandlerFunc {
 func writePump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown func()) {
 	defer shutdown()
 
-	for line := range sf.Lines() {
-		msg := parseSFLine(line)
-		if msg == nil {
-			continue
-		}
-		if msg.Type == "bestmove" && state.ShouldDropBestMove() {
-			continue
-		}
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := writeBinaryMsg(conn, msg); err != nil {
-			slog.Warn("websocket write failed", "error", err)
-			return
+	ticker := time.NewTicker(websocketPingPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case line, ok := <-sf.Lines():
+			if !ok {
+				return
+			}
+
+			msg := parseSFLine(line)
+			if msg == nil {
+				continue
+			}
+			if msg.Type == "bestmove" && state.ShouldDropBestMove() {
+				continue
+			}
+
+			conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
+			if err := writeBinaryMsg(conn, msg); err != nil {
+				slog.Warn("websocket write failed", "error", err)
+				return
+			}
+
+		case <-ticker.C:
+			conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				slog.Warn("websocket ping failed", "error", err)
+				return
+			}
 		}
 	}
 }
 
 func readPump(conn *websocket.Conn, sf *Stockfish, state *searchState, shutdown func()) {
 	defer shutdown()
+
+	conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+		return nil
+	})
 
 	for {
 		mt, data, err := conn.ReadMessage()
