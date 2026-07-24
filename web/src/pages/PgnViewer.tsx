@@ -40,6 +40,7 @@ import {
   createPgnPositions,
   createPracticeMove,
   formatTimeControl,
+  getEvaluationBarScore,
   getFormattedScore,
   getGameAtPgnPosition,
   getGameWithPractice as getReviewGameWithPractice,
@@ -157,18 +158,32 @@ export default function PgnViewer() {
   const blackAccuracy = computeAccuracy(moves, "b");
   const latestPracticeMove =
     activePracticeMoves[activePracticeMoves.length - 1];
-  const currentEval =
+  const currentMoveDetails =
+    latestPracticeMove ??
+    (currentIdx > 0 ? mainLineMoves[currentIdx - 1] : null);
+  const currentEvalAfter =
     latestPracticeMove?.evaluation ?? positions[currentIdx]?.evaluation ?? null;
   const currentMate =
     latestPracticeMove?.mate ?? positions[currentIdx]?.mate ?? null;
+  const previousEval =
+    latestPracticeMove?.evaluationBefore ??
+    positions[currentIdx - 1]?.evaluation ??
+    null;
+  const previousMate =
+    latestPracticeMove?.mateBefore ?? positions[currentIdx - 1]?.mate ?? null;
+  const currentEval = getEvaluationBarScore(
+    currentEvalAfter,
+    currentMate,
+    previousEval,
+    previousMate,
+    currentMoveDetails?.color ?? "w",
+    currentMoveDetails?.classification,
+  );
   const currentFen =
     latestPracticeMove?.fen ?? positions[currentIdx]?.fen ?? gameAtIdx.fen();
   const currentAnalysisPosition =
     activePracticeMoves.length > 0 ? null : positions[currentIdx];
   const currentAnalysisLines = currentAnalysisPosition?.lines ?? [];
-  const currentMoveDetails =
-    latestPracticeMove ??
-    (currentIdx > 0 ? mainLineMoves[currentIdx - 1] : null);
   const headers = activePgnGameInfo?.headers ?? {};
   const headerEntries = Object.entries(headers);
   const gameLinkUrl = getSafeExternalUrl(headers.Link || headers.ECOUrl);

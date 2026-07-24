@@ -38,6 +38,10 @@ export const KNOWN_PGN_HEADER_LABELS: Record<string, string> = {
 };
 
 const ACCURACY_CENTIPAWN_DECAY = 0.00368208;
+const BAR_PROTECTED_CLASSIFICATIONS = new Set<ClassificationValue>([
+  "perfect",
+  "splendid",
+]);
 
 export interface PositionData {
   fen: string;
@@ -244,6 +248,32 @@ export function computeAccuracy(moveList: MoveEntry[], color: "w" | "b") {
     accuracies.length;
 
   return averageAccuracy.toFixed(1);
+}
+
+export function getEvaluationBarScore(
+  evaluation: number | null,
+  mate: number | null,
+  evaluationBefore: number | null,
+  mateBefore: number | null,
+  color: "w" | "b",
+  classification?: ClassificationValue,
+) {
+  if (
+    evaluation === null ||
+    evaluationBefore === null ||
+    mate !== null ||
+    mateBefore !== null ||
+    !classification ||
+    !BAR_PROTECTED_CLASSIFICATIONS.has(classification)
+  ) {
+    return evaluation;
+  }
+
+  if (color === "w") {
+    return Math.max(evaluation, evaluationBefore);
+  }
+
+  return Math.min(evaluation, evaluationBefore);
 }
 
 function getPracticalScore(

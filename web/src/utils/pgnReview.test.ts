@@ -6,6 +6,7 @@ import {
   createPgnPositions,
   createPracticeMove,
   formatTimeControl,
+  getEvaluationBarScore,
   getFormattedScore,
   getGameAtPgnPosition,
   getGameWithPractice,
@@ -162,5 +163,14 @@ describe("PGN review helpers", () => {
     expect(shouldDeepenAnalysis(1, 0.2, null, null, "w")).toBe(true);
     expect(shouldDeepenAnalysis(-1, -0.2, null, null, "b")).toBe(true);
     expect(shouldDeepenAnalysis(0.1, 0, null, null, "w")).toBe(false);
+  });
+
+  it("does not lower the evaluation bar for brilliant or perfect moves", () => {
+    expect(getEvaluationBarScore(2.95, null, 3, null, "w", "splendid")).toBe(3);
+    expect(getEvaluationBarScore(-2.95, null, -3, null, "b", "perfect")).toBe(
+      -3,
+    );
+    expect(getEvaluationBarScore(2.95, null, 3, null, "w", "best")).toBe(2.95);
+    expect(getEvaluationBarScore(3.2, null, 3, null, "w", "perfect")).toBe(3.2);
   });
 });
