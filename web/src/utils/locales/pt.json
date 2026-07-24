@@ -117,6 +117,28 @@
     "casual": "casual",
     "matchmakingJoined": "Você entrou na fila. Aguardando um oponente.",
     "opponentDisconnected": "Oponente desconectou.",
+    "drawOffer": {
+      "title": "Proposta de empate",
+      "message": "{{opponent}} propôs um empate.",
+      "opponent": "Seu oponente",
+      "offer": "Propor empate",
+      "sending": "Enviando proposta de empate...",
+      "sent": "Proposta de empate enviada",
+      "accept": "Aceitar empate",
+      "decline": "Recusar empate",
+      "declinedByOpponent": "Seu oponente recusou a proposta de empate."
+    },
+    "setup": {
+      "title": "Configuração da partida",
+      "description": "Escolha o controle de tempo e o tipo de partida antes de encontrar um oponente.",
+      "gameType": "Tipo de partida",
+      "rated": "Ranqueada",
+      "ratedDescription": "Seu rating muda com base no resultado.",
+      "casual": "Casual",
+      "casualDescription": "Jogue sem alterar seu rating.",
+      "timeControl": "Controle de tempo",
+      "findOpponent": "Encontrar oponente"
+    },
     "connectionStatus": {
       "idle": "Ocioso",
       "matching": "Procurando",
@@ -151,6 +173,7 @@
     "botElo": "Elo do Bot: {{elo}}",
     "playerName": "Gabriel-Logan",
     "undoLastMove": "Desfazer último lance",
+    "restartFromStartPosition": "Reiniciar da posição inicial",
     "flipBoard": "Virar tabuleiro",
     "copyPgn": "Copiar PGN",
     "resign": "Abandonar",
