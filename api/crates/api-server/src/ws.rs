@@ -236,8 +236,7 @@ async fn accept_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiRe
         .hub
         .accept_rematch(game_id, user_id)
         .ok_or_else(|| ApiError::BadRequest("no rematch request is pending".to_owned()))?;
-    let new_game =
-        games::create_rematch(state, game_id, requesting_user_id, user_id).await?;
+    let new_game = games::create_rematch(state, game_id, requesting_user_id, user_id).await?;
 
     state.hub.broadcast_game(
         game_id,
@@ -258,7 +257,9 @@ async fn decline_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiR
     }
 
     if state.hub.decline_rematch(game_id, user_id).is_none() {
-        return Err(ApiError::BadRequest("no rematch request is pending".to_owned()));
+        return Err(ApiError::BadRequest(
+            "no rematch request is pending".to_owned(),
+        ));
     }
 
     state.hub.broadcast_game(
