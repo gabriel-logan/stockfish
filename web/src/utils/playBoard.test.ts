@@ -8,6 +8,7 @@ import {
   createPlayGamePgn,
   getCapturedMaterial,
   getGameResult,
+  getGameTermination,
   moveEditedPieceInGame,
   placeEditedPiece,
 } from "./playBoard";
@@ -60,6 +61,34 @@ describe("play board helpers", () => {
     game.move("Qh4#");
 
     expect(getGameResult(game)).toBe("0-1");
+    expect(getGameTermination(game)).toBe("Checkmate");
+  });
+
+  it("identifies unfinished games in PGN metadata", () => {
+    expect(getGameTermination(new Chess())).toBe("Unterminated");
+  });
+
+  it("identifies the different automatic draw reasons", () => {
+    const stalemate = new Chess("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1");
+    const insufficientMaterial = new Chess("7k/8/8/8/8/8/8/K7 w - - 0 1");
+    const fiftyMoveRule = new Chess("7k/8/8/8/8/8/8/R5K1 w - - 100 1");
+    const repetition = new Chess();
+
+    repetition.move("Nf3");
+    repetition.move("Nf6");
+    repetition.move("Ng1");
+    repetition.move("Ng8");
+    repetition.move("Nf3");
+    repetition.move("Nf6");
+    repetition.move("Ng1");
+    repetition.move("Ng8");
+
+    expect(getGameTermination(stalemate)).toBe("Stalemate");
+    expect(getGameTermination(insufficientMaterial)).toBe(
+      "Insufficient material",
+    );
+    expect(getGameTermination(fiftyMoveRule)).toBe("Fifty-move rule");
+    expect(getGameTermination(repetition)).toBe("Threefold repetition");
   });
 
   it("creates annotated PGN headers for saved games", () => {
@@ -83,6 +112,7 @@ describe("play board helpers", () => {
     expect(pgn).toContain('[Black "Stockfish 1400"]');
     expect(pgn).toContain('[BlackElo "1400"]');
     expect(pgn).toContain('[Opening "King\'s Pawn Game"]');
+    expect(pgn).toContain('[Termination "Unterminated"]');
   });
 
   it("edits positions without applying move legality", () => {

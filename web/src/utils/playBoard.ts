@@ -116,6 +116,34 @@ export function getGameResult(game: Chess) {
   return "*";
 }
 
+export function getGameTermination(game: Chess): string {
+  if (game.isCheckmate()) {
+    return "Checkmate";
+  }
+
+  if (game.isStalemate()) {
+    return "Stalemate";
+  }
+
+  if (game.isThreefoldRepetition()) {
+    return "Threefold repetition";
+  }
+
+  if (game.isDrawByFiftyMoves()) {
+    return "Fifty-move rule";
+  }
+
+  if (game.isInsufficientMaterial()) {
+    return "Insufficient material";
+  }
+
+  if (game.isDraw()) {
+    return "Draw";
+  }
+
+  return "Unterminated";
+}
+
 export function createPlayGamePgn({
   game,
   date,
@@ -127,6 +155,7 @@ export function createPlayGamePgn({
   selfOpponentLabel,
 }: CreatePlayGamePgnParams): string {
   const result = getGameResult(game);
+  const termination = getGameTermination(game);
   const pgnGame = new Chess();
   const rawPgn = game.pgn();
 
@@ -149,6 +178,7 @@ export function createPlayGamePgn({
   pgnGame.setHeader("White", white);
   pgnGame.setHeader("Black", black);
   pgnGame.setHeader("Result", result);
+  pgnGame.setHeader("Termination", termination);
   pgnGame.setHeader("Annotator", "GLFish");
 
   if (!freePlay) {

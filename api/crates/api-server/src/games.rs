@@ -202,7 +202,8 @@ pub async fn play_uci_move(
         });
     }
 
-    let validated = validate_move(&game.fen, uci)?;
+    let historical_fens = list_move_fens(&mut tx, game.id).await?;
+    let validated = validate_move(&game.fen, uci, &historical_fens)?;
     let move_number = game.move_count + 1;
     let status = if validated.result.is_some() {
         "finished"
@@ -345,6 +346,17 @@ pub async fn list_moves(state: &AppState, game_id: Uuid) -> ApiResult<Vec<MoveRe
     .fetch_all(&state.db)
     .await
     .map_err(ApiError::from)
+}
+
+async fn list_move_fens(
+    connection: &mut sqlx::PgConnection,
+    game_id: Uuid,
+) -> ApiResult<Vec<String>> {
+    sqlx::query_scalar("SELECT fen_after FROM moves WHERE game_id = $1 ORDER BY move_number ASC")
+        .bind(game_id)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(ApiError::from)
 }
 
 pub fn ensure_player(game: &Game, user_id: Uuid) -> ApiResult<()> {
@@ -666,7 +678,7 @@ struct ValidatedMove {
     result_reason: String,
 }
 
-fn validate_move(fen: &str, uci: &str) -> ApiResult<ValidatedMove> {
+fn validate_move(fen: &str, uci: &str, historical_fens: &[String]) -> ApiResult<ValidatedMove> {
     let position: Chess = Fen::from_ascii(fen.as_bytes())
         .map_err(|_| ApiError::BadRequest("invalid game position".to_owned()))?
         .into_position(CastlingMode::Standard)
@@ -688,7 +700,7 @@ fn validate_move(fen: &str, uci: &str) -> ApiResult<ValidatedMove> {
         Color::Black => "black",
     }
     .to_owned();
-    let (result, result_reason) = result_from_outcome(next_position.outcome());
+    let (result, result_reason) = result_from_position(&next_position, historical_fens);
 
     Ok(ValidatedMove {
         san,
@@ -714,6 +726,51 @@ fn result_from_outcome(outcome: Outcome) -> (Option<String>, String) {
     };
 
     (Some(result.to_owned()), "checkmate".to_owned())
+}
+
+fn result_from_position(position: &Chess, historical_fens: &[String]) -> (Option<String>, String) {
+    if position.is_stalemate() {
+        return (Some("draw".to_owned()), "stalemate".to_owned());
+    }
+
+    if position.is_insufficient_material() {
+        return (Some("draw".to_owned()), "insufficient_material".to_owned());
+    }
+
+    if position.halfmoves() >= 100 {
+        return (Some("draw".to_owned()), "fifty_move_rule".to_owned());
+    }
+
+    let current_fen = Fen::from_position(position, EnPassantMode::Legal).to_string();
+
+    if has_threefold_repetition(historical_fens, &current_fen) {
+        return (Some("draw".to_owned()), "threefold_repetition".to_owned());
+    }
+
+    result_from_outcome(position.outcome())
+}
+
+fn has_threefold_repetition(historical_fens: &[String], current_fen: &str) -> bool {
+    let Some(current_key) = position_key(current_fen) else {
+        return false;
+    };
+
+    let mut occurrences =
+        usize::from(position_key(STARTING_FEN).as_deref() == Some(current_key.as_str()));
+
+    for fen in historical_fens {
+        if position_key(fen).as_deref() == Some(current_key.as_str()) {
+            occurrences += 1;
+        }
+    }
+
+    occurrences >= 3
+}
+
+fn position_key(fen: &str) -> Option<String> {
+    let fields: Vec<&str> = fen.split_whitespace().take(4).collect();
+
+    (fields.len() == 4).then(|| fields.join(" "))
 }
 
 fn format_pgn_clock(clock_ms: i64) -> String {
@@ -773,7 +830,7 @@ mod tests {
 
     #[test]
     fn validates_a_legal_move() {
-        let validated = validate_move(STARTING_FEN, "e2e4").unwrap();
+        let validated = validate_move(STARTING_FEN, "e2e4", &[]).unwrap();
 
         assert_eq!(validated.san, "e4");
         assert_eq!(validated.side_to_move, "black");
@@ -788,11 +845,11 @@ mod tests {
     #[test]
     fn rejects_invalid_position_and_illegal_move() {
         assert!(matches!(
-            validate_move("not a fen", "e2e4"),
+            validate_move("not a fen", "e2e4", &[]),
             Err(ApiError::BadRequest(message)) if message == "invalid game position"
         ));
         assert!(matches!(
-            validate_move(STARTING_FEN, "e2e5"),
+            validate_move(STARTING_FEN, "e2e5", &[]),
             Err(ApiError::BadRequest(message)) if message == "illegal move"
         ));
     }
@@ -810,6 +867,41 @@ mod tests {
 
         assert_eq!(result.as_deref(), Some("black_win"));
         assert_eq!(reason, "checkmate");
+    }
+
+    #[test]
+    fn identifies_automatic_draw_reasons() {
+        let stalemate = Fen::from_ascii(b"7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")
+            .unwrap()
+            .into_position::<Chess>(CastlingMode::Standard)
+            .unwrap();
+        let insufficient_material = Fen::from_ascii(b"7k/8/8/8/8/8/8/K7 w - - 0 1")
+            .unwrap()
+            .into_position::<Chess>(CastlingMode::Standard)
+            .unwrap();
+        let fifty_move_rule = Fen::from_ascii(b"7k/8/8/8/8/8/8/R5K1 w - - 100 1")
+            .unwrap()
+            .into_position::<Chess>(CastlingMode::Standard)
+            .unwrap();
+        let repetition = Chess::default();
+        let repeated_fens = vec![
+            STARTING_FEN.to_owned(),
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3".to_owned(),
+        ];
+
+        assert_eq!(result_from_position(&stalemate, &[]).1, "stalemate");
+        assert_eq!(
+            result_from_position(&insufficient_material, &[]).1,
+            "insufficient_material"
+        );
+        assert_eq!(
+            result_from_position(&fifty_move_rule, &[]).1,
+            "fifty_move_rule"
+        );
+        assert_eq!(
+            result_from_position(&repetition, &repeated_fens).1,
+            "threefold_repetition"
+        );
     }
 
     #[test]

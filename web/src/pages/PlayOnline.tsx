@@ -48,6 +48,7 @@ import {
 } from "../utils/binaryMessage";
 import { getOpeningName } from "../utils/openingNames";
 import { formatPgnClock, formatPgnDate } from "../utils/pgn";
+import { getGameTermination } from "../utils/playBoard";
 import {
   playErrorSound,
   playMoveRecordSound,
@@ -209,6 +210,32 @@ function getPgnResult(result: Game["result"] | undefined) {
   }
 
   return "*";
+}
+
+function getPgnTermination(game: Game, position: Chess): string {
+  if (game.resultReason === "checkmate") {
+    return "Checkmate";
+  }
+
+  if (game.resultReason === "timeout") {
+    return "Time forfeit";
+  }
+
+  if (game.resultReason === "resignation") {
+    return "Resignation";
+  }
+
+  if (game.resultReason === "disconnection") {
+    return "Disconnection";
+  }
+
+  if (game.result === "draw" || game.resultReason === "draw") {
+    const termination = getGameTermination(position);
+
+    return termination === "Unterminated" ? "Draw" : termination;
+  }
+
+  return game.status === "finished" ? "Normal" : "Unterminated";
 }
 
 export default function PlayOnline() {
@@ -710,6 +737,7 @@ export default function PlayOnline() {
     }
 
     const result = getPgnResult(game.result);
+    const termination = getPgnTermination(game, pgnGame);
 
     const white = whitePlayer?.username ?? "White";
     const black = blackPlayer?.username ?? "Black";
@@ -725,6 +753,7 @@ export default function PlayOnline() {
     pgnGame.setHeader("White", white);
     pgnGame.setHeader("Black", black);
     pgnGame.setHeader("Result", result);
+    pgnGame.setHeader("Termination", termination);
     pgnGame.setHeader("Annotator", "GLFish");
 
     if (whitePlayer?.rating) {
