@@ -127,6 +127,8 @@ export type ServerMessage =
       white_player: PlayerInfo | null;
       black_player: PlayerInfo | null;
     }
+  | { type: "draw_offered"; user_id: string }
+  | { type: "draw_offer_declined"; user_id: string }
   | { type: "player_disconnected"; user_id: string }
   | { type: "error"; message: string }
   | { type: "pong" };

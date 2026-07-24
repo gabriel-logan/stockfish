@@ -112,6 +112,17 @@
     "casual": "casual",
     "matchmakingJoined": "You joined the queue. Waiting for an opponent.",
     "opponentDisconnected": "Opponent disconnected.",
+    "drawOffer": {
+      "title": "Draw offer",
+      "message": "{{opponent}} offered a draw.",
+      "opponent": "Your opponent",
+      "offer": "Offer draw",
+      "sending": "Sending draw offer...",
+      "sent": "Draw offer sent",
+      "accept": "Accept draw",
+      "decline": "Decline draw",
+      "declinedByOpponent": "Your opponent declined the draw offer."
+    },
     "setup": {
       "title": "Game setup",
       "description": "Choose the time control and game type before finding an opponent.",

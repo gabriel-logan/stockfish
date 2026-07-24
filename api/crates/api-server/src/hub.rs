@@ -18,6 +18,7 @@ pub struct Hub {
 struct HubInner {
     rooms: Subscriptions,
     games: Subscriptions,
+    draw_offers: HashMap<Uuid, Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -43,6 +44,12 @@ pub enum ServerMessage<T: Serialize> {
         move_record: serde_json::Value,
         white_player: Option<PlayerInfo>,
         black_player: Option<PlayerInfo>,
+    },
+    DrawOffered {
+        user_id: Uuid,
+    },
+    DrawOfferDeclined {
+        user_id: Uuid,
     },
     PlayerDisconnected {
         user_id: Uuid,
@@ -90,6 +97,45 @@ impl Hub {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
 
         broadcast(&mut inner.games, game_id, &payload);
+    }
+
+    pub fn offer_draw(&self, game_id: Uuid, user_id: Uuid) -> bool {
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        if inner.draw_offers.contains_key(&game_id) {
+            return false;
+        }
+
+        inner.draw_offers.insert(game_id, user_id);
+
+        true
+    }
+
+    pub fn accept_draw_offer(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        self.resolve_draw_offer(game_id, user_id)
+    }
+
+    pub fn decline_draw_offer(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        self.resolve_draw_offer(game_id, user_id)
+    }
+
+    pub fn clear_draw_offer(&self, game_id: Uuid) {
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        inner.draw_offers.remove(&game_id);
+    }
+
+    fn resolve_draw_offer(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+        let offering_user_id = *inner.draw_offers.get(&game_id)?;
+
+        if offering_user_id == user_id {
+            return None;
+        }
+
+        inner.draw_offers.remove(&game_id);
+
+        Some(offering_user_id)
     }
 }
 
@@ -146,6 +192,23 @@ mod tests {
 
         let inner = hub.inner.lock().unwrap();
         assert_eq!(inner.games.get(&game_id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn draw_offer_can_be_offered_and_resolved_once() {
+        let hub = Hub::default();
+        let game_id = Uuid::new_v4();
+        let offering_user_id = Uuid::new_v4();
+        let responding_user_id = Uuid::new_v4();
+
+        assert!(hub.offer_draw(game_id, offering_user_id));
+        assert!(!hub.offer_draw(game_id, responding_user_id));
+        assert_eq!(hub.accept_draw_offer(game_id, offering_user_id), None);
+        assert_eq!(
+            hub.decline_draw_offer(game_id, responding_user_id),
+            Some(offering_user_id)
+        );
+        assert_eq!(hub.accept_draw_offer(game_id, responding_user_id), None);
     }
 
     #[test]

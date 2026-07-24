@@ -78,6 +78,10 @@ pub async fn resign_game(
     Ok(web::Json(game))
 }
 
+pub async fn finish_game_by_draw_agreement(state: &AppState, game_id: Uuid) -> ApiResult<Game> {
+    finish_game(state, game_id, "draw", "agreement").await
+}
+
 pub async fn start_game_if_ready(state: &AppState, room: &Room) -> ApiResult<Option<Game>> {
     let Some(white_user_id) = room.white_user_id else {
         return Ok(None);
@@ -311,6 +315,10 @@ pub async fn play_uci_move(
 
     tx.commit().await?;
 
+    if updated_game.status == "finished" {
+        state.hub.clear_draw_offer(updated_game.id);
+    }
+
     Ok(MoveResult {
         game: updated_game,
         move_record: Some(move_record),
@@ -415,6 +423,8 @@ async fn finish_game(
     .await?;
 
     tx.commit().await?;
+
+    state.hub.clear_draw_offer(game.id);
 
     Ok(game)
 }
@@ -560,6 +570,8 @@ async fn expire_game(state: &AppState, game_id: Uuid) -> ApiResult<Option<Game>>
         finish_game_in_transaction(&mut tx, game, room_timing, result, "timeout", now).await?;
 
     tx.commit().await?;
+
+    state.hub.clear_draw_offer(updated_game.id);
 
     Ok(Some(updated_game))
 }

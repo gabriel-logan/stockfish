@@ -6,6 +6,7 @@ import {
   FaClipboard,
   FaDoorOpen,
   FaFlag,
+  FaHandshake,
   FaPlay,
   FaSave,
   FaSyncAlt,
@@ -16,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
+import DrawOfferModal from "../components/DrawOfferModal";
 import MoveList from "../components/MoveList";
 import OnlineGameSetupModal from "../components/OnlineGameSetupModal";
 import { baseUrlApiWS } from "../constants";
@@ -229,6 +231,10 @@ function getPgnTermination(game: Game, position: Chess): string {
     return "Disconnection";
   }
 
+  if (game.resultReason === "agreement") {
+    return "Draw by agreement";
+  }
+
   if (game.result === "draw" || game.resultReason === "draw") {
     const termination = getGameTermination(position);
 
@@ -273,6 +279,9 @@ export default function PlayOnline() {
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [setupModalVersion, setSetupModalVersion] = useState(0);
+  const [drawOfferSent, setDrawOfferSent] = useState(false);
+  const [drawOfferReceived, setDrawOfferReceived] = useState(false);
+  const [drawOfferActionPending, setDrawOfferActionPending] = useState(false);
   const [matchmakingOptions, setMatchmakingOptions] = useState(
     DEFAULT_MATCHMAKING_OPTIONS,
   );
@@ -305,6 +314,16 @@ export default function PlayOnline() {
 
     return game.blackUserId === user.id ? "b" : "w";
   }, [game, user]);
+
+  const opponentName = useMemo(() => {
+    if (!game || !user) {
+      return t("online.drawOffer.opponent");
+    }
+
+    const opponent = game.whiteUserId === user.id ? blackPlayer : whitePlayer;
+
+    return opponent?.username ?? t("online.drawOffer.opponent");
+  }, [blackPlayer, game, t, user, whitePlayer]);
 
   const isPlayerTurn = useMemo(() => {
     if (!game || !user || game.status !== "active") {
@@ -371,6 +390,9 @@ export default function PlayOnline() {
         setGame(message.game);
         setStatus("playing");
         setSavedGameId(null);
+        setDrawOfferSent(false);
+        setDrawOfferReceived(false);
+        setDrawOfferActionPending(false);
         finishedSoundGameIdRef.current = null;
         socketRef.current?.send(
           encodeBinaryMessage({ type: "join_game", game_id: message.game.id }),
@@ -431,6 +453,13 @@ export default function PlayOnline() {
         }
 
         setStatus(message.game.status === "finished" ? "finished" : "playing");
+
+        if (message.game.status === "finished") {
+          setDrawOfferSent(false);
+          setDrawOfferReceived(false);
+          setDrawOfferActionPending(false);
+        }
+
         return;
       }
 
@@ -506,6 +535,41 @@ export default function PlayOnline() {
         });
         setSendingMove(false);
         setStatus(message.game.status === "finished" ? "finished" : "playing");
+
+        if (message.game.status === "finished") {
+          setDrawOfferSent(false);
+          setDrawOfferReceived(false);
+          setDrawOfferActionPending(false);
+        }
+
+        return;
+      }
+
+      if (message.type === "draw_offered") {
+        setDrawOfferActionPending(false);
+
+        if (message.user_id === user?.id) {
+          setDrawOfferSent(true);
+        } else {
+          setDrawOfferReceived(true);
+
+          if (soundEnabled) {
+            playNotificationSound();
+          }
+        }
+
+        return;
+      }
+
+      if (message.type === "draw_offer_declined") {
+        setDrawOfferSent(false);
+        setDrawOfferReceived(false);
+        setDrawOfferActionPending(false);
+
+        if (message.user_id !== user?.id) {
+          toast.info(t("online.drawOffer.declinedByOpponent"));
+        }
+
         return;
       }
 
@@ -516,6 +580,9 @@ export default function PlayOnline() {
 
         toast.error(t("online.opponentDisconnected"));
         setGame((prev) => (prev ? { ...prev, status: "finished" } : prev));
+        setDrawOfferSent(false);
+        setDrawOfferReceived(false);
+        setDrawOfferActionPending(false);
         setStatus("finished");
         return;
       }
@@ -526,10 +593,16 @@ export default function PlayOnline() {
         }
 
         setSendingMove(false);
+        setDrawOfferActionPending(false);
+
+        if (drawOfferActionPending) {
+          setDrawOfferSent(false);
+        }
+
         toast.error(message.message);
       }
     },
-    [queryClient, soundEnabled, t, updateRating, user],
+    [drawOfferActionPending, queryClient, soundEnabled, t, updateRating, user],
   );
 
   const connectSocket = useCallback(
@@ -572,6 +645,9 @@ export default function PlayOnline() {
         .then((gameResponse) => {
           setGame(gameResponse.game);
           setMoves(gameResponse.moves);
+          setDrawOfferSent(false);
+          setDrawOfferReceived(false);
+          setDrawOfferActionPending(false);
           setStatus("playing");
           connectSocket({ type: "join_game", game_id: gameId });
         });
@@ -698,6 +774,55 @@ export default function PlayOnline() {
       }),
     );
     setSelectedSquare(null);
+  }
+
+  function handleOfferDraw() {
+    if (
+      !game ||
+      game.status !== "active" ||
+      !socketRef.current ||
+      drawOfferSent ||
+      drawOfferReceived ||
+      drawOfferActionPending
+    ) {
+      return;
+    }
+
+    setDrawOfferActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "offer_draw",
+        game_id: game.id,
+      }),
+    );
+  }
+
+  function handleAcceptDraw() {
+    if (!game || game.status !== "active" || !socketRef.current) {
+      return;
+    }
+
+    setDrawOfferActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "accept_draw",
+        game_id: game.id,
+      }),
+    );
+  }
+
+  function handleDeclineDraw() {
+    if (!game || game.status !== "active" || !socketRef.current) {
+      return;
+    }
+
+    setDrawOfferActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "decline_draw",
+        game_id: game.id,
+      }),
+    );
   }
 
   function handleResign() {
@@ -960,17 +1085,35 @@ export default function PlayOnline() {
             </button>
 
             {game?.status === "active" && (
-              <button
-                type="button"
-                className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#df535366] bg-[#3b2525] text-sm font-extrabold text-[#ffd5d5] transition-colors hover:bg-[#df5353] hover:text-white"
-                onClick={() => {
-                  handleResign();
-                }}
-                disabled={resigningGame}
-              >
-                <FaFlag aria-hidden="true" />
-                {t("online.resign")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#b7d58a66] bg-[#30432a] text-sm font-extrabold text-[#d9edb5] transition-colors hover:bg-[#628d3f] hover:text-white disabled:opacity-60"
+                  onClick={handleOfferDraw}
+                  disabled={
+                    drawOfferSent || drawOfferReceived || drawOfferActionPending
+                  }
+                >
+                  <FaHandshake aria-hidden="true" />
+                  {drawOfferActionPending
+                    ? t("online.drawOffer.sending")
+                    : drawOfferSent
+                      ? t("online.drawOffer.sent")
+                      : t("online.drawOffer.offer")}
+                </button>
+
+                <button
+                  type="button"
+                  className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#df535366] bg-[#3b2525] text-sm font-extrabold text-[#ffd5d5] transition-colors hover:bg-[#df5353] hover:text-white"
+                  onClick={() => {
+                    handleResign();
+                  }}
+                  disabled={resigningGame}
+                >
+                  <FaFlag aria-hidden="true" />
+                  {t("online.resign")}
+                </button>
+              </>
             )}
 
             {status === "finished" && (
@@ -1072,6 +1215,14 @@ export default function PlayOnline() {
         onCancel={() => {
           setSetupModalOpen(false);
         }}
+      />
+
+      <DrawOfferModal
+        open={drawOfferReceived && game?.status === "active"}
+        opponentName={opponentName}
+        actionDisabled={drawOfferActionPending}
+        onAccept={handleAcceptDraw}
+        onDecline={handleDeclineDraw}
       />
     </div>
   );

@@ -19,6 +19,9 @@ enum ClientMessage {
     JoinRoom { room_id: Uuid },
     JoinGame { game_id: Uuid },
     Move { game_id: Uuid, uci: String },
+    OfferDraw { game_id: Uuid },
+    AcceptDraw { game_id: Uuid },
+    DeclineDraw { game_id: Uuid },
     Ping,
 }
 
@@ -96,6 +99,9 @@ async fn handle_binary(
             }
         }
         Ok(ClientMessage::Move { game_id, uci }) => play_move(state, user_id, game_id, &uci).await,
+        Ok(ClientMessage::OfferDraw { game_id }) => offer_draw(state, user_id, game_id).await,
+        Ok(ClientMessage::AcceptDraw { game_id }) => accept_draw(state, user_id, game_id).await,
+        Ok(ClientMessage::DeclineDraw { game_id }) => decline_draw(state, user_id, game_id).await,
         Ok(ClientMessage::Ping) => {
             send_json(session, &ServerMessage::<serde_json::Value>::Pong).await;
             Ok(())
@@ -112,6 +118,76 @@ async fn handle_binary(
         )
         .await;
     }
+}
+
+async fn offer_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "active" {
+        return Err(ApiError::BadRequest("game is finished".to_owned()));
+    }
+
+    if !state.hub.offer_draw(game_id, user_id) {
+        return Err(ApiError::BadRequest(
+            "a draw offer is already pending".to_owned(),
+        ));
+    }
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::<serde_json::Value>::DrawOffered { user_id },
+    );
+
+    Ok(())
+}
+
+async fn accept_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "active" {
+        return Err(ApiError::BadRequest("game is finished".to_owned()));
+    }
+
+    if state.hub.accept_draw_offer(game_id, user_id).is_none() {
+        return Err(ApiError::BadRequest("no draw offer is pending".to_owned()));
+    }
+
+    let game = games::finish_game_by_draw_agreement(state, game_id).await?;
+    let (white_player, black_player) = games::fetch_game_players(state, &game).await;
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::GameState {
+            game,
+            moves: serde_json::json!([]),
+            white_player,
+            black_player,
+        },
+    );
+
+    Ok(())
+}
+
+async fn decline_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "active" {
+        return Err(ApiError::BadRequest("game is finished".to_owned()));
+    }
+
+    if state.hub.decline_draw_offer(game_id, user_id).is_none() {
+        return Err(ApiError::BadRequest("no draw offer is pending".to_owned()));
+    }
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::<serde_json::Value>::DrawOfferDeclined { user_id },
+    );
+
+    Ok(())
 }
 
 async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
