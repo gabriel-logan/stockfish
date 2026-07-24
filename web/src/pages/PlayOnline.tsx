@@ -17,6 +17,7 @@ import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
 import MoveList from "../components/MoveList";
+import OnlineGameSetupModal from "../components/OnlineGameSetupModal";
 import { baseUrlApiWS } from "../constants";
 import { getApiErrorMessage } from "../lib/apiInstance";
 import { useResignGameMutation } from "../mutations/gameMutations";
@@ -33,6 +34,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import type {
   Game,
   GameResponse,
+  MatchmakingOptions,
   MoveRecord,
   PlayerInfo,
   Room,
@@ -65,6 +67,11 @@ const ONLINE_STATUS_KEYS = {
 } as const satisfies Record<OnlineStatus, string>;
 
 const EMPTY_ROOMS: Room[] = [];
+const DEFAULT_MATCHMAKING_OPTIONS: MatchmakingOptions = {
+  rated: false,
+  timeControlSeconds: 600,
+  incrementSeconds: 0,
+};
 
 function getLastMove(moves: MoveRecord[]) {
   const lastMove = moves.at(-1);
@@ -90,6 +97,22 @@ function getMoveEntries(moves: MoveRecord[]): MoveEntry[] {
       uci: move.uci,
     };
   });
+}
+
+function getPlayerForUser(
+  whitePlayer: PlayerInfo | null,
+  blackPlayer: PlayerInfo | null,
+  userId: string | undefined,
+) {
+  if (whitePlayer?.id === userId) {
+    return whitePlayer;
+  }
+
+  if (blackPlayer?.id === userId) {
+    return blackPlayer;
+  }
+
+  return null;
 }
 
 function getGameStatusKey(game: Game | null, userId: string | null) {
@@ -158,6 +181,7 @@ export default function PlayOnline() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const updateRating = useAuthStore((s) => s.updateRating);
   const pieceSet = useSettingsStore((s) => s.pieceSet);
   const soundEnabled = useSettingsStore((s) => s.soundEnabled);
   const socketRef = useRef<WebSocket | null>(null);
@@ -185,6 +209,11 @@ export default function PlayOnline() {
   const [whitePlayer, setWhitePlayer] = useState<PlayerInfo | null>(null);
   const [blackPlayer, setBlackPlayer] = useState<PlayerInfo | null>(null);
   const [savedGameId, setSavedGameId] = useState<string | null>(null);
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [setupModalVersion, setSetupModalVersion] = useState(0);
+  const [matchmakingOptions, setMatchmakingOptions] = useState(
+    DEFAULT_MATCHMAKING_OPTIONS,
+  );
   const rooms = roomsData ?? EMPTY_ROOMS;
   const joiningGame = joiningMatchmaking || joiningRoom;
 
@@ -312,6 +341,17 @@ export default function PlayOnline() {
         });
         setWhitePlayer(message.white_player);
         setBlackPlayer(message.black_player);
+
+        const currentPlayer = getPlayerForUser(
+          message.white_player,
+          message.black_player,
+          user?.id,
+        );
+
+        if (currentPlayer) {
+          updateRating(currentPlayer.rating);
+        }
+
         setStatus(message.game.status === "finished" ? "finished" : "playing");
         return;
       }
@@ -342,6 +382,24 @@ export default function PlayOnline() {
         }
 
         setGame(message.game);
+        if (message.white_player) {
+          setWhitePlayer(message.white_player);
+        }
+
+        if (message.black_player) {
+          setBlackPlayer(message.black_player);
+        }
+
+        const currentPlayer = getPlayerForUser(
+          message.white_player,
+          message.black_player,
+          user?.id,
+        );
+
+        if (currentPlayer) {
+          updateRating(currentPlayer.rating);
+        }
+
         setMoves((currentMoves) => {
           const exists = currentMoves.some((move) => {
             return move.id === message.move_record.id;
@@ -374,7 +432,7 @@ export default function PlayOnline() {
         toast.error(message.message);
       }
     },
-    [queryClient, soundEnabled, t],
+    [queryClient, soundEnabled, t, updateRating, user],
   );
 
   const connectSocket = useCallback(
@@ -430,10 +488,10 @@ export default function PlayOnline() {
     };
   }, [closeSocket]);
 
-  function handleJoinMatchmaking() {
+  function handleJoinMatchmaking(options: MatchmakingOptions) {
     setStatus("matching");
 
-    joinMatchmaking(undefined, {
+    joinMatchmaking(options, {
       onSuccess: (response) => {
         if (response.game) {
           void startOnlineGame(response.game.id).catch((error: unknown) => {
@@ -452,6 +510,21 @@ export default function PlayOnline() {
         toast.error(getApiErrorMessage(error));
       },
     });
+  }
+
+  function handleOpenSetupModal() {
+    if (status === "playing" || joiningGame) {
+      return;
+    }
+
+    setSetupModalVersion((currentVersion) => currentVersion + 1);
+    setSetupModalOpen(true);
+  }
+
+  function handleConfirmSetup(options: MatchmakingOptions) {
+    setMatchmakingOptions(options);
+    setSetupModalOpen(false);
+    handleJoinMatchmaking(options);
   }
 
   function handleJoinRoom(roomId: string) {
@@ -713,7 +786,7 @@ export default function PlayOnline() {
                 className="flex min-h-10 items-center justify-center gap-2 rounded bg-[#628d3f] text-sm font-extrabold text-white transition-colors hover:bg-[#7aad4e] disabled:opacity-60"
                 disabled={status === "playing" || joiningGame}
                 onClick={() => {
-                  handleJoinMatchmaking();
+                  handleOpenSetupModal();
                 }}
               >
                 <FaPlay aria-hidden="true" />
@@ -836,6 +909,17 @@ export default function PlayOnline() {
           </div>
         </section>
       </aside>
+
+      <OnlineGameSetupModal
+        key={setupModalVersion}
+        open={setupModalOpen}
+        confirmDisabled={joiningGame}
+        initialOptions={matchmakingOptions}
+        onConfirm={handleConfirmSetup}
+        onCancel={() => {
+          setSetupModalOpen(false);
+        }}
+      />
     </div>
   );
 }

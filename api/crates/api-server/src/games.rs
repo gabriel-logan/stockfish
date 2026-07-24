@@ -14,6 +14,7 @@ use crate::models::{Game, MoveRecord, PlayerInfo, Room};
 use crate::users;
 
 const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const RATING_K_FACTOR: f64 = 32.0;
 
 pub async fn get_game(
     state: web::Data<AppState>,
@@ -148,6 +149,11 @@ pub async fn play_uci_move(
 
     ensure_player(&game, user_id)?;
 
+    let room_rated = sqlx::query_scalar::<_, bool>("SELECT rated FROM rooms WHERE id = $1")
+        .bind(game.room_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
     if game.status != "active" {
         return Err(ApiError::BadRequest("game is finished".to_owned()));
     }
@@ -189,7 +195,7 @@ pub async fn play_uci_move(
             move_count = $8,
             last_move_at = now(),
             finished_at = $9
-        WHERE id = $1
+        WHERE id = $1 AND status = 'active'
         RETURNING id, room_id, white_user_id, black_user_id, status::text, result::text,
             result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
             last_move_at, started_at, finished_at
@@ -235,6 +241,16 @@ pub async fn play_uci_move(
         .bind(updated_game.room_id)
         .execute(&mut *tx)
         .await?;
+
+        if room_rated {
+            update_ratings(
+                &mut tx,
+                updated_game.white_user_id,
+                updated_game.black_user_id,
+                updated_game.result.as_deref().unwrap_or("draw"),
+            )
+            .await?;
+        }
     }
 
     tx.commit().await?;
@@ -309,6 +325,15 @@ async fn finish_game(
 ) -> ApiResult<Game> {
     let mut tx = state.db.begin().await?;
 
+    let room_id = sqlx::query_scalar::<_, Uuid>("SELECT room_id FROM games WHERE id = $1")
+        .bind(game_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    let room_rated = sqlx::query_scalar::<_, bool>("SELECT rated FROM rooms WHERE id = $1")
+        .bind(room_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
     let game = sqlx::query_as::<_, Game>(
         r#"
         UPDATE games
@@ -316,7 +341,7 @@ async fn finish_game(
             result = $2::game_result,
             result_reason = $3,
             finished_at = now()
-        WHERE id = $1
+        WHERE id = $1 AND status = 'active'
         RETURNING id, room_id, white_user_id, black_user_id, status::text, result::text,
             result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
             last_move_at, started_at, finished_at
@@ -325,17 +350,91 @@ async fn finish_game(
     .bind(game_id)
     .bind(result)
     .bind(result_reason)
-    .fetch_one(&mut *tx)
-    .await?;
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::BadRequest("game is already finished".to_owned()))?;
 
     sqlx::query("UPDATE rooms SET status = 'finished', updated_at = now() WHERE id = $1")
         .bind(game.room_id)
         .execute(&mut *tx)
         .await?;
 
+    if room_rated {
+        update_ratings(&mut tx, game.white_user_id, game.black_user_id, result).await?;
+    }
+
     tx.commit().await?;
 
     Ok(game)
+}
+
+pub async fn finish_game_by_disconnect(
+    state: &AppState,
+    game_id: Uuid,
+    disconnected_user_id: Uuid,
+) -> ApiResult<Option<Game>> {
+    let game = get_game_by_id(state, game_id).await?;
+    ensure_player(&game, disconnected_user_id)?;
+
+    if game.status != "active" {
+        return Ok(None);
+    }
+
+    let result = if game.white_user_id == disconnected_user_id {
+        "black_win"
+    } else {
+        "white_win"
+    };
+
+    finish_game(state, game.id, result, "disconnection")
+        .await
+        .map(Some)
+}
+
+async fn update_ratings(
+    connection: &mut sqlx::PgConnection,
+    white_user_id: Uuid,
+    black_user_id: Uuid,
+    result: &str,
+) -> ApiResult<()> {
+    let white_rating =
+        sqlx::query_scalar::<_, i32>("SELECT rating FROM users WHERE id = $1 FOR UPDATE")
+            .bind(white_user_id)
+            .fetch_one(&mut *connection)
+            .await?;
+    let black_rating =
+        sqlx::query_scalar::<_, i32>("SELECT rating FROM users WHERE id = $1 FOR UPDATE")
+            .bind(black_user_id)
+            .fetch_one(&mut *connection)
+            .await?;
+
+    let (white_change, black_change) = calculate_rating_changes(white_rating, black_rating, result);
+
+    sqlx::query("UPDATE users SET rating = rating + $2, updated_at = now() WHERE id = $1")
+        .bind(white_user_id)
+        .bind(white_change)
+        .execute(&mut *connection)
+        .await?;
+    sqlx::query("UPDATE users SET rating = rating + $2, updated_at = now() WHERE id = $1")
+        .bind(black_user_id)
+        .bind(black_change)
+        .execute(&mut *connection)
+        .await?;
+
+    Ok(())
+}
+
+fn calculate_rating_changes(white_rating: i32, black_rating: i32, result: &str) -> (i32, i32) {
+    let white_score = match result {
+        "white_win" => 1.0,
+        "black_win" => 0.0,
+        _ => 0.5,
+    };
+    let expected_white_score =
+        1.0 / (1.0 + 10.0_f64.powf(f64::from(black_rating - white_rating) / 400.0));
+    let white_change = (RATING_K_FACTOR * (white_score - expected_white_score)).round() as i32;
+
+    (white_change, -white_change)
 }
 
 struct ValidatedMove {
@@ -502,5 +601,20 @@ mod tests {
             ensure_player(&game, Uuid::new_v4()),
             Err(ApiError::Forbidden)
         ));
+    }
+
+    #[test]
+    fn applies_symmetric_rating_changes_to_equal_players() {
+        assert_eq!(calculate_rating_changes(400, 400, "white_win"), (16, -16));
+        assert_eq!(calculate_rating_changes(400, 400, "black_win"), (-16, 16));
+        assert_eq!(calculate_rating_changes(400, 400, "draw"), (0, 0));
+    }
+
+    #[test]
+    fn favors_the_lower_rated_player_with_a_win() {
+        let (white_change, black_change) = calculate_rating_changes(800, 1200, "white_win");
+
+        assert!(white_change > 16);
+        assert_eq!(black_change, -white_change);
     }
 }

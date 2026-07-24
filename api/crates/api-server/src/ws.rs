@@ -58,7 +58,7 @@ pub async fn websocket(
                 }
                 Message::Close(reason) => {
                     if let Some(game_id) = current_game_id {
-                        broadcast_player_disconnected(&state_for_task, game_id, user_id);
+                        handle_player_disconnected(&state_for_task, game_id, user_id).await;
                     }
                     let _ = session.close(reason).await;
                     return;
@@ -68,7 +68,7 @@ pub async fn websocket(
         }
 
         if let Some(game_id) = current_game_id {
-            broadcast_player_disconnected(&state_for_task, game_id, user_id);
+            handle_player_disconnected(&state_for_task, game_id, user_id).await;
         }
 
         let _ = session.close(None).await;
@@ -114,10 +114,28 @@ async fn handle_binary(
     }
 }
 
-fn broadcast_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
-    let message = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
+async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
+    match games::finish_game_by_disconnect(state, game_id, user_id).await {
+        Ok(Some(game)) => {
+            let (white_player, black_player) = games::fetch_game_players(state, &game).await;
 
-    state.hub.broadcast_game(game_id, &message);
+            state.hub.broadcast_game(
+                game.id,
+                &ServerMessage::GameState {
+                    game,
+                    moves: serde_json::json!([]),
+                    white_player,
+                    black_player,
+                },
+            );
+        }
+        Ok(None) => {}
+        Err(_) => {
+            let message = ServerMessage::<serde_json::Value>::PlayerDisconnected { user_id };
+
+            state.hub.broadcast_game(game_id, &message);
+        }
+    }
 }
 
 fn forward_hub_messages(
@@ -180,9 +198,16 @@ async fn join_game_channel(
 
 async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) -> ApiResult<()> {
     let (game, move_record) = games::play_uci_move(state, user_id, game_id, uci).await?;
+    let (white_player, black_player) = if game.status == "finished" {
+        games::fetch_game_players(state, &game).await
+    } else {
+        (None, None)
+    };
     let message = ServerMessage::MoveAccepted {
         game: game.clone(),
         move_record: serde_json::json!(move_record),
+        white_player,
+        black_player,
     };
 
     state.hub.broadcast_game(game.id, &message);

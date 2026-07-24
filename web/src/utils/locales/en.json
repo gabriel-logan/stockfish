@@ -112,6 +112,17 @@
     "casual": "casual",
     "matchmakingJoined": "You joined the queue. Waiting for an opponent.",
     "opponentDisconnected": "Opponent disconnected.",
+    "setup": {
+      "title": "Game setup",
+      "description": "Choose the time control and game type before finding an opponent.",
+      "gameType": "Game type",
+      "rated": "Rated",
+      "ratedDescription": "Your rating changes based on the result.",
+      "casual": "Casual",
+      "casualDescription": "Play without changing your rating.",
+      "timeControl": "Time control",
+      "findOpponent": "Find opponent"
+    },
     "connectionStatus": {
       "idle": "Idle",
       "matching": "Matching",

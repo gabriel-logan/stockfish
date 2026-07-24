@@ -86,6 +86,12 @@ export interface JoinMatchmakingResponse {
   game?: Game;
 }
 
+export interface MatchmakingOptions {
+  rated: boolean;
+  timeControlSeconds: number;
+  incrementSeconds: number;
+}
+
 export interface JoinRoomResponse {
   room: Room;
   game?: Game;
@@ -113,7 +119,13 @@ export type ServerMessage =
       white_player: PlayerInfo | null;
       black_player: PlayerInfo | null;
     }
-  | { type: "move_accepted"; game: Game; move_record: MoveRecord }
+  | {
+      type: "move_accepted";
+      game: Game;
+      move_record: MoveRecord;
+      white_player: PlayerInfo | null;
+      black_player: PlayerInfo | null;
+    }
   | { type: "player_disconnected"; user_id: string }
   | { type: "error"; message: string }
   | { type: "pong" };

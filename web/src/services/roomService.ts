@@ -2,6 +2,7 @@ import apiInstance from "../lib/apiInstance";
 import type {
   JoinMatchmakingResponse,
   JoinRoomResponse,
+  MatchmakingOptions,
   Room,
 } from "../types/api";
 
@@ -11,14 +12,12 @@ export async function listRooms(): Promise<Room[]> {
   return response.data;
 }
 
-export async function joinMatchmaking(): Promise<JoinMatchmakingResponse> {
+export async function joinMatchmaking(
+  options: MatchmakingOptions,
+): Promise<JoinMatchmakingResponse> {
   const response = await apiInstance.post<JoinMatchmakingResponse>(
     "/matchmaking/join",
-    {
-      rated: false,
-      timeControlSeconds: 600,
-      incrementSeconds: 0,
-    },
+    options,
   );
 
   return response.data;

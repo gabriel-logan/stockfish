@@ -13,6 +13,7 @@ interface AuthState {
     accessToken: string,
     refreshToken: string,
   ) => void;
+  updateRating: (rating: number) => void;
   clearSession: () => void;
 }
 
@@ -32,6 +33,21 @@ export const useAuthStore = create<AuthState>()(
           user,
           accessToken,
           refreshToken,
+        });
+      },
+
+      updateRating: (rating: number) => {
+        set((state) => {
+          if (!state.user) {
+            return state;
+          }
+
+          return {
+            user: {
+              ...state.user,
+              rating,
+            },
+          };
         });
       },
 

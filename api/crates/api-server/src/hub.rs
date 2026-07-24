@@ -41,6 +41,8 @@ pub enum ServerMessage<T: Serialize> {
     MoveAccepted {
         game: T,
         move_record: serde_json::Value,
+        white_player: Option<PlayerInfo>,
+        black_player: Option<PlayerInfo>,
     },
     PlayerDisconnected {
         user_id: Uuid,
