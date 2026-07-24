@@ -99,13 +99,65 @@ describe("PGN review helpers", () => {
     expect(
       computeAccuracy(
         [
-          { san: "e4", fen: "fen", color: "w", classification: "best" },
-          { san: "e5", fen: "fen", color: "b", classification: "mistake" },
-          { san: "Nf3", fen: "fen", color: "w", classification: "excellent" },
+          {
+            san: "e4",
+            fen: "fen",
+            color: "w",
+            evaluationBefore: 0,
+            evaluation: 0,
+            classification: "best",
+          },
+          {
+            san: "e5",
+            fen: "fen",
+            color: "b",
+            evaluationBefore: 0,
+            evaluation: 0,
+            classification: "mistake",
+          },
+          {
+            san: "Nf3",
+            fen: "fen",
+            color: "w",
+            evaluationBefore: 0,
+            evaluation: 0,
+            classification: "excellent",
+          },
         ],
         "w",
       ),
     ).toBe("100.0");
+
+    expect(
+      computeAccuracy(
+        [
+          {
+            san: "e4",
+            fen: "fen",
+            color: "w",
+            evaluationBefore: 0,
+            evaluation: 0,
+            classification: "blunder",
+          },
+          {
+            san: "e5",
+            fen: "fen",
+            color: "b",
+            evaluationBefore: 0,
+            evaluation: 1,
+            classification: "best",
+          },
+        ],
+        "b",
+      ),
+    ).toBe("69.2");
+
+    expect(
+      computeAccuracy(
+        [{ san: "e4", fen: "fen", color: "w", classification: "best" }],
+        "w",
+      ),
+    ).toBe("-");
 
     expect(shouldDeepenAnalysis(1, 0.2, null, null, "w")).toBe(true);
     expect(shouldDeepenAnalysis(-1, -0.2, null, null, "b")).toBe(true);

@@ -13,6 +13,8 @@ export interface MoveEntry {
   captured?: "p" | "n" | "b" | "r" | "q";
   isManual?: boolean;
   classification?: ClassificationValue;
+  evaluationBefore?: number;
+  mateBefore?: number;
   evaluation?: number;
   mate?: number;
 }

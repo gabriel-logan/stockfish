@@ -153,6 +153,8 @@ export default function PgnViewer() {
           .slice(0, Math.max(0, currentIdx))
           .concat(activePracticeMoves)
       : activePracticeMoves;
+  const whiteAccuracy = computeAccuracy(moves, "w");
+  const blackAccuracy = computeAccuracy(moves, "b");
   const latestPracticeMove =
     activePracticeMoves[activePracticeMoves.length - 1];
   const currentEval =
@@ -970,7 +972,7 @@ export default function PgnViewer() {
                     {t("common.white")}
                   </div>
                   <div className="mt-1 text-2xl font-black text-white">
-                    {computeAccuracy(moves, "w")}%
+                    {whiteAccuracy === "-" ? "-" : `${whiteAccuracy}%`}
                   </div>
                 </div>
 
@@ -979,7 +981,7 @@ export default function PgnViewer() {
                     {t("common.black")}
                   </div>
                   <div className="mt-1 text-2xl font-black text-white">
-                    {computeAccuracy(moves, "b")}%
+                    {blackAccuracy === "-" ? "-" : `${blackAccuracy}%`}
                   </div>
                 </div>
               </div>

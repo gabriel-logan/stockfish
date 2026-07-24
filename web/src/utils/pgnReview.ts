@@ -37,14 +37,7 @@ export const KNOWN_PGN_HEADER_LABELS: Record<string, string> = {
   Link: "Link",
 };
 
-const ACCURATE_CLASSIFICATIONS = new Set<ClassificationValue>([
-  "excellent",
-  "best",
-  "forced",
-  "opening",
-  "perfect",
-  "splendid",
-]);
+const ACCURACY_CENTIPAWN_DECAY = 0.00368208;
 
 export interface PositionData {
   fen: string;
@@ -218,21 +211,80 @@ export function formatTimeControl(timeControl: string) {
 }
 
 export function computeAccuracy(moveList: MoveEntry[], color: "w" | "b") {
-  const playerMoves = moveList.filter((move) => {
-    return move.color === color;
+  const accuracies = moveList.flatMap((move, index) => {
+    if (move.color !== color) {
+      return [];
+    }
+
+    const previousMove = moveList[index - 1];
+    const evaluationBefore = move.evaluationBefore ?? previousMove?.evaluation;
+    const mateBefore = move.mateBefore ?? previousMove?.mate ?? null;
+    const accuracy = getMoveAccuracy(
+      move,
+      getPracticalScore(
+        evaluationBefore ?? null,
+        mateBefore,
+        move.color === "w" ? "b" : "w",
+      ),
+    );
+
+    if (accuracy === null) {
+      return [];
+    }
+
+    return [accuracy];
   });
 
-  if (playerMoves.length === 0) {
+  if (accuracies.length === 0) {
     return "-";
   }
 
-  const accurateMoves = playerMoves.filter((move) => {
-    return (
-      move.classification && ACCURATE_CLASSIFICATIONS.has(move.classification)
-    );
-  });
+  const averageAccuracy =
+    accuracies.reduce((total, accuracy) => total + accuracy, 0) /
+    accuracies.length;
 
-  return ((accurateMoves.length / playerMoves.length) * 100).toFixed(1);
+  return averageAccuracy.toFixed(1);
+}
+
+function getPracticalScore(
+  evaluation: number | null,
+  mate: number | null,
+  color: "w" | "b",
+): number | null {
+  if (mate !== null) {
+    if (mate === 0) {
+      return color === "w" ? 1000 : -1000;
+    }
+
+    if (mate > 0) {
+      return 1000 - mate;
+    }
+
+    return -1000 - mate;
+  }
+
+  return evaluation;
+}
+
+function getMoveAccuracy(
+  move: MoveEntry,
+  scoreBefore: number | null,
+): number | null {
+  const scoreAfter = getPracticalScore(
+    move.evaluation ?? null,
+    move.mate ?? null,
+    move.color,
+  );
+
+  if (scoreBefore === null || scoreAfter === null) {
+    return null;
+  }
+
+  const scoreLoss =
+    move.color === "w" ? scoreBefore - scoreAfter : scoreAfter - scoreBefore;
+  const centipawnLoss = Math.max(0, scoreLoss * 100);
+
+  return 100 * Math.exp(-ACCURACY_CENTIPAWN_DECAY * centipawnLoss);
 }
 
 export function shouldDeepenAnalysis(
@@ -257,19 +309,15 @@ export function shouldDeepenAnalysis(
 }
 
 export function getMainLineMoves(positions: PositionData[]): MoveEntry[] {
-  return positions
-    .filter(
-      (
-        position,
-      ): position is PositionData & {
-        san: string;
-        color: "w" | "b";
-      } => {
-        return !!position.san && !!position.color;
-      },
-    )
-    .map((position) => {
-      return {
+  return positions.flatMap((position, index) => {
+    if (!position.san || !position.color) {
+      return [];
+    }
+
+    const previousPosition = positions[index - 1];
+
+    return [
+      {
         san: position.san,
         fen: position.fen,
         color: position.color,
@@ -280,10 +328,13 @@ export function getMainLineMoves(positions: PositionData[]): MoveEntry[] {
         elapsed: position.elapsed,
         comment: position.comment,
         classification: position.classification,
+        evaluationBefore: previousPosition?.evaluation ?? undefined,
+        mateBefore: previousPosition?.mate ?? undefined,
         evaluation: position.evaluation ?? undefined,
         mate: position.mate ?? undefined,
-      };
-    });
+      },
+    ];
+  });
 }
 
 export function createPgnPositions(
@@ -578,6 +629,8 @@ export async function analyzePracticeMove({
           previousMove: previousPracticeMove?.uci ?? previousMainMove,
         },
       ),
+      evaluationBefore: before.score ?? undefined,
+      mateBefore: before.mate ?? undefined,
       evaluation: after.score ?? undefined,
       mate: after.mate ?? undefined,
     };
