@@ -1,9 +1,10 @@
 use actix_web::{HttpResponse, web};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use shakmaty::fen::Fen;
 use shakmaty::san::San;
 use shakmaty::uci::UciMove;
 use shakmaty::{CastlingMode, Chess, Color, EnPassantMode, Outcome, Position};
+use tokio::time::{Duration, interval};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -15,6 +16,17 @@ use crate::users;
 
 const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const RATING_K_FACTOR: f64 = 32.0;
+const CLOCK_MONITOR_INTERVAL_MS: u64 = 500;
+
+struct RoomTiming {
+    rated: bool,
+    increment_ms: i64,
+}
+
+pub struct MoveResult {
+    pub game: Game,
+    pub move_record: Option<MoveRecord>,
+}
 
 pub async fn get_game(
     state: web::Data<AppState>,
@@ -129,7 +141,7 @@ pub async fn play_uci_move(
     user_id: Uuid,
     game_id: Uuid,
     uci: &str,
-) -> ApiResult<(Game, MoveRecord)> {
+) -> ApiResult<MoveResult> {
     let mut tx = state.db.begin().await?;
 
     let game = sqlx::query_as::<_, Game>(
@@ -149,10 +161,7 @@ pub async fn play_uci_move(
 
     ensure_player(&game, user_id)?;
 
-    let room_rated = sqlx::query_scalar::<_, bool>("SELECT rated FROM rooms WHERE id = $1")
-        .bind(game.room_id)
-        .fetch_one(&mut *tx)
-        .await?;
+    let room_timing = get_room_timing(&mut tx, game.room_id).await?;
 
     if game.status != "active" {
         return Err(ApiError::BadRequest("game is finished".to_owned()));
@@ -168,6 +177,31 @@ pub async fn play_uci_move(
         return Err(ApiError::Forbidden);
     }
 
+    let now = Utc::now();
+    let (white_clock_ms, black_clock_ms) = clocks_after_elapsed(&game, now);
+    let moving_clock_ms = if game.side_to_move == "white" {
+        white_clock_ms
+    } else {
+        black_clock_ms
+    };
+
+    if moving_clock_ms <= 0 {
+        let result = if game.side_to_move == "white" {
+            "black_win"
+        } else {
+            "white_win"
+        };
+        let updated_game =
+            finish_game_in_transaction(&mut tx, game, room_timing, result, "timeout", now).await?;
+
+        tx.commit().await?;
+
+        return Ok(MoveResult {
+            game: updated_game,
+            move_record: None,
+        });
+    }
+
     let validated = validate_move(&game.fen, uci)?;
     let move_number = game.move_count + 1;
     let pgn = append_pgn(&game, &validated.san);
@@ -181,7 +215,17 @@ pub async fn play_uci_move(
         .result
         .as_ref()
         .map(|_| validated.result_reason.as_str());
-    let finished_at = validated.result.as_ref().map(|_| Utc::now());
+    let white_clock_ms = if game.side_to_move == "white" {
+        white_clock_ms + room_timing.increment_ms
+    } else {
+        white_clock_ms
+    };
+    let black_clock_ms = if game.side_to_move == "black" {
+        black_clock_ms + room_timing.increment_ms
+    } else {
+        black_clock_ms
+    };
+    let finished_at = validated.result.as_ref().map(|_| now);
 
     let updated_game = sqlx::query_as::<_, Game>(
         r#"
@@ -193,8 +237,10 @@ pub async fn play_uci_move(
             pgn = $6,
             side_to_move = $7,
             move_count = $8,
-            last_move_at = now(),
-            finished_at = $9
+            last_move_at = $9,
+            finished_at = $10,
+            white_clock_ms = $11,
+            black_clock_ms = $12
         WHERE id = $1 AND status = 'active'
         RETURNING id, room_id, white_user_id, black_user_id, status::text, result::text,
             result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
@@ -209,7 +255,10 @@ pub async fn play_uci_move(
     .bind(pgn)
     .bind(&validated.side_to_move)
     .bind(move_number)
+    .bind(now)
     .bind(finished_at)
+    .bind(white_clock_ms)
+    .bind(black_clock_ms)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -242,7 +291,7 @@ pub async fn play_uci_move(
         .execute(&mut *tx)
         .await?;
 
-        if room_rated {
+        if room_timing.rated {
             update_ratings(
                 &mut tx,
                 updated_game.white_user_id,
@@ -255,7 +304,10 @@ pub async fn play_uci_move(
 
     tx.commit().await?;
 
-    Ok((updated_game, move_record))
+    Ok(MoveResult {
+        game: updated_game,
+        move_record: Some(move_record),
+    })
 }
 
 pub async fn get_game_by_id(state: &AppState, game_id: Uuid) -> ApiResult<Game> {
@@ -325,47 +377,210 @@ async fn finish_game(
 ) -> ApiResult<Game> {
     let mut tx = state.db.begin().await?;
 
-    let room_id = sqlx::query_scalar::<_, Uuid>("SELECT room_id FROM games WHERE id = $1")
-        .bind(game_id)
-        .fetch_one(&mut *tx)
-        .await?;
-    let room_rated = sqlx::query_scalar::<_, bool>("SELECT rated FROM rooms WHERE id = $1")
-        .bind(room_id)
-        .fetch_one(&mut *tx)
-        .await?;
+    let game = get_game_for_update(&mut tx, game_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("game not found".to_owned()))?;
 
-    let game = sqlx::query_as::<_, Game>(
+    if game.status != "active" {
+        return Err(ApiError::BadRequest("game is already finished".to_owned()));
+    }
+
+    let room_timing = get_room_timing(&mut tx, game.room_id).await?;
+    let game = finish_game_in_transaction(
+        &mut tx,
+        game,
+        room_timing,
+        result,
+        result_reason,
+        Utc::now(),
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(game)
+}
+
+async fn get_game_for_update(
+    connection: &mut sqlx::PgConnection,
+    game_id: Uuid,
+) -> ApiResult<Option<Game>> {
+    sqlx::query_as::<_, Game>(
+        r#"
+        SELECT id, room_id, white_user_id, black_user_id, status::text, result::text,
+            result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
+            last_move_at, started_at, finished_at
+        FROM games
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(game_id)
+    .fetch_optional(&mut *connection)
+    .await
+    .map_err(ApiError::from)
+}
+
+async fn get_room_timing(
+    connection: &mut sqlx::PgConnection,
+    room_id: Uuid,
+) -> ApiResult<RoomTiming> {
+    let (rated, increment_seconds) = sqlx::query_as::<_, (bool, i32)>(
+        "SELECT rated, increment_seconds FROM rooms WHERE id = $1",
+    )
+    .bind(room_id)
+    .fetch_one(&mut *connection)
+    .await?;
+
+    Ok(RoomTiming {
+        rated,
+        increment_ms: i64::from(increment_seconds) * 1000,
+    })
+}
+
+fn clocks_after_elapsed(game: &Game, now: DateTime<Utc>) -> (i64, i64) {
+    let elapsed_ms = (now - game.last_move_at).num_milliseconds().max(0);
+    let mut white_clock_ms = game.white_clock_ms;
+    let mut black_clock_ms = game.black_clock_ms;
+
+    if game.side_to_move == "white" {
+        white_clock_ms -= elapsed_ms;
+    } else {
+        black_clock_ms -= elapsed_ms;
+    }
+
+    (white_clock_ms.max(0), black_clock_ms.max(0))
+}
+
+async fn finish_game_in_transaction(
+    connection: &mut sqlx::PgConnection,
+    game: Game,
+    room_timing: RoomTiming,
+    result: &str,
+    result_reason: &str,
+    now: DateTime<Utc>,
+) -> ApiResult<Game> {
+    let (white_clock_ms, black_clock_ms) = clocks_after_elapsed(&game, now);
+    let updated_game = sqlx::query_as::<_, Game>(
         r#"
         UPDATE games
         SET status = 'finished',
             result = $2::game_result,
             result_reason = $3,
-            finished_at = now()
+            finished_at = $4,
+            white_clock_ms = $5,
+            black_clock_ms = $6
         WHERE id = $1 AND status = 'active'
         RETURNING id, room_id, white_user_id, black_user_id, status::text, result::text,
             result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
             last_move_at, started_at, finished_at
         "#,
     )
-    .bind(game_id)
+    .bind(game.id)
     .bind(result)
     .bind(result_reason)
-    .fetch_optional(&mut *tx)
+    .bind(now)
+    .bind(white_clock_ms)
+    .bind(black_clock_ms)
+    .fetch_optional(&mut *connection)
     .await?
     .ok_or_else(|| ApiError::BadRequest("game is already finished".to_owned()))?;
 
     sqlx::query("UPDATE rooms SET status = 'finished', updated_at = now() WHERE id = $1")
-        .bind(game.room_id)
-        .execute(&mut *tx)
+        .bind(updated_game.room_id)
+        .execute(&mut *connection)
         .await?;
 
-    if room_rated {
-        update_ratings(&mut tx, game.white_user_id, game.black_user_id, result).await?;
+    if room_timing.rated {
+        update_ratings(
+            connection,
+            updated_game.white_user_id,
+            updated_game.black_user_id,
+            result,
+        )
+        .await?;
     }
+
+    Ok(updated_game)
+}
+
+async fn expire_game(state: &AppState, game_id: Uuid) -> ApiResult<Option<Game>> {
+    let mut tx = state.db.begin().await?;
+    let Some(game) = get_game_for_update(&mut tx, game_id).await? else {
+        tx.commit().await?;
+
+        return Ok(None);
+    };
+
+    if game.status != "active" {
+        tx.commit().await?;
+
+        return Ok(None);
+    }
+
+    let room_timing = get_room_timing(&mut tx, game.room_id).await?;
+    let now = Utc::now();
+    let (white_clock_ms, black_clock_ms) = clocks_after_elapsed(&game, now);
+    let moving_clock_ms = if game.side_to_move == "white" {
+        white_clock_ms
+    } else {
+        black_clock_ms
+    };
+
+    if moving_clock_ms > 0 {
+        tx.commit().await?;
+
+        return Ok(None);
+    }
+
+    let result = if game.side_to_move == "white" {
+        "black_win"
+    } else {
+        "white_win"
+    };
+    let updated_game =
+        finish_game_in_transaction(&mut tx, game, room_timing, result, "timeout", now).await?;
 
     tx.commit().await?;
 
-    Ok(game)
+    Ok(Some(updated_game))
+}
+
+async fn expire_active_games(state: &AppState) -> ApiResult<()> {
+    let game_ids = sqlx::query_scalar::<_, Uuid>("SELECT id FROM games WHERE status = 'active'")
+        .fetch_all(&state.db)
+        .await?;
+
+    for game_id in game_ids {
+        let Some(game) = expire_game(state, game_id).await? else {
+            continue;
+        };
+        let (white_player, black_player) = fetch_game_players(state, &game).await;
+
+        state.hub.broadcast_game(
+            game.id,
+            &ServerMessage::GameState {
+                game,
+                moves: serde_json::json!([]),
+                white_player,
+                black_player,
+            },
+        );
+    }
+
+    Ok(())
+}
+
+pub async fn run_clock_monitor(state: AppState) {
+    let mut ticker = interval(Duration::from_millis(CLOCK_MONITOR_INTERVAL_MS));
+
+    loop {
+        ticker.tick().await;
+
+        if let Err(error) = expire_active_games(&state).await {
+            tracing::error!(error = %error, "clock monitor failed");
+        }
+    }
 }
 
 pub async fn finish_game_by_disconnect(
@@ -616,5 +831,16 @@ mod tests {
 
         assert!(white_change > 16);
         assert_eq!(black_change, -white_change);
+    }
+
+    #[test]
+    fn subtracts_elapsed_time_only_from_the_side_to_move() {
+        let mut game = game("white", 0, "");
+        let now = Utc::now();
+        game.last_move_at = now - chrono::Duration::milliseconds(1_500);
+        game.white_clock_ms = 3_000;
+        game.black_clock_ms = 5_000;
+
+        assert_eq!(clocks_after_elapsed(&game, now), (1_500, 5_000));
     }
 }

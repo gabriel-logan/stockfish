@@ -115,6 +115,35 @@ function getPlayerForUser(
   return null;
 }
 
+function getDisplayedClockMs(
+  game: Game,
+  color: "white" | "black",
+  now: number,
+) {
+  const storedClockMs =
+    color === "white" ? game.whiteClockMs : game.blackClockMs;
+
+  if (game.status !== "active" || game.sideToMove !== color) {
+    return Math.max(0, storedClockMs);
+  }
+
+  const lastMoveAt = Date.parse(game.lastMoveAt);
+
+  if (Number.isNaN(lastMoveAt)) {
+    return Math.max(0, storedClockMs);
+  }
+
+  return Math.max(0, storedClockMs - Math.max(0, now - lastMoveAt));
+}
+
+function formatClock(clockMs: number) {
+  const totalSeconds = Math.ceil(Math.max(0, clockMs) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function getGameStatusKey(game: Game | null, userId: string | null) {
   if (!game || !userId) {
     return "online.status.ready";
@@ -214,6 +243,7 @@ export default function PlayOnline() {
   const [matchmakingOptions, setMatchmakingOptions] = useState(
     DEFAULT_MATCHMAKING_OPTIONS,
   );
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const rooms = roomsData ?? EMPTY_ROOMS;
   const joiningGame = joiningMatchmaking || joiningRoom;
 
@@ -341,6 +371,7 @@ export default function PlayOnline() {
         });
         setWhitePlayer(message.white_player);
         setBlackPlayer(message.black_player);
+        setSendingMove(false);
 
         const currentPlayer = getPlayerForUser(
           message.white_player,
@@ -487,6 +518,20 @@ export default function PlayOnline() {
       closeSocket();
     };
   }, [closeSocket]);
+
+  useEffect(() => {
+    if (!game || game.status !== "active") {
+      return;
+    }
+
+    const clockInterval = window.setInterval(() => {
+      setClockNow(Date.now());
+    }, 250);
+
+    return () => {
+      window.clearInterval(clockInterval);
+    };
+  }, [game]);
 
   function handleJoinMatchmaking(options: MatchmakingOptions) {
     setStatus("matching");
@@ -685,6 +730,13 @@ export default function PlayOnline() {
     );
   }
 
+  const whiteClock = game
+    ? formatClock(getDisplayedClockMs(game, "white", clockNow))
+    : "--:--";
+  const blackClock = game
+    ? formatClock(getDisplayedClockMs(game, "black", clockNow))
+    : "--:--";
+
   return (
     <div className="grid w-full max-w-7xl grid-cols-[minmax(0,1fr)_22rem] gap-4 max-[66rem]:grid-cols-1">
       <section className="flex min-w-0 justify-center rounded-md border border-white/8 bg-[#20241f] p-4 shadow-2xl shadow-black/20">
@@ -728,9 +780,14 @@ export default function PlayOnline() {
                     {whitePlayer?.username ?? "..."}
                   </span>
                 </div>
-                <span className="text-xs font-extrabold text-[#aaa7a0]">
-                  {whitePlayer?.rating}
-                </span>
+                <div className="text-right">
+                  <div className="text-base font-extrabold text-[#f3f1e9]">
+                    {whiteClock}
+                  </div>
+                  <div className="text-xs font-extrabold text-[#aaa7a0]">
+                    {whitePlayer?.rating}
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between rounded border border-white/6 bg-[#292d27] px-3 py-2">
@@ -740,9 +797,14 @@ export default function PlayOnline() {
                     {blackPlayer?.username ?? "..."}
                   </span>
                 </div>
-                <span className="text-xs font-extrabold text-[#aaa7a0]">
-                  {blackPlayer?.rating}
-                </span>
+                <div className="text-right">
+                  <div className="text-base font-extrabold text-[#f3f1e9]">
+                    {blackClock}
+                  </div>
+                  <div className="text-xs font-extrabold text-[#aaa7a0]">
+                    {blackPlayer?.rating}
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -91,6 +91,8 @@ async fn main() -> std::io::Result<()> {
         hub: Hub::default(),
     };
 
+    actix_web::rt::spawn(games::run_clock_monitor(state.clone()));
+
     tracing::info!(%bind_addr, "starting api-server");
 
     HttpServer::new(move || {

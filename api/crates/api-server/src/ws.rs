@@ -197,20 +197,34 @@ async fn join_game_channel(
 }
 
 async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) -> ApiResult<()> {
-    let (game, move_record) = games::play_uci_move(state, user_id, game_id, uci).await?;
-    let (white_player, black_player) = if game.status == "finished" {
-        games::fetch_game_players(state, &game).await
-    } else {
-        (None, None)
-    };
-    let message = ServerMessage::MoveAccepted {
-        game: game.clone(),
-        move_record: serde_json::json!(move_record),
-        white_player,
-        black_player,
-    };
+    let move_result = games::play_uci_move(state, user_id, game_id, uci).await?;
 
-    state.hub.broadcast_game(game.id, &message);
+    if let Some(move_record) = move_result.move_record {
+        let (white_player, black_player) = if move_result.game.status == "finished" {
+            games::fetch_game_players(state, &move_result.game).await
+        } else {
+            (None, None)
+        };
+        let message = ServerMessage::MoveAccepted {
+            game: move_result.game.clone(),
+            move_record: serde_json::json!(move_record),
+            white_player,
+            black_player,
+        };
+
+        state.hub.broadcast_game(move_result.game.id, &message);
+    } else {
+        let (white_player, black_player) =
+            games::fetch_game_players(state, &move_result.game).await;
+        let message = ServerMessage::GameState {
+            game: move_result.game,
+            moves: serde_json::json!([]),
+            white_player,
+            black_player,
+        };
+
+        state.hub.broadcast_game(game_id, &message);
+    }
 
     Ok(())
 }
