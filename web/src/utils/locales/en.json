@@ -123,6 +123,15 @@
       "decline": "Decline draw",
       "declinedByOpponent": "Your opponent declined the draw offer."
     },
+    "rematch": {
+      "title": "Rematch request",
+      "message": "{{opponent}} wants a rematch.",
+      "request": "Request rematch",
+      "sending": "Sending rematch request...",
+      "sent": "Rematch request sent",
+      "accept": "Accept rematch",
+      "declinedByOpponent": "Your opponent declined the rematch request."
+    },
     "setup": {
       "title": "Game setup",
       "description": "Choose the time control and game type before finding an opponent.",

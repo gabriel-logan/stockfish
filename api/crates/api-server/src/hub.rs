@@ -19,6 +19,7 @@ struct HubInner {
     rooms: Subscriptions,
     games: Subscriptions,
     draw_offers: HashMap<Uuid, Uuid>,
+    rematch_requests: HashMap<Uuid, Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +50,12 @@ pub enum ServerMessage<T: Serialize> {
         user_id: Uuid,
     },
     DrawOfferDeclined {
+        user_id: Uuid,
+    },
+    RematchRequested {
+        user_id: Uuid,
+    },
+    RematchDeclined {
         user_id: Uuid,
     },
     PlayerDisconnected {
@@ -125,6 +132,26 @@ impl Hub {
         inner.draw_offers.remove(&game_id);
     }
 
+    pub fn request_rematch(&self, game_id: Uuid, user_id: Uuid) -> bool {
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+        if inner.rematch_requests.contains_key(&game_id) {
+            return false;
+        }
+
+        inner.rematch_requests.insert(game_id, user_id);
+
+        true
+    }
+
+    pub fn accept_rematch(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        self.resolve_rematch_request(game_id, user_id)
+    }
+
+    pub fn decline_rematch(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        self.resolve_rematch_request(game_id, user_id)
+    }
+
     fn resolve_draw_offer(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
         let offering_user_id = *inner.draw_offers.get(&game_id)?;
@@ -136,6 +163,19 @@ impl Hub {
         inner.draw_offers.remove(&game_id);
 
         Some(offering_user_id)
+    }
+
+    fn resolve_rematch_request(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
+        let mut inner = self.inner.lock().expect("hub mutex poisoned");
+        let requesting_user_id = *inner.rematch_requests.get(&game_id)?;
+
+        if requesting_user_id == user_id {
+            return None;
+        }
+
+        inner.rematch_requests.remove(&game_id);
+
+        Some(requesting_user_id)
     }
 }
 
@@ -209,6 +249,23 @@ mod tests {
             Some(offering_user_id)
         );
         assert_eq!(hub.accept_draw_offer(game_id, responding_user_id), None);
+    }
+
+    #[test]
+    fn rematch_request_can_be_requested_and_resolved_once() {
+        let hub = Hub::default();
+        let game_id = Uuid::new_v4();
+        let requesting_user_id = Uuid::new_v4();
+        let responding_user_id = Uuid::new_v4();
+
+        assert!(hub.request_rematch(game_id, requesting_user_id));
+        assert!(!hub.request_rematch(game_id, responding_user_id));
+        assert_eq!(hub.accept_rematch(game_id, requesting_user_id), None);
+        assert_eq!(
+            hub.decline_rematch(game_id, responding_user_id),
+            Some(requesting_user_id)
+        );
+        assert_eq!(hub.accept_rematch(game_id, responding_user_id), None);
     }
 
     #[test]

@@ -140,6 +140,92 @@ pub async fn start_game_if_ready(state: &AppState, room: &Room) -> ApiResult<Opt
     Ok(Some(game))
 }
 
+pub async fn create_rematch(
+    state: &AppState,
+    previous_game_id: Uuid,
+    requesting_user_id: Uuid,
+    accepting_user_id: Uuid,
+) -> ApiResult<Game> {
+    let mut tx = state.db.begin().await?;
+
+    let previous_game = get_game_for_update(&mut tx, previous_game_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("game not found".to_owned()))?;
+
+    if previous_game.status != "finished" {
+        return Err(ApiError::BadRequest("game is still active".to_owned()));
+    }
+
+    ensure_player(&previous_game, requesting_user_id)?;
+    ensure_player(&previous_game, accepting_user_id)?;
+
+    if requesting_user_id == accepting_user_id {
+        return Err(ApiError::BadRequest(
+            "rematch requires two players".to_owned(),
+        ));
+    }
+
+    let (owner_id, visibility, rated, time_control_seconds, increment_seconds) =
+        sqlx::query_as::<_, (Uuid, String, bool, i32, i32)>(
+            r#"
+            SELECT owner_id, visibility::text, rated, time_control_seconds, increment_seconds
+            FROM rooms
+            WHERE id = $1
+            "#,
+        )
+        .bind(previous_game.room_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+    let new_room_id = Uuid::new_v4();
+    let new_game_id = Uuid::new_v4();
+    let clock_ms = i64::from(time_control_seconds) * 1000;
+
+    sqlx::query(
+        r#"
+        INSERT INTO rooms (
+            id, owner_id, status, visibility, rated, time_control_seconds, increment_seconds,
+            white_user_id, black_user_id
+        )
+        VALUES ($1, $2, 'playing', $3::room_visibility, $4, $5, $6, $7, $8)
+        "#,
+    )
+    .bind(new_room_id)
+    .bind(owner_id)
+    .bind(visibility)
+    .bind(rated)
+    .bind(time_control_seconds)
+    .bind(increment_seconds)
+    .bind(previous_game.black_user_id)
+    .bind(previous_game.white_user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    let new_game = sqlx::query_as::<_, Game>(
+        r#"
+        INSERT INTO games (
+            id, room_id, white_user_id, black_user_id, fen, white_clock_ms, black_clock_ms
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $6)
+        RETURNING id, room_id, white_user_id, black_user_id, status::text, result::text,
+            result_reason, fen, pgn, side_to_move, move_count, white_clock_ms, black_clock_ms,
+            last_move_at, started_at, finished_at
+        "#,
+    )
+    .bind(new_game_id)
+    .bind(new_room_id)
+    .bind(previous_game.black_user_id)
+    .bind(previous_game.white_user_id)
+    .bind(STARTING_FEN)
+    .bind(clock_ms)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(new_game)
+}
+
 pub async fn play_uci_move(
     state: &AppState,
     user_id: Uuid,

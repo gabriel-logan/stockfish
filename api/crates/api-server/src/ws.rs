@@ -22,6 +22,9 @@ enum ClientMessage {
     OfferDraw { game_id: Uuid },
     AcceptDraw { game_id: Uuid },
     DeclineDraw { game_id: Uuid },
+    RequestRematch { game_id: Uuid },
+    AcceptRematch { game_id: Uuid },
+    DeclineRematch { game_id: Uuid },
     Ping,
 }
 
@@ -102,6 +105,15 @@ async fn handle_binary(
         Ok(ClientMessage::OfferDraw { game_id }) => offer_draw(state, user_id, game_id).await,
         Ok(ClientMessage::AcceptDraw { game_id }) => accept_draw(state, user_id, game_id).await,
         Ok(ClientMessage::DeclineDraw { game_id }) => decline_draw(state, user_id, game_id).await,
+        Ok(ClientMessage::RequestRematch { game_id }) => {
+            request_rematch(state, user_id, game_id).await
+        }
+        Ok(ClientMessage::AcceptRematch { game_id }) => {
+            accept_rematch(state, user_id, game_id).await
+        }
+        Ok(ClientMessage::DeclineRematch { game_id }) => {
+            decline_rematch(state, user_id, game_id).await
+        }
         Ok(ClientMessage::Ping) => {
             send_json(session, &ServerMessage::<serde_json::Value>::Pong).await;
             Ok(())
@@ -185,6 +197,73 @@ async fn decline_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResu
     state.hub.broadcast_game(
         game_id,
         &ServerMessage::<serde_json::Value>::DrawOfferDeclined { user_id },
+    );
+
+    Ok(())
+}
+
+async fn request_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "finished" {
+        return Err(ApiError::BadRequest("game is still active".to_owned()));
+    }
+
+    if !state.hub.request_rematch(game_id, user_id) {
+        return Err(ApiError::BadRequest(
+            "a rematch request is already pending".to_owned(),
+        ));
+    }
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::<serde_json::Value>::RematchRequested { user_id },
+    );
+
+    Ok(())
+}
+
+async fn accept_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "finished" {
+        return Err(ApiError::BadRequest("game is still active".to_owned()));
+    }
+
+    let requesting_user_id = state
+        .hub
+        .accept_rematch(game_id, user_id)
+        .ok_or_else(|| ApiError::BadRequest("no rematch request is pending".to_owned()))?;
+    let new_game =
+        games::create_rematch(state, game_id, requesting_user_id, user_id).await?;
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::GameStarted {
+            game: new_game.clone(),
+        },
+    );
+
+    Ok(())
+}
+
+async fn decline_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let game = games::get_game_by_id(state, game_id).await?;
+    games::ensure_player(&game, user_id)?;
+
+    if game.status != "finished" {
+        return Err(ApiError::BadRequest("game is still active".to_owned()));
+    }
+
+    if state.hub.decline_rematch(game_id, user_id).is_none() {
+        return Err(ApiError::BadRequest("no rematch request is pending".to_owned()));
+    }
+
+    state.hub.broadcast_game(
+        game_id,
+        &ServerMessage::<serde_json::Value>::RematchDeclined { user_id },
     );
 
     Ok(())

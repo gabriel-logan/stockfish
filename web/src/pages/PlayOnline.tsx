@@ -8,6 +8,7 @@ import {
   FaFlag,
   FaHandshake,
   FaPlay,
+  FaRedo,
   FaSave,
   FaSyncAlt,
   FaWifi,
@@ -17,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Chess, type Square } from "chess.js";
 
 import Board from "../components/Board";
+import ConfirmModal from "../components/ConfirmModal";
 import DrawOfferModal from "../components/DrawOfferModal";
 import MoveList from "../components/MoveList";
 import OnlineGameSetupModal from "../components/OnlineGameSetupModal";
@@ -282,6 +284,9 @@ export default function PlayOnline() {
   const [drawOfferSent, setDrawOfferSent] = useState(false);
   const [drawOfferReceived, setDrawOfferReceived] = useState(false);
   const [drawOfferActionPending, setDrawOfferActionPending] = useState(false);
+  const [rematchRequestSent, setRematchRequestSent] = useState(false);
+  const [rematchRequestReceived, setRematchRequestReceived] = useState(false);
+  const [rematchActionPending, setRematchActionPending] = useState(false);
   const [matchmakingOptions, setMatchmakingOptions] = useState(
     DEFAULT_MATCHMAKING_OPTIONS,
   );
@@ -393,6 +398,9 @@ export default function PlayOnline() {
         setDrawOfferSent(false);
         setDrawOfferReceived(false);
         setDrawOfferActionPending(false);
+        setRematchRequestSent(false);
+        setRematchRequestReceived(false);
+        setRematchActionPending(false);
         finishedSoundGameIdRef.current = null;
         socketRef.current?.send(
           encodeBinaryMessage({ type: "join_game", game_id: message.game.id }),
@@ -573,6 +581,34 @@ export default function PlayOnline() {
         return;
       }
 
+      if (message.type === "rematch_requested") {
+        setRematchActionPending(false);
+
+        if (message.user_id === user?.id) {
+          setRematchRequestSent(true);
+        } else {
+          setRematchRequestReceived(true);
+
+          if (soundEnabled) {
+            playNotificationSound();
+          }
+        }
+
+        return;
+      }
+
+      if (message.type === "rematch_declined") {
+        setRematchRequestSent(false);
+        setRematchRequestReceived(false);
+        setRematchActionPending(false);
+
+        if (message.user_id !== user?.id) {
+          toast.info(t("online.rematch.declinedByOpponent"));
+        }
+
+        return;
+      }
+
       if (message.type === "player_disconnected") {
         if (soundEnabled) {
           playNotificationSound();
@@ -594,15 +630,28 @@ export default function PlayOnline() {
 
         setSendingMove(false);
         setDrawOfferActionPending(false);
+        setRematchActionPending(false);
 
         if (drawOfferActionPending) {
           setDrawOfferSent(false);
         }
 
+        if (rematchActionPending) {
+          setRematchRequestSent(false);
+        }
+
         toast.error(message.message);
       }
     },
-    [drawOfferActionPending, queryClient, soundEnabled, t, updateRating, user],
+    [
+      drawOfferActionPending,
+      queryClient,
+      rematchActionPending,
+      soundEnabled,
+      t,
+      updateRating,
+      user,
+    ],
   );
 
   const connectSocket = useCallback(
@@ -648,6 +697,9 @@ export default function PlayOnline() {
           setDrawOfferSent(false);
           setDrawOfferReceived(false);
           setDrawOfferActionPending(false);
+          setRematchRequestSent(false);
+          setRematchRequestReceived(false);
+          setRematchActionPending(false);
           setStatus("playing");
           connectSocket({ type: "join_game", game_id: gameId });
         });
@@ -820,6 +872,65 @@ export default function PlayOnline() {
     socketRef.current.send(
       encodeBinaryMessage({
         type: "decline_draw",
+        game_id: game.id,
+      }),
+    );
+  }
+
+  function handleRequestRematch() {
+    if (
+      !game ||
+      game.status !== "finished" ||
+      !socketRef.current ||
+      rematchRequestSent ||
+      rematchRequestReceived ||
+      rematchActionPending
+    ) {
+      return;
+    }
+
+    setRematchActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "request_rematch",
+        game_id: game.id,
+      }),
+    );
+  }
+
+  function handleAcceptRematch() {
+    if (
+      !game ||
+      game.status !== "finished" ||
+      !socketRef.current ||
+      rematchActionPending
+    ) {
+      return;
+    }
+
+    setRematchActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "accept_rematch",
+        game_id: game.id,
+      }),
+    );
+  }
+
+  function handleDeclineRematch() {
+    if (
+      !game ||
+      game.status !== "finished" ||
+      !socketRef.current ||
+      rematchActionPending
+    ) {
+      return;
+    }
+
+    setRematchActionPending(true);
+    socketRef.current.send(
+      encodeBinaryMessage({
+        type: "decline_rematch",
         game_id: game.id,
       }),
     );
@@ -1120,6 +1231,24 @@ export default function PlayOnline() {
               <>
                 <button
                   type="button"
+                  className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#b7d58a66] bg-[#30432a] text-sm font-extrabold text-[#d9edb5] transition-colors hover:bg-[#628d3f] hover:text-white disabled:opacity-60"
+                  onClick={handleRequestRematch}
+                  disabled={
+                    rematchRequestSent ||
+                    rematchRequestReceived ||
+                    rematchActionPending
+                  }
+                >
+                  <FaRedo aria-hidden="true" />
+                  {rematchActionPending
+                    ? t("online.rematch.sending")
+                    : rematchRequestSent
+                      ? t("online.rematch.sent")
+                      : t("online.rematch.request")}
+                </button>
+
+                <button
+                  type="button"
                   className="flex min-h-10 items-center justify-center gap-2 rounded border border-white/8 bg-[#3b3934] text-sm font-extrabold text-[#f0ece3] transition-colors hover:bg-[#48453e]"
                   onClick={handleCopyPgn}
                 >
@@ -1223,6 +1352,16 @@ export default function PlayOnline() {
         actionDisabled={drawOfferActionPending}
         onAccept={handleAcceptDraw}
         onDecline={handleDeclineDraw}
+      />
+
+      <ConfirmModal
+        open={rematchRequestReceived && game?.status === "finished"}
+        title={t("online.rematch.title")}
+        message={t("online.rematch.message", { opponent: opponentName })}
+        confirmLabel={t("online.rematch.accept")}
+        confirmDisabled={rematchActionPending}
+        onConfirm={handleAcceptRematch}
+        onCancel={handleDeclineRematch}
       />
     </div>
   );

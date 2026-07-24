@@ -129,6 +129,8 @@ export type ServerMessage =
     }
   | { type: "draw_offered"; user_id: string }
   | { type: "draw_offer_declined"; user_id: string }
+  | { type: "rematch_requested"; user_id: string }
+  | { type: "rematch_declined"; user_id: string }
   | { type: "player_disconnected"; user_id: string }
   | { type: "error"; message: string }
   | { type: "pong" };
