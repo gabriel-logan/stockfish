@@ -53,6 +53,7 @@ export interface MoveRecord {
   uci: string;
   san: string;
   fenAfter: string;
+  clockMs?: number | null;
   createdAt: string;
 }
 

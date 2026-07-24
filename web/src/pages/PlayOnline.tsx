@@ -47,7 +47,7 @@ import {
   encodeBinaryMessage,
 } from "../utils/binaryMessage";
 import { getOpeningName } from "../utils/openingNames";
-import { formatPgnDate } from "../utils/pgn";
+import { formatPgnClock, formatPgnDate } from "../utils/pgn";
 import {
   playErrorSound,
   playMoveRecordSound,
@@ -100,6 +100,7 @@ function getMoveEntries(moves: MoveRecord[]): MoveEntry[] {
       from: move.uci.slice(0, 2),
       to: move.uci.slice(2, 4),
       uci: move.uci,
+      clock: move.clockMs == null ? undefined : formatPgnClock(move.clockMs),
     };
   });
 }
@@ -701,7 +702,11 @@ export default function PlayOnline() {
     const pgnGame = new Chess();
 
     for (const move of moves) {
-      pgnGame.move(move.uci);
+      const appliedMove = pgnGame.move(move.uci);
+
+      if (appliedMove && move.clockMs != null) {
+        pgnGame.setComment(`[%clk ${formatPgnClock(move.clockMs)}]`);
+      }
     }
 
     const result = getPgnResult(game.result);

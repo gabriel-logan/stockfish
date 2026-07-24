@@ -63,6 +63,7 @@ CREATE TABLE moves (
     uci text NOT NULL,
     san text NOT NULL,
     fen_after text NOT NULL,
+    clock_ms bigint,
     created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (game_id, move_number)
 );

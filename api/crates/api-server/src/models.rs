@@ -60,6 +60,7 @@ pub struct MoveRecord {
     pub uci: String,
     pub san: String,
     pub fen_after: String,
+    pub clock_ms: Option<i64>,
     pub created_at: DateTime<Utc>,
 }
 

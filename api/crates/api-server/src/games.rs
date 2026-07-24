@@ -204,7 +204,6 @@ pub async fn play_uci_move(
 
     let validated = validate_move(&game.fen, uci)?;
     let move_number = game.move_count + 1;
-    let pgn = append_pgn(&game, &validated.san);
     let status = if validated.result.is_some() {
         "finished"
     } else {
@@ -225,6 +224,12 @@ pub async fn play_uci_move(
     } else {
         black_clock_ms
     };
+    let moving_clock_ms = if game.side_to_move == "white" {
+        white_clock_ms
+    } else {
+        black_clock_ms
+    };
+    let pgn = append_pgn(&game, &validated.san, moving_clock_ms);
     let finished_at = validated.result.as_ref().map(|_| now);
 
     let updated_game = sqlx::query_as::<_, Game>(
@@ -264,9 +269,9 @@ pub async fn play_uci_move(
 
     let move_record = sqlx::query_as::<_, MoveRecord>(
         r#"
-        INSERT INTO moves (id, game_id, move_number, user_id, uci, san, fen_after)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, game_id, move_number, user_id, uci, san, fen_after, created_at
+        INSERT INTO moves (id, game_id, move_number, user_id, uci, san, fen_after, clock_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, game_id, move_number, user_id, uci, san, fen_after, clock_ms, created_at
         "#,
     )
     .bind(Uuid::new_v4())
@@ -276,6 +281,7 @@ pub async fn play_uci_move(
     .bind(uci)
     .bind(&validated.san)
     .bind(&validated.fen_after)
+    .bind(moving_clock_ms)
     .fetch_one(&mut *tx)
     .await?;
 
@@ -329,7 +335,7 @@ pub async fn get_game_by_id(state: &AppState, game_id: Uuid) -> ApiResult<Game> 
 pub async fn list_moves(state: &AppState, game_id: Uuid) -> ApiResult<Vec<MoveRecord>> {
     sqlx::query_as::<_, MoveRecord>(
         r#"
-        SELECT id, game_id, move_number, user_id, uci, san, fen_after, created_at
+        SELECT id, game_id, move_number, user_id, uci, san, fen_after, clock_ms, created_at
         FROM moves
         WHERE game_id = $1
         ORDER BY move_number ASC
@@ -710,8 +716,18 @@ fn result_from_outcome(outcome: Outcome) -> (Option<String>, String) {
     (Some(result.to_owned()), "checkmate".to_owned())
 }
 
-fn append_pgn(game: &Game, san: &str) -> String {
+fn format_pgn_clock(clock_ms: i64) -> String {
+    let total_seconds = (clock_ms.max(0) + 999) / 1000;
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    format!("{hours}:{minutes:02}:{seconds:02}")
+}
+
+fn append_pgn(game: &Game, san: &str, clock_ms: i64) -> String {
     let mut pgn = game.pgn.clone();
+    let timed_san = format!("{san} {{[%clk {}]}}", format_pgn_clock(clock_ms));
 
     if game.side_to_move == "white" {
         if !pgn.is_empty() {
@@ -719,10 +735,10 @@ fn append_pgn(game: &Game, san: &str) -> String {
         }
 
         let fullmove = (game.move_count / 2) + 1;
-        pgn.push_str(&format!("{fullmove}. {san}"));
+        pgn.push_str(&format!("{fullmove}. {timed_san}"));
     } else {
         pgn.push(' ');
-        pgn.push_str(san);
+        pgn.push_str(&timed_san);
     }
 
     pgn
@@ -798,12 +814,28 @@ mod tests {
 
     #[test]
     fn appends_white_and_black_moves_to_pgn() {
-        assert_eq!(append_pgn(&game("white", 0, ""), "e4"), "1. e4");
-        assert_eq!(append_pgn(&game("black", 1, "1. e4"), "e5"), "1. e4 e5");
         assert_eq!(
-            append_pgn(&game("white", 2, "1. e4 e5"), "Nf3"),
-            "1. e4 e5 2. Nf3"
+            append_pgn(&game("white", 0, ""), "e4", 599_000),
+            "1. e4 {[%clk 0:09:59]}"
         );
+        assert_eq!(
+            append_pgn(&game("black", 1, "1. e4 {[%clk 0:09:59]}"), "e5", 598_000),
+            "1. e4 {[%clk 0:09:59]} e5 {[%clk 0:09:58]}"
+        );
+        assert_eq!(
+            append_pgn(
+                &game("white", 2, "1. e4 {[%clk 0:09:59]} e5 {[%clk 0:09:58]}"),
+                "Nf3",
+                597_000
+            ),
+            "1. e4 {[%clk 0:09:59]} e5 {[%clk 0:09:58]} 2. Nf3 {[%clk 0:09:57]}"
+        );
+    }
+
+    #[test]
+    fn formats_pgn_clock_with_hours_minutes_and_seconds() {
+        assert_eq!(format_pgn_clock(3_723_001), "1:02:04");
+        assert_eq!(format_pgn_clock(0), "0:00:00");
     }
 
     #[test]
