@@ -243,6 +243,7 @@ export default function PlayOnline() {
   const [matchmakingOptions, setMatchmakingOptions] = useState(
     DEFAULT_MATCHMAKING_OPTIONS,
   );
+  const finishedSoundGameIdRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const rooms = roomsData ?? EMPTY_ROOMS;
   const joiningGame = joiningMatchmaking || joiningRoom;
@@ -334,6 +335,7 @@ export default function PlayOnline() {
         setGame(message.game);
         setStatus("playing");
         setSavedGameId(null);
+        finishedSoundGameIdRef.current = null;
         socketRef.current?.send(
           encodeBinaryMessage({ type: "join_game", game_id: message.game.id }),
         );
@@ -357,6 +359,15 @@ export default function PlayOnline() {
       }
 
       if (message.type === "game_state") {
+        if (
+          message.game.status === "finished" &&
+          soundEnabled &&
+          finishedSoundGameIdRef.current !== message.game.id
+        ) {
+          playNotificationSound();
+          finishedSoundGameIdRef.current = message.game.id;
+        }
+
         queryClient.setQueryData<GameResponse>(["games", message.game.id], {
           game: message.game,
           moves: message.moves,
@@ -412,6 +423,10 @@ export default function PlayOnline() {
           );
         }
 
+        if (message.game.status === "finished") {
+          finishedSoundGameIdRef.current = message.game.id;
+        }
+
         setGame(message.game);
         if (message.white_player) {
           setWhitePlayer(message.white_player);
@@ -448,6 +463,10 @@ export default function PlayOnline() {
       }
 
       if (message.type === "player_disconnected") {
+        if (soundEnabled) {
+          playNotificationSound();
+        }
+
         toast.error(t("online.opponentDisconnected"));
         setGame((prev) => (prev ? { ...prev, status: "finished" } : prev));
         setStatus("finished");
@@ -633,6 +652,11 @@ export default function PlayOnline() {
       onSuccess: (nextGame) => {
         setGame(nextGame);
         setStatus("finished");
+
+        if (soundEnabled && finishedSoundGameIdRef.current !== nextGame.id) {
+          playNotificationSound();
+          finishedSoundGameIdRef.current = nextGame.id;
+        }
       },
       onError: (error) => {
         toast.error(getApiErrorMessage(error));

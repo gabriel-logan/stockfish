@@ -55,7 +55,7 @@ import {
   moveEditedPieceInGame,
   placeEditedPiece,
 } from "../utils/playBoard";
-import { playErrorSound, playMoveResultSound } from "../utils/sounds";
+import { playMoveResultSound, playNotificationSound } from "../utils/sounds";
 import Board from "./Board";
 import EvaluationBar from "./EvaluationBar";
 import MoveList from "./MoveList";
@@ -296,7 +296,7 @@ export default function PlayBoard({ freePlay = false }: PlayBoardProps) {
         setIsGameOver(true);
 
         if (soundEnabledRef.current) {
-          playErrorSound();
+          playNotificationSound();
         }
 
         return;

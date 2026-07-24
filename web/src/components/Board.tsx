@@ -87,6 +87,26 @@ export default function Board({
 
   const board = game.board();
 
+  let checkedKingSquare: Square | null = null;
+
+  try {
+    if (game.isCheck()) {
+      const checkedKingColor = game.turn();
+
+      for (let row = 0; row < board.length; row += 1) {
+        for (let col = 0; col < board[row].length; col += 1) {
+          const piece = board[row][col];
+
+          if (piece?.type === "k" && piece.color === checkedKingColor) {
+            checkedKingSquare = `${FILES[col]}${RANKS[row]}` as Square;
+          }
+        }
+      }
+    }
+  } catch {
+    checkedKingSquare = null;
+  }
+
   const displayRanks = getDisplayRanks(orientation);
 
   const displayFiles = getDisplayFiles(orientation);
@@ -450,6 +470,7 @@ export default function Board({
   function getSquareClass(row: number, col: number, square: Square): string {
     const isLight = (row + col) % 2 === 0;
     const isSelected = square === selectedSquare;
+    const isCheckSquare = square === checkedKingSquare;
     const isLastMoveSquare =
       lastMove !== null && (lastMove.from === square || lastMove.to === square);
 
@@ -457,6 +478,10 @@ export default function Board({
 
     if (interactive) {
       className = `${className} cursor-pointer`;
+    }
+
+    if (isCheckSquare) {
+      return `${className} bg-[#ef4444]/55 shadow-[inset_0_0_0_0.18rem_rgb(127_29_29_/_65%)]`;
     }
 
     if (isSelected) {

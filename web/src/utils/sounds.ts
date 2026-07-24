@@ -30,7 +30,7 @@ export function playErrorSound(): void {
 
 export function playMoveResultSound(move: Move, game: Chess): void {
   if (game.isGameOver()) {
-    playErrorSound();
+    playNotificationSound();
 
     return;
   }
@@ -58,7 +58,7 @@ export function playMoveResultSound(move: Move, game: Chess): void {
 
 export function playMoveRecordSound(san: string, gameOver: boolean): void {
   if (gameOver) {
-    playErrorSound();
+    playNotificationSound();
 
     return;
   }
