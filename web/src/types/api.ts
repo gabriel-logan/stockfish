@@ -101,6 +101,7 @@ export interface JoinRoomResponse {
 export interface GameResponse {
   game: Game;
   moves: MoveRecord[];
+  serverTime: string;
 }
 
 export interface PlayerInfo {
@@ -112,13 +113,14 @@ export interface PlayerInfo {
 export type ServerMessage =
   | { type: "ready"; user_id: string }
   | { type: "room_updated"; room: Room }
-  | { type: "game_started"; game: Game }
+  | { type: "game_started"; game: Game; server_time: string }
   | {
       type: "game_state";
       game: Game;
       moves: MoveRecord[];
       white_player: PlayerInfo | null;
       black_player: PlayerInfo | null;
+      server_time: string;
     }
   | {
       type: "move_accepted";
@@ -126,6 +128,7 @@ export type ServerMessage =
       move_record: MoveRecord;
       white_player: PlayerInfo | null;
       black_player: PlayerInfo | null;
+      server_time: string;
     }
   | { type: "draw_offered"; user_id: string }
   | { type: "draw_offer_declined"; user_id: string }

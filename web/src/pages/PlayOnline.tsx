@@ -50,6 +50,13 @@ import {
   decodeBinaryMessage,
   encodeBinaryMessage,
 } from "../utils/binaryMessage";
+import type { ClockAnchor } from "../utils/onlineClock";
+import {
+  createClockAnchor,
+  getDisplayedClockMs,
+  getMonotonicTime,
+  isNewerGameSnapshot,
+} from "../utils/onlineClock";
 import { getOpeningName } from "../utils/openingNames";
 import { formatPgnClock, formatPgnDate } from "../utils/pgn";
 import { getGameTermination } from "../utils/playBoard";
@@ -124,27 +131,6 @@ function getPlayerForUser(
   }
 
   return null;
-}
-
-function getDisplayedClockMs(
-  game: Game,
-  color: "white" | "black",
-  now: number,
-) {
-  const storedClockMs =
-    color === "white" ? game.whiteClockMs : game.blackClockMs;
-
-  if (game.status !== "active" || game.sideToMove !== color) {
-    return Math.max(0, storedClockMs);
-  }
-
-  const lastMoveAt = Date.parse(game.lastMoveAt);
-
-  if (Number.isNaN(lastMoveAt)) {
-    return Math.max(0, storedClockMs);
-  }
-
-  return Math.max(0, storedClockMs - Math.max(0, now - lastMoveAt));
 }
 
 function formatClock(clockMs: number) {
@@ -294,7 +280,9 @@ export default function PlayOnline() {
     DEFAULT_GAME_TIME_CONTROL,
   );
   const finishedSoundGameIdRef = useRef<string | null>(null);
-  const [clockNow, setClockNow] = useState(() => Date.now());
+  const latestGameRef = useRef<Game | null>(null);
+  const [clockAnchor, setClockAnchor] = useState<ClockAnchor | null>(null);
+  const [clockNow, setClockNow] = useState(() => getMonotonicTime());
   const rooms = roomsData ?? EMPTY_ROOMS;
   const joiningGame = joiningMatchmaking || joiningRoom;
 
@@ -373,6 +361,23 @@ export default function PlayOnline() {
     socketRef.current = null;
   }, []);
 
+  const acceptGameSnapshot = useCallback(
+    (nextGame: Game, serverTime?: string) => {
+      if (!isNewerGameSnapshot(latestGameRef.current, nextGame)) {
+        return false;
+      }
+
+      latestGameRef.current = nextGame;
+      setClockAnchor(
+        createClockAnchor(nextGame, serverTime, getMonotonicTime()),
+      );
+      setGame(nextGame);
+
+      return true;
+    },
+    [],
+  );
+
   const handleSocketMessage = useCallback(
     (event: MessageEvent<ArrayBuffer>) => {
       let message: ServerMessage;
@@ -391,8 +396,9 @@ export default function PlayOnline() {
         queryClient.setQueryData<GameResponse>(["games", message.game.id], {
           game: message.game,
           moves: [],
+          serverTime: message.server_time,
         });
-        setGame(message.game);
+        acceptGameSnapshot(message.game, message.server_time);
         setStatus("playing");
         setSavedGameId(null);
         setDrawOfferSent(false);
@@ -425,6 +431,20 @@ export default function PlayOnline() {
       }
 
       if (message.type === "game_state") {
+        const snapshotAccepted = acceptGameSnapshot(
+          message.game,
+          message.server_time,
+        );
+        const currentGame = latestGameRef.current;
+        const sameGamePosition =
+          currentGame?.id === message.game.id &&
+          currentGame.moveCount === message.game.moveCount &&
+          currentGame.status === message.game.status;
+
+        if (!snapshotAccepted && !sameGamePosition) {
+          return;
+        }
+
         if (
           message.game.status === "finished" &&
           soundEnabled &&
@@ -435,10 +455,10 @@ export default function PlayOnline() {
         }
 
         queryClient.setQueryData<GameResponse>(["games", message.game.id], {
-          game: message.game,
+          game: currentGame ?? message.game,
           moves: message.moves,
+          serverTime: message.server_time,
         });
-        setGame(message.game);
         setMoves((currentMoves) => {
           if (message.moves.length > 0 || message.game.moveCount === 0) {
             return message.moves;
@@ -472,6 +492,10 @@ export default function PlayOnline() {
       }
 
       if (message.type === "move_accepted") {
+        if (!acceptGameSnapshot(message.game, message.server_time)) {
+          return;
+        }
+
         queryClient.setQueryData<GameResponse>(
           ["games", message.game.id],
           (gameResponse) => {
@@ -482,6 +506,7 @@ export default function PlayOnline() {
 
             return {
               game: message.game,
+              serverTime: message.server_time,
               moves: moveExists
                 ? currentMoves
                 : [...currentMoves, message.move_record],
@@ -511,7 +536,6 @@ export default function PlayOnline() {
           finishedSoundGameIdRef.current = message.game.id;
         }
 
-        setGame(message.game);
         if (message.white_player) {
           setWhitePlayer(message.white_player);
         }
@@ -651,6 +675,7 @@ export default function PlayOnline() {
       t,
       updateRating,
       user,
+      acceptGameSnapshot,
     ],
   );
 
@@ -692,7 +717,7 @@ export default function PlayOnline() {
           },
         })
         .then((gameResponse) => {
-          setGame(gameResponse.game);
+          acceptGameSnapshot(gameResponse.game, gameResponse.serverTime);
           setMoves(gameResponse.moves);
           setDrawOfferSent(false);
           setDrawOfferReceived(false);
@@ -704,7 +729,7 @@ export default function PlayOnline() {
           connectSocket({ type: "join_game", game_id: gameId });
         });
     },
-    [connectSocket, queryClient],
+    [acceptGameSnapshot, connectSocket, queryClient],
   );
 
   useEffect(() => {
@@ -719,7 +744,7 @@ export default function PlayOnline() {
     }
 
     const clockInterval = window.setInterval(() => {
-      setClockNow(Date.now());
+      setClockNow(getMonotonicTime());
     }, 250);
 
     return () => {
@@ -943,6 +968,10 @@ export default function PlayOnline() {
 
     resignGame(game.id, {
       onSuccess: (nextGame) => {
+        latestGameRef.current = nextGame;
+        setClockAnchor(
+          createClockAnchor(nextGame, undefined, getMonotonicTime()),
+        );
         setGame(nextGame);
         setStatus("finished");
 
@@ -1058,10 +1087,10 @@ export default function PlayOnline() {
   }
 
   const whiteClock = game
-    ? formatClock(getDisplayedClockMs(game, "white", clockNow))
+    ? formatClock(getDisplayedClockMs(game, "white", clockNow, clockAnchor))
     : "--:--";
   const blackClock = game
-    ? formatClock(getDisplayedClockMs(game, "black", clockNow))
+    ? formatClock(getDisplayedClockMs(game, "black", clockNow, clockAnchor))
     : "--:--";
 
   return (

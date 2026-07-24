@@ -39,7 +39,8 @@ pub async fn get_game(
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "game": game,
-        "moves": moves
+        "moves": moves,
+        "serverTime": Utc::now()
     })))
 }
 
@@ -48,6 +49,7 @@ pub async fn resign_game(
     user: AuthUser,
     game_id: web::Path<Uuid>,
 ) -> ApiResult<web::Json<Game>> {
+    let _game_lock = state.hub.lock_game(*game_id).await;
     let game = get_game_by_id(&state, *game_id).await?;
     ensure_player(&game, user.id)?;
 
@@ -72,6 +74,7 @@ pub async fn resign_game(
             moves: serde_json::json!([]),
             white_player,
             black_player,
+            server_time: Utc::now(),
         },
     );
 
@@ -668,6 +671,8 @@ async fn expire_active_games(state: &AppState) -> ApiResult<()> {
         .await?;
 
     for game_id in game_ids {
+        let _game_lock = state.hub.lock_game(game_id).await;
+
         let Some(game) = expire_game(state, game_id).await? else {
             continue;
         };
@@ -680,6 +685,7 @@ async fn expire_active_games(state: &AppState) -> ApiResult<()> {
                 moves: serde_json::json!([]),
                 white_player,
                 black_player,
+                server_time: Utc::now(),
             },
         );
     }

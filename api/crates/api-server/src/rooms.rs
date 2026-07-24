@@ -1,4 +1,5 @@
 use actix_web::{HttpResponse, web};
+use chrono::Utc;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -172,7 +173,10 @@ async fn join_room_and_start_game(
         .broadcast_room(room.id, &ServerMessage::RoomUpdated { room: room.clone() });
 
     if let Some(game) = &game {
-        let message = ServerMessage::GameStarted { game: game.clone() };
+        let message = ServerMessage::GameStarted {
+            game: game.clone(),
+            server_time: Utc::now(),
+        };
 
         state.hub.broadcast_room(room.id, &message);
         state.hub.broadcast_game(game.id, &message);

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, mpsc};
 use uuid::Uuid;
 
 use crate::models::PlayerInfo;
@@ -18,6 +19,7 @@ pub struct Hub {
 struct HubInner {
     rooms: Subscriptions,
     games: Subscriptions,
+    game_locks: HashMap<Uuid, Arc<AsyncMutex<()>>>,
     draw_offers: HashMap<Uuid, Uuid>,
     rematch_requests: HashMap<Uuid, Uuid>,
 }
@@ -33,18 +35,21 @@ pub enum ServerMessage<T: Serialize> {
     },
     GameStarted {
         game: T,
+        server_time: DateTime<Utc>,
     },
     GameState {
         game: T,
         moves: serde_json::Value,
         white_player: Option<PlayerInfo>,
         black_player: Option<PlayerInfo>,
+        server_time: DateTime<Utc>,
     },
     MoveAccepted {
         game: T,
         move_record: serde_json::Value,
         white_player: Option<PlayerInfo>,
         black_player: Option<PlayerInfo>,
+        server_time: DateTime<Utc>,
     },
     DrawOffered {
         user_id: Uuid,
@@ -84,6 +89,20 @@ impl Hub {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
 
         subscribe(&mut inner.games, game_id)
+    }
+
+    pub async fn lock_game(&self, game_id: Uuid) -> OwnedMutexGuard<()> {
+        let lock = {
+            let mut inner = self.inner.lock().expect("hub mutex poisoned");
+
+            inner
+                .game_locks
+                .entry(game_id)
+                .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+                .clone()
+        };
+
+        lock.lock_owned().await
     }
 
     pub fn broadcast_room<T: Serialize>(&self, room_id: Uuid, message: &ServerMessage<T>) {

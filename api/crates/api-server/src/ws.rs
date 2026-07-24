@@ -1,6 +1,7 @@
 use actix_web::web::Bytes;
 use actix_web::{HttpRequest, HttpResponse, web};
 use actix_ws::Message;
+use chrono::Utc;
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -155,6 +156,7 @@ async fn offer_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult
 }
 
 async fn accept_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let _game_lock = state.hub.lock_game(game_id).await;
     let game = games::get_game_by_id(state, game_id).await?;
     games::ensure_player(&game, user_id)?;
 
@@ -176,6 +178,7 @@ async fn accept_draw(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResul
             moves: serde_json::json!([]),
             white_player,
             black_player,
+            server_time: Utc::now(),
         },
     );
 
@@ -225,6 +228,7 @@ async fn request_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiR
 }
 
 async fn accept_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiResult<()> {
+    let _game_lock = state.hub.lock_game(game_id).await;
     let game = games::get_game_by_id(state, game_id).await?;
     games::ensure_player(&game, user_id)?;
 
@@ -242,6 +246,7 @@ async fn accept_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiRe
         game_id,
         &ServerMessage::GameStarted {
             game: new_game.clone(),
+            server_time: Utc::now(),
         },
     );
 
@@ -271,6 +276,8 @@ async fn decline_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiR
 }
 
 async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
+    let _game_lock = state.hub.lock_game(game_id).await;
+
     match games::finish_game_by_disconnect(state, game_id, user_id).await {
         Ok(Some(game)) => {
             let (white_player, black_player) = games::fetch_game_players(state, &game).await;
@@ -282,6 +289,7 @@ async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uu
                     moves: serde_json::json!([]),
                     white_player,
                     black_player,
+                    server_time: Utc::now(),
                 },
             );
         }
@@ -328,6 +336,7 @@ async fn join_game_channel(
     session: &mut actix_ws::Session,
     game_id: Uuid,
 ) -> ApiResult<()> {
+    let game_lock = state.hub.lock_game(game_id).await;
     let game = games::get_game_by_id(state, game_id).await?;
     games::ensure_player(&game, user_id)?;
 
@@ -336,8 +345,6 @@ async fn join_game_channel(
 
     let messages = state.hub.subscribe_game(game_id);
 
-    forward_hub_messages(session.clone(), messages);
-
     send_json(
         session,
         &ServerMessage::GameState {
@@ -345,14 +352,19 @@ async fn join_game_channel(
             moves: serde_json::json!(moves),
             white_player,
             black_player,
+            server_time: Utc::now(),
         },
     )
     .await;
+
+    drop(game_lock);
+    forward_hub_messages(session.clone(), messages);
 
     Ok(())
 }
 
 async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) -> ApiResult<()> {
+    let _game_lock = state.hub.lock_game(game_id).await;
     let move_result = games::play_uci_move(state, user_id, game_id, uci).await?;
 
     if let Some(move_record) = move_result.move_record {
@@ -366,6 +378,7 @@ async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) ->
             move_record: serde_json::json!(move_record),
             white_player,
             black_player,
+            server_time: Utc::now(),
         };
 
         state.hub.broadcast_game(move_result.game.id, &message);
@@ -377,6 +390,7 @@ async fn play_move(state: &AppState, user_id: Uuid, game_id: Uuid, uci: &str) ->
             moves: serde_json::json!([]),
             white_player,
             black_player,
+            server_time: Utc::now(),
         };
 
         state.hub.broadcast_game(game_id, &message);
