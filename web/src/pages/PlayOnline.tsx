@@ -73,6 +73,11 @@ const DEFAULT_MATCHMAKING_OPTIONS: MatchmakingOptions = {
   incrementSeconds: 0,
 };
 
+const DEFAULT_GAME_TIME_CONTROL = {
+  timeControlSeconds: DEFAULT_MATCHMAKING_OPTIONS.timeControlSeconds,
+  incrementSeconds: DEFAULT_MATCHMAKING_OPTIONS.incrementSeconds,
+};
+
 function getLastMove(moves: MoveRecord[]) {
   const lastMove = moves.at(-1);
 
@@ -242,6 +247,9 @@ export default function PlayOnline() {
   const [setupModalVersion, setSetupModalVersion] = useState(0);
   const [matchmakingOptions, setMatchmakingOptions] = useState(
     DEFAULT_MATCHMAKING_OPTIONS,
+  );
+  const [gameTimeControl, setGameTimeControl] = useState(
+    DEFAULT_GAME_TIME_CONTROL,
   );
   const finishedSoundGameIdRef = useRef<string | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -417,9 +425,20 @@ export default function PlayOnline() {
         );
 
         if (soundEnabled) {
+          let moveIsCheck =
+            message.move_record.san.includes("+") ||
+            message.move_record.san.includes("#");
+
+          try {
+            moveIsCheck = new Chess(message.game.fen).isCheck();
+          } catch {
+            // Keep the SAN fallback if the position cannot be reconstructed.
+          }
+
           playMoveRecordSound(
             message.move_record.san,
             message.game.status === "finished",
+            moveIsCheck,
           );
         }
 
@@ -557,6 +576,11 @@ export default function PlayOnline() {
 
     joinMatchmaking(options, {
       onSuccess: (response) => {
+        setGameTimeControl({
+          timeControlSeconds: response.room.timeControlSeconds,
+          incrementSeconds: response.room.incrementSeconds,
+        });
+
         if (response.game) {
           void startOnlineGame(response.game.id).catch((error: unknown) => {
             setStatus("idle");
@@ -596,6 +620,11 @@ export default function PlayOnline() {
 
     joinRoom(roomId, {
       onSuccess: (response) => {
+        setGameTimeControl({
+          timeControlSeconds: response.room.timeControlSeconds,
+          incrementSeconds: response.room.incrementSeconds,
+        });
+
         if (response.game) {
           void startOnlineGame(response.game.id).catch((error: unknown) => {
             setStatus("idle");
@@ -683,7 +712,11 @@ export default function PlayOnline() {
     pgnGame.setHeader("Event", "GLFish Online");
     pgnGame.setHeader("Site", "GLFish");
     pgnGame.setHeader("Date", formatPgnDate(new Date()));
-    pgnGame.setHeader("Round", "-");
+    pgnGame.setHeader("Round", "1");
+    pgnGame.setHeader(
+      "TimeControl",
+      `${gameTimeControl.timeControlSeconds}+${gameTimeControl.incrementSeconds}`,
+    );
     pgnGame.setHeader("White", white);
     pgnGame.setHeader("Black", black);
     pgnGame.setHeader("Result", result);
@@ -702,7 +735,7 @@ export default function PlayOnline() {
     }
 
     return pgnGame.pgn();
-  }, [game, moves, whitePlayer, blackPlayer, openingName]);
+  }, [game, gameTimeControl, moves, whitePlayer, blackPlayer, openingName]);
 
   function handleCopyPgn() {
     const pgn = createPgnWithHeaders();

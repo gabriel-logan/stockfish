@@ -28,15 +28,25 @@ export function playErrorSound(): void {
   playSound("error.mp3");
 }
 
+function playCheckSound(gameOver: boolean): void {
+  playSound("move-check.mp3");
+
+  if (gameOver) {
+    window.setTimeout(() => {
+      playNotificationSound();
+    }, 300);
+  }
+}
+
 export function playMoveResultSound(move: Move, game: Chess): void {
-  if (game.isGameOver()) {
-    playNotificationSound();
+  if (game.isCheck()) {
+    playCheckSound(game.isGameOver());
 
     return;
   }
 
-  if (game.isCheck()) {
-    playSound("move-check.mp3");
+  if (game.isGameOver()) {
+    playNotificationSound();
 
     return;
   }
@@ -56,15 +66,19 @@ export function playMoveResultSound(move: Move, game: Chess): void {
   playMoveSound();
 }
 
-export function playMoveRecordSound(san: string, gameOver: boolean): void {
-  if (gameOver) {
-    playNotificationSound();
+export function playMoveRecordSound(
+  san: string,
+  gameOver: boolean,
+  isCheck = san.includes("+") || san.includes("#"),
+): void {
+  if (isCheck) {
+    playCheckSound(gameOver);
 
     return;
   }
 
-  if (san.includes("+")) {
-    playSound("move-check.mp3");
+  if (gameOver) {
+    playNotificationSound();
 
     return;
   }
