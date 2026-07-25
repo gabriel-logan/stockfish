@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -9,6 +10,13 @@ use uuid::Uuid;
 use crate::models::PlayerInfo;
 
 type Subscriptions = HashMap<Uuid, Vec<mpsc::UnboundedSender<String>>>;
+const PENDING_ACTION_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Clone, Copy)]
+struct PendingAction {
+    user_id: Uuid,
+    created_at: Instant,
+}
 
 #[derive(Clone, Default)]
 pub struct Hub {
@@ -20,8 +28,8 @@ struct HubInner {
     rooms: Subscriptions,
     games: Subscriptions,
     game_locks: HashMap<Uuid, Arc<AsyncMutex<()>>>,
-    draw_offers: HashMap<Uuid, Uuid>,
-    rematch_requests: HashMap<Uuid, Uuid>,
+    draw_offers: HashMap<Uuid, PendingAction>,
+    rematch_requests: HashMap<Uuid, PendingAction>,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,11 +136,19 @@ impl Hub {
     pub fn offer_draw(&self, game_id: Uuid, user_id: Uuid) -> bool {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
 
-        if inner.draw_offers.contains_key(&game_id) {
+        if let Some(offer) = inner.draw_offers.get(&game_id)
+            && offer.created_at.elapsed() < PENDING_ACTION_TIMEOUT
+        {
             return false;
         }
 
-        inner.draw_offers.insert(game_id, user_id);
+        inner.draw_offers.insert(
+            game_id,
+            PendingAction {
+                user_id,
+                created_at: Instant::now(),
+            },
+        );
 
         true
     }
@@ -145,20 +161,29 @@ impl Hub {
         self.resolve_draw_offer(game_id, user_id)
     }
 
-    pub fn clear_draw_offer(&self, game_id: Uuid) {
+    pub fn clear_pending_actions(&self, game_id: Uuid) {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
 
         inner.draw_offers.remove(&game_id);
+        inner.rematch_requests.remove(&game_id);
     }
 
     pub fn request_rematch(&self, game_id: Uuid, user_id: Uuid) -> bool {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
 
-        if inner.rematch_requests.contains_key(&game_id) {
+        if let Some(request) = inner.rematch_requests.get(&game_id)
+            && request.created_at.elapsed() < PENDING_ACTION_TIMEOUT
+        {
             return false;
         }
 
-        inner.rematch_requests.insert(game_id, user_id);
+        inner.rematch_requests.insert(
+            game_id,
+            PendingAction {
+                user_id,
+                created_at: Instant::now(),
+            },
+        );
 
         true
     }
@@ -173,28 +198,40 @@ impl Hub {
 
     fn resolve_draw_offer(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
-        let offering_user_id = *inner.draw_offers.get(&game_id)?;
+        let offer = *inner.draw_offers.get(&game_id)?;
 
-        if offering_user_id == user_id {
+        if offer.created_at.elapsed() >= PENDING_ACTION_TIMEOUT {
+            inner.draw_offers.remove(&game_id);
+
+            return None;
+        }
+
+        if offer.user_id == user_id {
             return None;
         }
 
         inner.draw_offers.remove(&game_id);
 
-        Some(offering_user_id)
+        Some(offer.user_id)
     }
 
     fn resolve_rematch_request(&self, game_id: Uuid, user_id: Uuid) -> Option<Uuid> {
         let mut inner = self.inner.lock().expect("hub mutex poisoned");
-        let requesting_user_id = *inner.rematch_requests.get(&game_id)?;
+        let request = *inner.rematch_requests.get(&game_id)?;
 
-        if requesting_user_id == user_id {
+        if request.created_at.elapsed() >= PENDING_ACTION_TIMEOUT {
+            inner.rematch_requests.remove(&game_id);
+
+            return None;
+        }
+
+        if request.user_id == user_id {
             return None;
         }
 
         inner.rematch_requests.remove(&game_id);
 
-        Some(requesting_user_id)
+        Some(request.user_id)
     }
 }
 
@@ -285,6 +322,21 @@ mod tests {
             Some(requesting_user_id)
         );
         assert_eq!(hub.accept_rematch(game_id, responding_user_id), None);
+    }
+
+    #[test]
+    fn clearing_pending_actions_allows_new_actions() {
+        let hub = Hub::default();
+        let game_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        assert!(hub.offer_draw(game_id, user_id));
+        assert!(hub.request_rematch(game_id, user_id));
+
+        hub.clear_pending_actions(game_id);
+
+        assert!(hub.offer_draw(game_id, user_id));
+        assert!(hub.request_rematch(game_id, user_id));
     }
 
     #[test]

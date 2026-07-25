@@ -405,7 +405,7 @@ pub async fn play_uci_move(
     tx.commit().await?;
 
     if updated_game.status == "finished" {
-        state.hub.clear_draw_offer(updated_game.id);
+        state.hub.clear_pending_actions(updated_game.id);
     }
 
     Ok(MoveResult {
@@ -513,7 +513,7 @@ async fn finish_game(
 
     tx.commit().await?;
 
-    state.hub.clear_draw_offer(game.id);
+    state.hub.clear_pending_actions(game.id);
 
     Ok(game)
 }
@@ -660,7 +660,7 @@ async fn expire_game(state: &AppState, game_id: Uuid) -> ApiResult<Option<Game>>
 
     tx.commit().await?;
 
-    state.hub.clear_draw_offer(updated_game.id);
+    state.hub.clear_pending_actions(updated_game.id);
 
     Ok(Some(updated_game))
 }

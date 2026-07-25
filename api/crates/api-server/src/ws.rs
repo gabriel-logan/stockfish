@@ -227,6 +227,12 @@ async fn request_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiR
         return Err(ApiError::BadRequest("game is still active".to_owned()));
     }
 
+    if game.result_reason.as_deref() == Some("disconnection") {
+        return Err(ApiError::BadRequest(
+            "rematch is unavailable after a disconnection".to_owned(),
+        ));
+    }
+
     if !state.hub.request_rematch(game_id, user_id) {
         return Err(ApiError::BadRequest(
             "a rematch request is already pending".to_owned(),
@@ -248,6 +254,12 @@ async fn accept_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiRe
 
     if game.status != "finished" {
         return Err(ApiError::BadRequest("game is still active".to_owned()));
+    }
+
+    if game.result_reason.as_deref() == Some("disconnection") {
+        return Err(ApiError::BadRequest(
+            "rematch is unavailable after a disconnection".to_owned(),
+        ));
     }
 
     let requesting_user_id = state
@@ -291,6 +303,7 @@ async fn decline_rematch(state: &AppState, user_id: Uuid, game_id: Uuid) -> ApiR
 
 async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uuid) {
     let _game_lock = state.hub.lock_game(game_id).await;
+    state.hub.clear_pending_actions(game_id);
 
     match games::finish_game_by_disconnect(state, game_id, user_id).await {
         Ok(Some(game)) => {

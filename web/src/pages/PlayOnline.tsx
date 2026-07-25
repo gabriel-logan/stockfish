@@ -90,6 +90,7 @@ const DEFAULT_GAME_TIME_CONTROL = {
   timeControlSeconds: DEFAULT_MATCHMAKING_OPTIONS.timeControlSeconds,
   incrementSeconds: DEFAULT_MATCHMAKING_OPTIONS.incrementSeconds,
 };
+const PENDING_ACTION_TIMEOUT_MS = 30_000;
 
 function getLastMove(moves: MoveRecord[]) {
   const lastMove = moves.at(-1);
@@ -484,6 +485,9 @@ export default function PlayOnline() {
           setDrawOfferSent(false);
           setDrawOfferReceived(false);
           setDrawOfferActionPending(false);
+          setRematchRequestSent(false);
+          setRematchRequestReceived(false);
+          setRematchActionPending(false);
         }
 
         return;
@@ -570,6 +574,9 @@ export default function PlayOnline() {
           setDrawOfferSent(false);
           setDrawOfferReceived(false);
           setDrawOfferActionPending(false);
+          setRematchRequestSent(false);
+          setRematchRequestReceived(false);
+          setRematchActionPending(false);
         }
 
         return;
@@ -637,10 +644,21 @@ export default function PlayOnline() {
         }
 
         toast.error(t("online.opponentDisconnected"));
-        setGame((prev) => (prev ? { ...prev, status: "finished" } : prev));
+        setGame((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "finished",
+                resultReason: "disconnection",
+              }
+            : prev,
+        );
         setDrawOfferSent(false);
         setDrawOfferReceived(false);
         setDrawOfferActionPending(false);
+        setRematchRequestSent(false);
+        setRematchRequestReceived(false);
+        setRematchActionPending(false);
         setStatus("finished");
         return;
       }
@@ -698,6 +716,17 @@ export default function PlayOnline() {
 
       socket.onclose = () => {
         setSendingMove(false);
+
+        if (socketRef.current !== socket) {
+          return;
+        }
+
+        setDrawOfferSent(false);
+        setDrawOfferReceived(false);
+        setDrawOfferActionPending(false);
+        setRematchRequestSent(false);
+        setRematchRequestReceived(false);
+        setRematchActionPending(false);
       };
 
       socketRef.current = socket;
@@ -749,6 +778,42 @@ export default function PlayOnline() {
       window.clearInterval(clockInterval);
     };
   }, [game]);
+
+  useEffect(() => {
+    if (!drawOfferSent && !drawOfferReceived && !drawOfferActionPending) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setDrawOfferSent(false);
+      setDrawOfferReceived(false);
+      setDrawOfferActionPending(false);
+    }, PENDING_ACTION_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [drawOfferActionPending, drawOfferReceived, drawOfferSent]);
+
+  useEffect(() => {
+    if (
+      !rematchRequestSent &&
+      !rematchRequestReceived &&
+      !rematchActionPending
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRematchRequestSent(false);
+      setRematchRequestReceived(false);
+      setRematchActionPending(false);
+    }, PENDING_ACTION_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [rematchActionPending, rematchRequestReceived, rematchRequestSent]);
 
   function handleJoinMatchmaking(options: MatchmakingOptions) {
     setStatus("matching");
@@ -904,6 +969,7 @@ export default function PlayOnline() {
     if (
       !game ||
       game.status !== "finished" ||
+      game.resultReason === "disconnection" ||
       !socketRef.current ||
       rematchRequestSent ||
       rematchRequestReceived ||
@@ -925,6 +991,7 @@ export default function PlayOnline() {
     if (
       !game ||
       game.status !== "finished" ||
+      game.resultReason === "disconnection" ||
       !socketRef.current ||
       rematchActionPending
     ) {
@@ -1256,23 +1323,25 @@ export default function PlayOnline() {
 
             {status === "finished" && (
               <>
-                <button
-                  type="button"
-                  className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#b7d58a66] bg-[#30432a] text-sm font-extrabold text-[#d9edb5] transition-colors hover:bg-[#628d3f] hover:text-white disabled:opacity-60"
-                  onClick={handleRequestRematch}
-                  disabled={
-                    rematchRequestSent ||
-                    rematchRequestReceived ||
-                    rematchActionPending
-                  }
-                >
-                  <FaRedo aria-hidden="true" />
-                  {rematchActionPending
-                    ? t("online.rematch.sending")
-                    : rematchRequestSent
-                      ? t("online.rematch.sent")
-                      : t("online.rematch.request")}
-                </button>
+                {game?.resultReason !== "disconnection" && (
+                  <button
+                    type="button"
+                    className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded border border-[#b7d58a66] bg-[#30432a] text-sm font-extrabold text-[#d9edb5] transition-colors hover:bg-[#628d3f] hover:text-white disabled:opacity-60"
+                    onClick={handleRequestRematch}
+                    disabled={
+                      rematchRequestSent ||
+                      rematchRequestReceived ||
+                      rematchActionPending
+                    }
+                  >
+                    <FaRedo aria-hidden="true" />
+                    {rematchActionPending
+                      ? t("online.rematch.sending")
+                      : rematchRequestSent
+                        ? t("online.rematch.sent")
+                        : t("online.rematch.request")}
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -1382,7 +1451,11 @@ export default function PlayOnline() {
       />
 
       <ConfirmModal
-        open={rematchRequestReceived && game?.status === "finished"}
+        open={
+          rematchRequestReceived &&
+          game?.status === "finished" &&
+          game.resultReason !== "disconnection"
+        }
         title={t("online.rematch.title")}
         message={t("online.rematch.message", { opponent: opponentName })}
         confirmLabel={t("online.rematch.accept")}
