@@ -6,18 +6,7 @@ import {
   leaveMatchmaking,
 } from "../services/roomService";
 import type { Room } from "../types/api";
-
-function updateRoomList(rooms: Room[] | undefined, room: Room) {
-  if (!rooms) {
-    return [room];
-  }
-
-  const filteredRooms = rooms.filter((currentRoom) => {
-    return currentRoom.id !== room.id;
-  });
-
-  return [room, ...filteredRooms];
-}
+import { updateRoomList } from "../utils/roomList";
 
 export function useJoinMatchmakingMutation() {
   const queryClient = useQueryClient();

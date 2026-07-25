@@ -43,7 +43,7 @@ pub async fn list_rooms(state: web::Data<AppState>) -> ApiResult<web::Json<Vec<R
         SELECT id, owner_id, status::text, visibility::text, rated, time_control_seconds,
             increment_seconds, white_user_id, black_user_id, created_at, updated_at
         FROM rooms
-        WHERE status = 'waiting' AND visibility = 'public'
+        WHERE status = 'waiting' AND visibility = 'public' AND black_user_id IS NULL
         ORDER BY created_at ASC
         LIMIT 100
         "#,
@@ -145,6 +145,33 @@ pub async fn leave_matchmaking(
     Ok(web::Json(serde_json::json!({ "ok": true })))
 }
 
+pub async fn cancel_waiting_room(state: &AppState, user_id: Uuid, room_id: Uuid) -> ApiResult<()> {
+    let room = sqlx::query_as::<_, Room>(
+        r#"
+        UPDATE rooms
+        SET status = 'cancelled', updated_at = now()
+        WHERE id = $1
+            AND owner_id = $2
+            AND status = 'waiting'
+            AND black_user_id IS NULL
+        RETURNING id, owner_id, status::text, visibility::text, rated, time_control_seconds,
+            increment_seconds, white_user_id, black_user_id, created_at, updated_at
+        "#,
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    if let Some(room) = room {
+        state
+            .hub
+            .broadcast_room(room.id, &ServerMessage::RoomUpdated { room });
+    }
+
+    Ok(())
+}
+
 pub async fn get_room_by_id(state: &AppState, room_id: Uuid) -> ApiResult<Room> {
     sqlx::query_as::<_, Room>(
         r#"
@@ -167,6 +194,12 @@ async fn join_room_and_start_game(
 ) -> ApiResult<(Room, Option<Game>)> {
     let room = join_room_record(state, user_id, room_id).await?;
     let game = games::start_game_if_ready(state, &room).await?;
+
+    let room = if game.is_some() {
+        get_room_by_id(state, room.id).await?
+    } else {
+        room
+    };
 
     state
         .hub

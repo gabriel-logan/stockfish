@@ -46,6 +46,7 @@ pub async fn websocket(
         let ready = ServerMessage::<serde_json::Value>::Ready { user_id };
         send_json(&mut session, &ready).await;
 
+        let mut current_room_id: Option<Uuid> = None;
         let mut current_game_id: Option<Uuid> = None;
 
         while let Some(Ok(message)) = stream.recv().await {
@@ -56,6 +57,7 @@ pub async fn websocket(
                         user_id,
                         &mut session,
                         &bytes,
+                        &mut current_room_id,
                         &mut current_game_id,
                     )
                     .await;
@@ -64,9 +66,13 @@ pub async fn websocket(
                     return;
                 }
                 Message::Close(reason) => {
-                    if let Some(game_id) = current_game_id {
-                        handle_player_disconnected(&state_for_task, game_id, user_id).await;
-                    }
+                    handle_connection_disconnected(
+                        &state_for_task,
+                        user_id,
+                        current_room_id,
+                        current_game_id,
+                    )
+                    .await;
                     let _ = session.close(reason).await;
                     return;
                 }
@@ -74,9 +80,8 @@ pub async fn websocket(
             }
         }
 
-        if let Some(game_id) = current_game_id {
-            handle_player_disconnected(&state_for_task, game_id, user_id).await;
-        }
+        handle_connection_disconnected(&state_for_task, user_id, current_room_id, current_game_id)
+            .await;
 
         let _ = session.close(None).await;
     });
@@ -89,10 +94,19 @@ async fn handle_binary(
     user_id: Uuid,
     session: &mut actix_ws::Session,
     bytes: &[u8],
+    current_room_id: &mut Option<Uuid>,
     current_game_id: &mut Option<Uuid>,
 ) {
     let result = match serde_json::from_slice::<ClientMessage>(bytes) {
-        Ok(ClientMessage::JoinRoom { room_id }) => join_room_channel(state, session, room_id).await,
+        Ok(ClientMessage::JoinRoom { room_id }) => {
+            let result = join_room_channel(state, session, room_id).await;
+
+            if result.is_ok() {
+                *current_room_id = Some(room_id);
+            }
+
+            result
+        }
         Ok(ClientMessage::JoinGame { game_id }) => {
             match join_game_channel(state, user_id, session, game_id).await {
                 Ok(()) => {
@@ -299,6 +313,21 @@ async fn handle_player_disconnected(state: &AppState, game_id: Uuid, user_id: Uu
 
             state.hub.broadcast_game(game_id, &message);
         }
+    }
+}
+
+async fn handle_connection_disconnected(
+    state: &AppState,
+    user_id: Uuid,
+    room_id: Option<Uuid>,
+    game_id: Option<Uuid>,
+) {
+    if let Some(game_id) = game_id {
+        handle_player_disconnected(state, game_id, user_id).await;
+    }
+
+    if let Some(room_id) = room_id {
+        let _ = rooms::cancel_waiting_room(state, user_id, room_id).await;
     }
 }
 

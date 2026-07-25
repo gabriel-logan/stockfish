@@ -60,6 +60,7 @@ import {
 import { getOpeningName } from "../utils/openingNames";
 import { formatPgnClock, formatPgnDate } from "../utils/pgn";
 import { getGameTermination } from "../utils/playBoard";
+import { updateRoomList } from "../utils/roomList";
 import {
   playErrorSound,
   playMoveRecordSound,
@@ -344,11 +345,16 @@ export default function PlayOnline() {
 
   const availableRooms = useMemo(() => {
     if (!user) {
-      return rooms.filter((room) => room.status === "waiting");
+      return rooms.filter(
+        (room) => room.status === "waiting" && room.blackUserId === null,
+      );
     }
 
     return rooms.filter(
-      (room) => room.status === "waiting" && room.ownerId !== user.id,
+      (room) =>
+        room.status === "waiting" &&
+        room.blackUserId === null &&
+        room.ownerId !== user.id,
     );
   }, [rooms, user]);
 
@@ -416,15 +422,7 @@ export default function PlayOnline() {
 
       if (message.type === "room_updated") {
         queryClient.setQueryData<Room[]>(["rooms"], (currentRooms) => {
-          if (!currentRooms) {
-            return [message.room];
-          }
-
-          const filteredRooms = currentRooms.filter((room) => {
-            return room.id !== message.room.id;
-          });
-
-          return [message.room, ...filteredRooms];
+          return updateRoomList(currentRooms, message.room);
         });
 
         return;
