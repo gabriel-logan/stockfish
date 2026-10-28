@@ -4,6 +4,10 @@
 
 A complete chess platform with a Go engine server, Rust multiplayer API, and React frontend. Play against adjustable Stockfish strength, review PGNs with engine evaluations and move classifications, study openings, practice custom positions, save games, and play online.
 
+## Hosted services
+
+See [Hosted services](HOSTED_SERVICES.md) for the service URLs, usage examples, and current availability.
+
 ## Packages
 
 | Package | Description |
